@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import ProjectModal from '../components/project/ProjectModal';
+import RequirementAnalyzer from '../components/ai/RequirementAnalyzer';
 import { projectApi } from '../api/projectApi';
 import {
   ArrowLeft,
@@ -203,34 +204,8 @@ export const ProjectDetailPage = () => {
                 </div>
               </div>
 
-              {/* Upcoming Features Teaser for Flow 3 */}
-              <div className="card teaser-card">
-                <div className="card-header">
-                  <div className="card-title-group">
-                    <Sparkles className="card-icon text-info" size={20} />
-                    <h3>Không gian phân tách yêu cầu (Ready for Flow 3)</h3>
-                  </div>
-                </div>
-                <div className="card-body">
-                  <p className="text-muted">
-                    Dự án này đã sẵn sàng làm việc. Khi chuyển sang <strong>Luồng 3</strong>, bạn sẽ có thể nhập yêu cầu phần mềm bằng ngôn ngữ tự nhiên và AI Gemini sẽ tự động phân tích thành <strong>Epic</strong>, <strong>User Story</strong>, <strong>Acceptance Criteria</strong>, và <strong>Tasks</strong> ngay trong workspace này.
-                  </p>
-                  <div className="teaser-features">
-                    <div className="teaser-pill">
-                      <Layers size={15} />
-                      <span>Quản lý Requirement</span>
-                    </div>
-                    <div className="teaser-pill">
-                      <Sparkles size={15} />
-                      <span>AI Breakdown (Gemini)</span>
-                    </div>
-                    <div className="teaser-pill">
-                      <CheckCircle2 size={15} />
-                      <span>Đẩy ticket lên Jira</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Flow 5 AI Requirement Analyzer */}
+              <RequirementAnalyzer />
             </>
           )}
         </div>

@@ -1,7 +1,9 @@
 const express = require('express');
+
 const authRoutes = require('./auth.routes');
 const projectRoutes = require('./project.routes');
 const configRoutes = require('./config.routes');
+const aiRoutes = require('./ai.routes');
 
 const router = express.Router();
 
@@ -12,5 +14,6 @@ router.get('/test', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/projects', projectRoutes);
 router.use('/config', configRoutes);
+router.use('/ai', aiRoutes);
 
 module.exports = router;

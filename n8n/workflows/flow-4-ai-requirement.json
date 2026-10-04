@@ -1,0 +1,109 @@
+{
+  "name": "FLow 4",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-requirement",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -368,
+        -16
+      ],
+      "id": "e4273d3d-78fe-454d-87c3-1f32aac755f6",
+      "name": "Webhook",
+      "webhookId": "df90969a-561c-4974-904e-62c06756fae6"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3-flash-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Bạn là AI phân tích yêu cầu phần mềm.\n\nHãy phân tích yêu cầu người dùng và chuyển thành cấu trúc:\n- Epic\n- Story\n- Task\n\nYêu cầu:\n1. Chỉ trả về JSON hợp lệ.\n2. Không thêm giải thích bên ngoài JSON.\n3. Mỗi Story phải thuộc một Epic.\n4. Mỗi Task phải thuộc một Story.\n5. Nội dung phải cụ thể, phù hợp với yêu cầu.\n6. Nếu yêu cầu chưa đủ rõ, hãy tự đưa ra giả định hợp lý.\n\nĐịnh dạng JSON:\n{\n  \"epics\": [\n    {\n      \"title\": \"Tên Epic\",\n      \"description\": \"Mô tả Epic\",\n      \"stories\": [\n        {\n          \"title\": \"Tên Story\",\n          \"description\": \"Mô tả Story\",\n          \"tasks\": [\n            {\n              \"title\": \"Tên Task\",\n              \"description\": \"Mô tả Task\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nYêu cầu người dùng:\n{{ $json.body.requirement }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        -16
+      ],
+      "id": "55966ea8-aed2-4548-9f7f-fb3448def968",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "JSBKgpWH4oIbMUSJ",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.content }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        -16
+      ],
+      "id": "a0fb9fb3-a7c5-4047-8403-24a0a64eb4f5",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d2bf23ce-7887-4942-86e7-62d435f5b4c7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "86c6032dcc0fd627266bfea215eff0a1a059f7b10e676fe6c342e72298caae9e"
+  },
+  "nodeGroups": [],
+  "id": "7rfbxjYvhqIZXuQ8",
+  "tags": []
+}
