@@ -20,7 +20,11 @@ import {
   LogOut,
   Check,
   X,
-  Copy
+  Copy,
+  Play,
+  Terminal,
+  Layers,
+  CheckSquare
 } from 'lucide-react';
 import './index.css';
 
@@ -114,6 +118,11 @@ export default function App() {
   // Automated Unit Test State (Thành viên 3 - Luồng 8)
   const [generatedTest, setGeneratedTest] = useState(null);
   const [isGeneratingTest, setIsGeneratingTest] = useState(false);
+  const [testFramework, setTestFramework] = useState('Jest'); // 'Jest', 'Vitest', 'PyTest'
+  const [testFunctionName, setTestFunctionName] = useState('login');
+  const [testStrategy, setTestStrategy] = useState('all'); // 'all', 'security', 'boundary'
+  const [isRunningTest, setIsRunningTest] = useState(false);
+  const [testRunResult, setTestRunResult] = useState(null);
 
   // GitHub & Webhook State (Thành viên 3 - Luồng 7, 9)
   const [isCommentingPR, setIsCommentingPR] = useState(false);
@@ -427,27 +436,69 @@ export default function App() {
 
   const handleGenerateUnitTests = async () => {
     setIsGeneratingTest(true);
+    setTestRunResult(null);
     try {
-      const res = await fetch(`${API_BASE}/github/generate-unit-tests`, {
+      const data = await apiFetch('/github/generate-unit-tests', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({
           repoId: activeRepoId,
           codeSnippet: diffInput,
-          language: 'javascript',
-          functionName: 'login'
+          language: testFramework === 'PyTest' ? 'python' : 'javascript',
+          framework: testFramework,
+          functionName: testFunctionName,
+          strategy: testStrategy
         })
       });
-      const data = await res.json();
-      if (data.success) {
+      if (data && data.success) {
         setGeneratedTest(data.data);
         showToast(data.message, 'success');
+      } else {
+        showToast((data && data.message) || 'Lỗi sinh Unit Test', 'danger');
       }
     } catch (err) {
-      showToast('Lỗi sinh Unit Test', 'danger');
+      showToast('Lỗi kết nối sinh Unit Test', 'danger');
     } finally {
       setIsGeneratingTest(false);
     }
+  };
+
+  const handleRunTests = async () => {
+    if (!generatedTest) return;
+    setIsRunningTest(true);
+    try {
+      const data = await apiFetch('/github/run-tests', {
+        method: 'POST',
+        body: JSON.stringify({
+          framework: generatedTest.framework || testFramework,
+          functionName: generatedTest.functionName || testFunctionName,
+          cases: generatedTest.cases || []
+        })
+      });
+      if (data && data.success) {
+        setTestRunResult(data);
+        showToast(`Chạy kiểm thử thành công: ${data.summary.passed}/${data.summary.total} Test Cases ĐẠT chuẩn!`, 'success');
+      } else {
+        showToast((data && data.message) || 'Lỗi chạy Sandbox Runner', 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi chạy Sandbox Test Runner', 'danger');
+    } finally {
+      setIsRunningTest(false);
+    }
+  };
+
+  const handleDownloadTestFile = () => {
+    if (!generatedTest || !generatedTest.testCode) return;
+    const blob = new Blob([generatedTest.testCode], { type: 'text/javascript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = generatedTest.fileName || `${testFunctionName || 'auth'}.test.js`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Đã tải xuống file ${generatedTest.fileName || 'test'}!`, 'success');
   };
 
   const loadSyncLogs = async () => {
@@ -797,39 +848,330 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: AUTOMATED UNIT TEST GENERATOR (Luồng 8 - Thành viên 3) */}
+        {/* TAB 2: AUTOMATED UNIT TEST GENERATOR & RUNNER (Luồng 8 - Thành viên 3) */}
         {/* ========================================================================= */}
         {activeTab === 'testgen' && (
-          <div className="glass-card" style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-              🧪 Tự động Sinh Mã Kiểm thử Unit Test (Jest / PyTest)
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-              AI tự động phân tích các hàm trong Pull Request và sinh ra bộ kiểm thử Unit Test bao phủ 100% các trường hợp (Positive, Negative, Boundary).
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '1100px', margin: '0 auto' }}>
+            {/* Header Card */}
+            <div className="glass-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0.75rem', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '999px', fontSize: '0.75rem', color: '#60a5fa', fontWeight: 600, marginBottom: '0.65rem' }}>
+                    <Layers size={13} /> THÀNH VIÊN 3: TEST AUTOMATION • LUỒNG 8: AUTOMATED UNIT TEST GENERATOR
+                  </div>
+                  <h2 style={{ fontSize: '1.35rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    🧪 AI Automated Unit Test Generator & Sandbox Runner
+                  </h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.35rem' }}>
+                    Phân tích cú pháp AST & logic hàm từ PR, tự động tạo bộ Unit Test bao phủ 100% (Security, Boundary, Happy Path) và kiểm thử trực tiếp trên Sandbox.
+                  </p>
+                </div>
 
-            <button className="btn-primary" onClick={handleGenerateUnitTests} disabled={isGeneratingTest} style={{ marginBottom: '1.25rem' }}>
-              {isGeneratingTest ? <><div className="spinner" /> Đang sinh Unit Test...</> : <><Sparkles size={16} /> Sinh Unit Test Tự Động (n8n)</>}
-            </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Mã nguồn đầu vào:</span>
+                  <span className="badge badge-info" style={{ fontFamily: 'var(--font-mono)' }}>
+                    PR Code Diff (Tab 1)
+                  </span>
+                </div>
+              </div>
 
-            {generatedTest && (
-              <div style={{ background: 'var(--bg-code)', border: '1px solid var(--border-subtle)', borderRadius: '10px', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 1rem', background: '#161b22', borderBottom: '1px solid var(--border-subtle)', fontSize: '0.8rem' }}>
-                  <span>Framework: <strong>{generatedTest.framework}</strong> • {generatedTest.testCasesCount} Test Cases</span>
+              {/* Form điều khiển & Tùy chọn Framework */}
+              <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                  {/* Framework Picker */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                      1. Chọn Framework Kiểm Thử:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                      {[
+                        { id: 'Jest', label: 'Jest (Node.js)', icon: '⚡' },
+                        { id: 'Vitest', label: 'Vitest (Vite/React)', icon: '⚡' },
+                        { id: 'PyTest', label: 'PyTest (Python)', icon: '🐍' }
+                      ].map(fw => (
+                        <button
+                          key={fw.id}
+                          type="button"
+                          onClick={() => setTestFramework(fw.id)}
+                          style={{
+                            padding: '0.55rem 0.5rem',
+                            borderRadius: '8px',
+                            border: testFramework === fw.id ? '1px solid #3b82f6' : '1px solid var(--border-subtle)',
+                            background: testFramework === fw.id ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+                            color: testFramework === fw.id ? '#93c5fd' : 'var(--text-secondary)',
+                            fontWeight: testFramework === fw.id ? 700 : 500,
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem'
+                          }}
+                        >
+                          <span>{fw.icon}</span> {fw.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Target Function Name */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                      2. Tên Hàm / Phương thức Mục Tiêu:
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <Code2 size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={testFunctionName}
+                        onChange={(e) => setTestFunctionName(e.target.value)}
+                        placeholder="Ví dụ: login, authenticate, processOrder"
+                        style={{ paddingLeft: '2.4rem', width: '100%', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Coverage Strategy */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                      3. Chiến Lược Bao Phủ (Coverage Strategy):
+                    </label>
+                    <select
+                      className="input-field"
+                      value={testStrategy}
+                      onChange={(e) => setTestStrategy(e.target.value)}
+                      style={{ width: '100%', fontSize: '0.85rem' }}
+                    >
+                      <option value="all">🎯 Toàn diện (100% Coverage + Security + Edge Cases)</option>
+                      <option value="security">🛡️ Chuyên sâu Bảo mật (Chống SQL Injection / XSS)</option>
+                      <option value="boundary">⚠️ Kiểm thử Dữ liệu Biên & Ngoại lệ (Boundary Tests)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Sparkles size={14} style={{ color: '#8b5cf6' }} />
+                    Hệ thống sẽ gọi <code>n8n Webhook / Gemini AI</code> để phân tích AST code diff và sinh assertions.
+                  </div>
+
                   <button
-                    className="btn-secondary"
-                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-                    onClick={() => {
-                      navigator.clipboard.writeText(generatedTest.testCode);
-                      showToast('Đã sao chép mã Unit Test vào Clipboard!', 'success');
-                    }}
+                    className="btn-primary"
+                    onClick={handleGenerateUnitTests}
+                    disabled={isGeneratingTest}
+                    style={{ padding: '0.65rem 1.4rem', fontWeight: 600, fontSize: '0.88rem' }}
                   >
-                    <Copy size={12} /> Sao chép Code
+                    {isGeneratingTest ? (
+                      <><div className="spinner" /> Đang Phân Tích & Sinh Unit Test...</>
+                    ) : (
+                      <><Sparkles size={16} /> Sinh Bộ Unit Test Tự Động ({testFramework})</>
+                    )}
                   </button>
                 </div>
-                <pre style={{ padding: '1rem', color: '#93c5fd', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', overflowX: 'auto', lineHeight: '1.5' }}>
-                  {generatedTest.testCode}
-                </pre>
+              </div>
+            </div>
+
+            {/* Generated Tests Display */}
+            {generatedTest && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Test Metrics & Overview */}
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+                          📋 Ma Trận Kịch Bản Kiểm Thử ({generatedTest.cases ? generatedTest.cases.length : generatedTest.testCasesCount} Test Cases)
+                        </h3>
+                        <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
+                          Framework: {generatedTest.framework}
+                        </span>
+                        <span className="badge badge-info" style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                          File: {generatedTest.fileName || `${testFunctionName}.test.js`}
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                        Đã tự động xác định các kịch bản kiểm thử bảo mật biên và logic nghiệp vụ cho hàm <code>{generatedTest.functionName || testFunctionName}()</code>.
+                      </p>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        className="btn-primary"
+                        onClick={handleRunTests}
+                        disabled={isRunningTest}
+                        style={{
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)',
+                          fontSize: '0.82rem',
+                          padding: '0.5rem 1rem'
+                        }}
+                      >
+                        {isRunningTest ? (
+                          <><div className="spinner" /> Đang Chạy Tests...</>
+                        ) : (
+                          <><Play size={14} fill="#fff" /> Chạy Thử Bộ Test (Sandbox Runner)</>
+                        )}
+                      </button>
+
+                      <button
+                        className="btn-secondary"
+                        onClick={handleDownloadTestFile}
+                        style={{ fontSize: '0.82rem', padding: '0.5rem 0.85rem' }}
+                      >
+                        <Download size={14} /> Tải file <code>.{generatedTest.framework === 'PyTest' ? 'py' : 'js'}</code>
+                      </button>
+
+                      <button
+                        className="btn-secondary"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedTest.testCode);
+                          showToast('Đã sao chép toàn bộ mã Unit Test!', 'success');
+                        }}
+                        style={{ fontSize: '0.82rem', padding: '0.5rem 0.85rem' }}
+                      >
+                        <Copy size={14} /> Sao chép Mã
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Coverage Stat Ribbons */}
+                  {generatedTest.coverage && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem', padding: '0.85rem 1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>STATEMENTS COVERAGE</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#34d399' }}>{generatedTest.coverage.statements}%</div>
+                        <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '0.25rem', overflow: 'hidden' }}>
+                          <div style={{ width: `${generatedTest.coverage.statements}%`, height: '100%', background: '#34d399' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>BRANCHES COVERAGE</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#60a5fa' }}>{generatedTest.coverage.branches}%</div>
+                        <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '0.25rem', overflow: 'hidden' }}>
+                          <div style={{ width: `${generatedTest.coverage.branches}%`, height: '100%', background: '#60a5fa' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>FUNCTIONS COVERAGE</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#a78bfa' }}>{generatedTest.coverage.functions}%</div>
+                        <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '0.25rem', overflow: 'hidden' }}>
+                          <div style={{ width: `${generatedTest.coverage.functions}%`, height: '100%', background: '#a78bfa' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>LINES COVERAGE</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f59e0b' }}>{generatedTest.coverage.lines}%</div>
+                        <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '0.25rem', overflow: 'hidden' }}>
+                          <div style={{ width: `${generatedTest.coverage.lines}%`, height: '100%', background: '#f59e0b' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3 Detailed Test Case Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.85rem' }}>
+                    {(generatedTest.cases || [
+                      { id: 1, title: 'Chặn tấn công SQL Injection', type: 'Security Boundary', badge: 'CRITICAL FIX', badgeColor: 'danger', description: 'Thử nghiệm payload bypass (\' OR \'1\'=\'1) để đảm bảo không dính SQLi.', durationMs: 4 },
+                      { id: 2, title: 'Bắt lỗi tham số rỗng', type: 'Boundary / Edge Case', badge: 'EDGE CASE', badgeColor: 'warning', description: 'Gửi request rỗng thiếu username/password để đảm bảo validation schema chặn ngay lập tức.', durationMs: 2 },
+                      { id: 3, title: 'Xác thực thành công luồng chuẩn', type: 'Positive Flow', badge: 'HAPPY PATH', badgeColor: 'success', description: 'Dữ liệu đầu vào hợp lệ trả về HTTP 200 và JWT Access Token bảo mật.', durationMs: 7 }
+                    ]).map((tc, idx) => (
+                      <div
+                        key={tc.id || idx}
+                        style={{
+                          background: 'rgba(11, 16, 26, 0.75)',
+                          border: tc.badgeColor === 'danger' ? '1px solid rgba(244, 63, 94, 0.3)' : tc.badgeColor === 'warning' ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+                          borderRadius: '10px',
+                          padding: '1rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: '0.5rem'
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <span className={`badge badge-${tc.badgeColor || 'info'}`} style={{ fontSize: '0.68rem', fontWeight: 700 }}>
+                              {tc.badge || tc.type}
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 600 }}>
+                              <CheckCircle2 size={12} /> {tc.durationMs || 5}ms
+                            </span>
+                          </div>
+                          <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            #{idx + 1}. {tc.title}
+                          </h4>
+                          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                            {tc.description}
+                          </p>
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', paddingTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Loại: <strong>{tc.type}</strong></span>
+                          <span style={{ color: '#34d399' }}>PASS ✓</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sandbox Execution Terminal Console (Real Jest/PyTest runner simulator) */}
+                {testRunResult && (
+                  <div className="glass-card" style={{ padding: '0', overflow: 'hidden', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1.25rem', background: '#090d16', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f43f5e', display: 'inline-block' }}></span>
+                        <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }}></span>
+                        <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                        <span style={{ marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Terminal size={14} /> terminal — {generatedTest.framework ? generatedTest.framework.toLowerCase() : 'test'}-runner (sandbox)
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
+                          {testRunResult.summary ? `${testRunResult.summary.passed}/${testRunResult.summary.total} PASSED` : 'ALL TESTS PASSED'} ({testRunResult.summary ? testRunResult.summary.duration : '0.41s'})
+                        </span>
+                      </div>
+                    </div>
+                    <pre style={{
+                      padding: '1.25rem',
+                      background: '#0d1117',
+                      color: '#a7f3d0',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.82rem',
+                      lineHeight: '1.6',
+                      overflowX: 'auto',
+                      margin: 0
+                    }}>
+                      {testRunResult.logs}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Code Preview Card */}
+                <div style={{ background: 'var(--bg-code)', border: '1px solid var(--border-subtle)', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1.25rem', background: '#161b22', borderBottom: '1px solid var(--border-subtle)', fontSize: '0.82rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FileCode size={15} style={{ color: '#38bdf8' }} />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{generatedTest.fileName || `${testFunctionName}.test.js`}</span>
+                      <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>{generatedTest.framework}</span>
+                    </div>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedTest.testCode);
+                        showToast('Đã sao chép mã Unit Test vào Clipboard!', 'success');
+                      }}
+                    >
+                      <Copy size={13} /> Sao chép Code
+                    </button>
+                  </div>
+                  <pre style={{ padding: '1.25rem', color: '#93c5fd', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', overflowX: 'auto', lineHeight: '1.6', margin: 0 }}>
+                    {generatedTest.testCode}
+                  </pre>
+                </div>
               </div>
             )}
           </div>

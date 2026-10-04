@@ -6,15 +6,7 @@
       "passwordHash": "$2a$10$wK1kKkI5k82oG8aP8t1q2u0B9eM.qQYp8mXb/gI4M2rW5zYxKzO7C",
       "fullName": "Nguyễn Văn Tech Lead",
       "role": "Tech Lead / Reviewer",
-      "createdAt": "2026-10-04T03:46:42.241Z"
-    },
-    {
-      "id": "user_1791085611053_388",
-      "email": "quantech@student.edu.vn",
-      "passwordHash": "$2b$10$pqomGbbxao8gIJchYPmMaemy1e79xRvvbzKs01gbFQNUA5EV.Z7Bi",
-      "fullName": "Lê Hoàng Quân",
-      "role": "Security Lead",
-      "createdAt": "2026-10-04T03:46:51.053Z"
+      "createdAt": "2026-10-04T04:00:18.530Z"
     }
   ],
   "repositories": [
@@ -29,7 +21,7 @@
       "description": "Dịch vụ cổng thanh toán và xử lý đơn hàng trực tuyến",
       "minQualityScore": 80,
       "blockOnCritical": true,
-      "createdAt": "2026-10-04T03:46:42.241Z"
+      "createdAt": "2026-10-04T04:00:18.530Z"
     },
     {
       "id": "repo_bank",
@@ -42,20 +34,7 @@
       "description": "Core banking API & chuyển tiền liên ngân hàng",
       "minQualityScore": 85,
       "blockOnCritical": true,
-      "createdAt": "2026-10-04T03:46:42.241Z"
-    },
-    {
-      "id": "repo_1791085611054",
-      "userId": "user_1791085611053_388",
-      "owner": "l-ho-ng-qu-n",
-      "name": "microservice-app",
-      "fullName": "l-ho-ng-qu-n/microservice-app",
-      "defaultBranch": "main",
-      "language": "JavaScript / Node.js",
-      "description": "Kho mã nguồn của Lê Hoàng Quân",
-      "minQualityScore": 80,
-      "blockOnCritical": true,
-      "createdAt": "2026-10-04T03:46:51.054Z"
+      "createdAt": "2026-10-04T04:00:18.530Z"
     }
   ],
   "apiConfigs": {
@@ -80,8 +59,8 @@
       "status": "CHANGES_REQUESTED",
       "qualityScore": 68,
       "grade": "C",
-      "createdAt": "2026-10-03T23:46:42.241Z",
-      "reviewedAt": "2026-10-04T01:46:42.241Z",
+      "createdAt": "2026-10-04T00:00:18.530Z",
+      "reviewedAt": "2026-10-04T02:00:18.530Z",
       "engine": "Gemini 2.0 Flash AI Reviewer",
       "summary": "Phát hiện 1 lỗi bảo mật nghiêm trọng (SQL Injection) và 1 trường hợp ghi log mật khẩu thô. Cần khắc phục trước khi merge vào nhánh main.",
       "diffText": "diff --git a/src/controllers/auth.js b/src/controllers/auth.js\nindex 8a34bc1..9f82d1a 100644\n--- a/src/controllers/auth.js\n+++ b/src/controllers/auth.js\n@@ -12,8 +12,14 @@ exports.login = async (req, res) => {\n+  const { username, password } = req.body;\n+  // LỖ HỔNG BẢO MẬT: Nối chuỗi trực tiếp\n+  const query = \"SELECT * FROM users WHERE username = '\" + username + \"' AND password = '\" + password + \"'\";\n+  const user = await db.query(query);\n+  console.log(\"Raw user password received:\", password);\n+  const token = jwt.sign({ id: user.id }, \"secret123\", { expiresIn: 3600000 });\n+  return res.json({ token });\n }",
@@ -128,7 +107,7 @@
       "pullNumber": 42,
       "sender": "junior-dev-a",
       "actionTaken": "Tự động kích hoạt n8n AI Review",
-      "timestamp": "2026-10-03T23:46:42.241Z"
+      "timestamp": "2026-10-04T00:00:18.530Z"
     }
   ]
 }
