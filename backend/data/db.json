@@ -51,6 +51,132 @@
   },
   "reviews": [
     {
+      "id": "rev_1791087117137",
+      "repoId": "repo_ecom",
+      "pullNumber": 48,
+      "pullTitle": "Hotfix: Thắt chặt bảo mật API & mã hóa mật khẩu",
+      "author": "quantech-developer",
+      "status": "CHANGES_REQUESTED",
+      "qualityScore": 72,
+      "grade": "C",
+      "summary": "Phát hiện lỗ hổng SQL Injection và Hardcoded API Secret trong đoạn mã vừa đẩy lên!",
+      "diffText": "+ const query = \"SELECT * FROM orders WHERE id = \" + orderId;\n+ const STRIPE_KEY = \"sk_live_93817263819\";",
+      "issues": [
+        {
+          "id": "iss_1791087117137_1",
+          "line": 1,
+          "type": "SECURITY",
+          "severity": "CRITICAL",
+          "title": "SQL Injection nghiêm trọng",
+          "message": "Nối chuỗi biến orderId vào câu lệnh query gây lỗ hổng truy xuất trái phép dữ liệu.",
+          "suggestion": "Dùng parameterized query: `db.query(\"SELECT * FROM orders WHERE id = ?\", [orderId])`",
+          "accepted": true
+        },
+        {
+          "id": "iss_1791087117137_2",
+          "line": 2,
+          "type": "SECURITY",
+          "severity": "CRITICAL",
+          "title": "Hardcoded Stripe Secret API Key",
+          "message": "Lộ Secret Key thanh toán Stripe trực tiếp trong mã nguồn git.",
+          "suggestion": "Lưu vào file .env và đọc qua `process.env.STRIPE_SECRET_KEY`.",
+          "accepted": true
+        }
+      ],
+      "engine": "GitHub Webhook Automated Trigger (Simulated)",
+      "createdAt": "2026-10-04T04:11:57.137Z"
+    },
+    {
+      "id": "rev_1791087072622",
+      "repoId": "repo_ecom",
+      "pullNumber": 30,
+      "pullTitle": "PR: Thắt chặt bảo mật API & tối ưu mã nguồn",
+      "author": "Phạm Huỳnh Quân",
+      "status": "APPROVED",
+      "qualityScore": 82,
+      "grade": "B",
+      "summary": "Phát hiện 1 vấn đề cần lưu ý, bao gồm 0 lỗi bảo mật mức nghiêm trọng.",
+      "diffText": "const express = require('express');\nconst cors = require('cors');\nrequire('dotenv').config();\n\nconst { initStorage } = require('./storage');\nconst { router: authRouter } = require('./routes/auth');\nconst reposRouter = require('./routes/repos');\nconst keysRouter = require('./routes/keys');\nconst aiRouter = require('./routes/ai');\nconst githubRouter = require('./routes/github');\nconst webhooksRouter = require('./routes/webhooks');\nconst statsRouter = require('./routes/stats');\nconst exportRouter = require('./routes/export');\n\nconst app = express();\n\ninitStorage();\n\napp.use(cors());\napp.use(express.json());\n\n// Gắn 12 luồng tính năng cho 4 thành viên\napp.use('/api/auth', authRouter);          // Thành viên 1: Luồng 1 (JWT Auth)\napp.use('/api/repos', reposRouter);        // Thành viên 1: Luồng 2 (Repo CRUD)\napp.use('/api/keys', keysRouter);          // Thành viên 1: Luồng 3 (API Keys & Quality Gate Policy)\n\napp.use('/api/ai', aiRouter);              // Thành viên 2: Luồng 4, 5, 6 (Core AI Review, Diff View & Approve)\n\napp.use('/api/github', githubRouter);      // Thành viên 3: Luồng 7 (PR Comments), Luồng 8 (Unit Test Gen)\napp.use('/api/webhooks', webhooksRouter);  // Thành viên 3: Luồng 9 (GitHub Webhook Sync & Simulator)\n\napp.use('/api/stats', statsRouter);        // Thành viên 4: Luồng 10 (Quality Dashboard & Leaderboard)\napp.use('/api/export', exportRouter);      // Thành viên 4: Luồng 11 (Discord Alert), Luồng 12 (Audit Export)\n\napp.get('/api/health', (req, res) => {\n  res.json({\n    status: 'ONLINE',\n    project: 'AI-Powered Code Reviewer & Automated PR Quality Gate',\n    topic: '16. Software Engineering Automation',\n    timestamp: new Date().toISOString(),\n    supportedFlows: [\n      'Flow 1: JWT Authentication & User Management (Member 1)',\n      'Flow 2: Monitored Repositories Management (Member 1)',\n      'Flow 3: API Vault & Quality Gate Policies (Member 1)',\n      'Flow 4: Git Diff AI Security Analysis via n8n (Member 2)',\n      'Flow 5: Interactive Visual Diff Viewer (Member 2)',\n      'Flow 6: Human-in-the-loop Issue Edit & Validation (Member 2)',\n      'Flow 7: Automated GitHub PR Review Comments via n8n (Member 3)',\n      'Flow 8: Automated Unit Test Generator (Jest/PyTest) (Member 3)',\n      'Flow 9: GitHub Webhook Sync & Event Simulator (Member 3)',\n      'Flow 10: Code Quality Metrics & Clean Code Leaderboard (Member 4)',\n      'Flow 11: Multi-channel Automated Notification (Discord/Slack) (Member 4)',\n      'Flow 12: Technical Audit & Security Report Export (Markdown/PDF) (Member 4)'\n    ]\n  });\n});\n\nconst PORT = process.env.PORT || 3000;\napp.listen(PORT, () => {\n  console.log(`====================================================`);\n  console.log(`🚀 AI-Powered Code Reviewer & PR Quality Gate Backend`);\n  console.log(`📡 Server online tại: http://localhost:${PORT}`);\n  console.log(`🔗 Kiểm tra trạng thái: http://localhost:${PORT}/api/health`);\n  console.log(`====================================================`);\n});",
+      "issues": [
+        {
+          "id": "iss_1791087072622_2",
+          "line": 18,
+          "type": "SECURITY",
+          "severity": "WARNING",
+          "title": "Nguy cơ rò rỉ dữ liệu nhạy cảm (CWE-532)",
+          "message": "In biến nhạy cảm hoặc mật khẩu ra console/log hệ thống.",
+          "suggestion": "Xóa bỏ console.log trước khi đẩy lên production hoặc băm dữ liệu.",
+          "accepted": true
+        }
+      ],
+      "engine": "Security Static Heuristics Engine",
+      "createdAt": "2026-10-04T04:11:12.622Z",
+      "reviewedAt": "2026-10-04T04:11:12.622Z"
+    },
+    {
+      "id": "rev_1791086926856",
+      "repoId": "repo_ecom",
+      "pullNumber": 14,
+      "pullTitle": "PR: Thắt chặt bảo mật API & tối ưu mã nguồn",
+      "author": "Phạm Huỳnh Quân",
+      "status": "APPROVED",
+      "qualityScore": 92,
+      "grade": "A",
+      "summary": "Mã nguồn được viết sạch, tuân thủ tiêu chuẩn an toàn và clean code!",
+      "diffText": "diff --git a/src/routes/profile.js b/src/routes/profile.js\nindex 4a12c3b..8d90e2f 100644\n--- a/src/routes/profile.js\n+++ b/src/routes/profile.js\n@@ -15,6 +15,10 @@ router.get('/user-bio', (req, res) => {\n+  const userBio = req.query.bio;\n+  // LỖ HỔNG XSS: Render trực tiếp HTML từ input người dùng\n+  res.send(\"<div><h1>User Bio:</h1><p>\" + userBio + \"</p></div>\");\n+  res.cookie(\"sessionId\", \"abc123456\", { httpOnly: false, secure: false });\n });",
+      "issues": [],
+      "engine": "Security Static Heuristics Engine",
+      "createdAt": "2026-10-04T04:08:46.856Z",
+      "reviewedAt": "2026-10-04T04:08:46.856Z"
+    },
+    {
+      "id": "rev_1791086827341",
+      "repoId": "repo_ecom",
+      "pullNumber": 22,
+      "pullTitle": "PR: Thắt chặt bảo mật API & tối ưu mã nguồn",
+      "author": "Phạm Huỳnh Quân",
+      "status": "CHANGES_REQUESTED",
+      "qualityScore": 52,
+      "grade": "D",
+      "summary": "Phát hiện 3 vấn đề cần lưu ý, bao gồm 1 lỗi bảo mật mức nghiêm trọng.",
+      "diffText": "const express = require('express');\nconst axios = require('axios');\nconst { readDB, writeDB } = require('../storage');\nconst { verifyToken } = require('./auth');\n\nconst router = express.Router();\n\n// Fallback phân tích bảo mật khi offline hoặc demo nhanh\nfunction generateFallbackSecurityReview(diffText, language) {\n  const issues = [];\n  let score = 92;\n\n  if (diffText.includes('SELECT') && (diffText.includes('+') || diffText.includes('${') || diffText.includes('\" + '))) {\n    issues.push({\n      id: 'iss_' + Date.now() + '_1',\n      line: 14,\n      type: 'SECURITY',\n      severity: 'CRITICAL',\n      title: 'Lỗ hổng SQL Injection (CWE-89)',\n      message: 'Phát hiện nối chuỗi trực tiếp dữ liệu người dùng vào câu lệnh SQL mà không qua escaping/parameterized queries.',\n      suggestion: 'Thay thế bằng prepared statement: `db.query(\"SELECT * FROM users WHERE id = ?\", [userId])`',\n      accepted: true\n    });\n    score -= 25;\n  }\n\n  if (diffText.includes('console.log') || diffText.includes('password') || diffText.includes('token') || diffText.includes('secret')) {\n    issues.push({\n      id: 'iss_' + Date.now() + '_2',\n      line: 18,\n      type: 'SECURITY',\n      severity: 'WARNING',\n      title: 'Nguy cơ rò rỉ dữ liệu nhạy cảm (CWE-532)',\n      message: 'In biến nhạy cảm hoặc mật khẩu ra console/log hệ thống.',\n      suggestion: 'Xóa bỏ console.log trước khi đẩy lên production hoặc băm dữ liệu.',\n      accepted: true\n    });\n    score -= 10;\n  }\n\n  if (diffText.includes('3600000') || diffText.includes('86400') || diffText.includes('1000')) {\n    issues.push({\n      id: 'iss_' + Date.now() + '_3',\n      line: 22,\n      type: 'CLEAN_CODE',\n      severity: 'SUGGESTION',\n      title: 'Magic Number không rõ ngữ cảnh',\n      message: 'Giá trị thời gian hoặc số nguyên cố định nên được định nghĩa thành hằng số (CONSTANT) rõ nghĩa.',\n      suggestion: 'Khai báo: `const ONE_HOUR_IN_MS = 3600000;`',\n      accepted: false\n    });\n    score -= 5;\n  }\n\n  const grade = score >= 90 ? 'A' : (score >= 80 ? 'B' : (score >= 65 ? 'C' : 'D'));\n\n  return {\n    qualityScore: Math.max(40, score),\n    grade,\n    summary: issues.length > 0\n      ? `Phát hiện ${issues.length} vấn đề cần lưu ý, bao gồm ${issues.filter(i => i.severity === 'CRITICAL').length} lỗi bảo mật mức nghiêm trọng.`\n      : 'Mã nguồn được viết sạch, tuân thủ tiêu chuẩn an toàn và clean code!',\n    issues\n  };\n}\n\n// 4. Gửi yêu cầu phân tích Code Diff (Core AI - Thành viên 2)\n// Gọi n8n Webhook, nếu n8n chưa mở thì gọi trực tiếp Gemini hoặc Fallback Engine\nrouter.post('/review-diff', verifyToken, async (req, res) => {\n  const { repoId, pullNumber, pullTitle, diffText, language } = req.body;\n\n  if (!diffText || diffText.trim().length < 10) {\n    return res.status(400).json({ success: false, message: 'Vui lòng nhập đoạn git diff hoặc code cần review' });\n  }\n\n  const db = readDB();\n  const config = db.apiConfigs[repoId] || {};\n  const n8nUrl = config.n8nReviewWebhookUrl || 'http://localhost:5678/webhook/review-code-diff';\n  const geminiKey = config.geminiKey || process.env.GEMINI_API_KEY;\n\n  let reviewData = null;\n  let processingEngine = '';\n\n  // BƯỚC 1: Thử gọi Webhook n8n\n  try {\n    console.log(`[AI Review] Đang gọi Webhook n8n tại: ${n8nUrl}...`);\n    const n8nRes = await axios.post(n8nUrl, {\n      diffText,\n      language: language || 'javascript',\n      geminiApiKey: geminiKey\n    }, { timeout: 8000 });\n\n    if (n8nRes.data && n8nRes.data.data) {\n      reviewData = n8nRes.data.data;\n      processingEngine = 'n8n Automation Engine';\n    }\n  } catch (n8nErr) {\n    console.log(`[AI Review] n8n Webhook chưa mở. Chuyển sang Gemini Direct: ${n8nErr.message}`);\n  }\n\n  // BƯỚC 2: Gọi Gemini API trực tiếp nếu có key\n  if (!reviewData && geminiKey) {\n    try {\n      const prompt = `Bạn là Senior Principal Security & Code Reviewer.\nHãy phân tích đoạn git diff sau và trả về JSON thuần túy theo schema:\n{\n  \"qualityScore\": 85,\n  \"grade\": \"B\",\n  \"summary\": \"Tóm tắt đánh giá chất lượng\",\n  \"issues\": [\n    {\n      \"id\": \"iss_1\",\n      \"line\": 14,\n      \"type\": \"SECURITY\",\n      \"severity\": \"CRITICAL\",\n      \"title\": \"Lỗ hổng SQL Injection\",\n      \"message\": \"Chi tiết vấn đề\",\n      \"suggestion\": \"Cách sửa cụ thể\"\n    }\n  ]\n}\n\nNGÔN NGỮ: ${language || 'javascript'}\nDIFF:\n${diffText}`;\n\n      const geminiRes = await axios.post(\n        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,\n        {\n          contents: [{ role: 'user', parts: [{ text: prompt }] }],\n          generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }\n        },\n        { timeout: 15000 }\n      );\n\n      let raw = geminiRes.data.candidates[0].content.parts[0].text;\n      raw = raw.replace(/```json/gi, '').replace(/```/gi, '').trim();\n      reviewData = JSON.parse(raw);\n      processingEngine = 'Gemini 2.0 Flash Direct';\n    } catch (gErr) {\n      console.log('Gemini API lỗi:', gErr.message);\n    }\n  }\n\n  // BƯỚC 3: Fallback Heuristic\n  if (!reviewData) {\n    reviewData = generateFallbackSecurityReview(diffText, language);\n    processingEngine = 'Security Static Heuristics Engine';\n  }\n\n  // Chuẩn hóa danh sách issues\n  if (reviewData.issues) {\n    reviewData.issues.forEach((iss, idx) => {\n      iss.id = iss.id || `iss_${Date.now()}_${idx}`;\n      iss.accepted = iss.accepted !== undefined ? iss.accepted : true;\n    });\n  }\n\n  const newReview = {\n    id: 'rev_' + Date.now(),\n    repoId: repoId || 'repo_default',\n    pullNumber: pullNumber || Math.floor(Math.random() * 50 + 1),\n    pullTitle: pullTitle || 'Pull Request: Cập nhật mã nguồn & tính năng',\n    author: req.user ? req.user.fullName : 'Developer',\n    status: reviewData.qualityScore >= (config.minQualityScore || 80) ? 'APPROVED' : 'CHANGES_REQUESTED',\n    qualityScore: reviewData.qualityScore || 80,\n    grade: reviewData.grade || 'B',\n    summary: reviewData.summary || 'Đã hoàn tất rà soát chất lượng code',\n    diffText,\n    issues: reviewData.issues || [],\n    engine: processingEngine,\n    createdAt: new Date().toISOString(),\n    reviewedAt: new Date().toISOString()\n  };\n\n  db.reviews.unshift(newReview);\n  writeDB(db);\n\n  res.json({\n    success: true,\n    message: `Đã phân tích code thành công qua ${processingEngine}!`,\n    engine: processingEngine,\n    review: newReview\n  });\n});\n\n// 5. Lấy danh sách reviews của Repo\nrouter.get('/reviews/:repoId', verifyToken, (req, res) => {\n  const { repoId } = req.params;\n  const db = readDB();\n  const list = db.reviews.filter(r => r.repoId === repoId);\n  res.json({ success: true, reviews: list });\n});\n\n// 6. Chỉnh sửa & Chốt duyệt nhận xét (Human-in-the-loop - Thành viên 2)\nrouter.put('/reviews/:reviewId/toggle-issue', verifyToken, (req, res) => {\n  const { reviewId } = req.params;\n  const { issueId } = req.body;\n\n  const db = readDB();\n  const review = db.reviews.find(r => r.id === reviewId);\n  if (!review) return res.status(404).json({ success: false, message: 'Không tìm thấy review' });\n\n  const issue = (review.issues || []).find(i => i.id === issueId);\n  if (issue) {\n    issue.accepted = !issue.accepted;\n    writeDB(db);\n    return res.json({ success: true, issue, message: `Đã ${issue.accepted ? 'chấp nhận' : 'bỏ qua'} nhận xét này` });\n  }\n\n  res.status(404).json({ success: false, message: 'Không tìm thấy nhận xét' });\n});\n\n// 6. Chốt duyệt trạng thái Pull Request (Approve / Reject)\nrouter.put('/reviews/:reviewId/status', verifyToken, (req, res) => {\n  const { reviewId } = req.params;\n  const { status } = req.body; // 'APPROVED' or 'CHANGES_REQUESTED'\n\n  const db = readDB();\n  const review = db.reviews.find(r => r.id === reviewId);\n  if (!review) return res.status(404).json({ success: false, message: 'Không tìm thấy review' });\n\n  review.status = status;\n  review.updatedAt = new Date().toISOString();\n  writeDB(db);\n\n  res.json({ success: true, review, message: `Đã chốt duyệt trạng thái: ${status}` });\n});\n\nmodule.exports = router;\n",
+      "issues": [
+        {
+          "id": "iss_1791086827340_1",
+          "line": 14,
+          "type": "SECURITY",
+          "severity": "CRITICAL",
+          "title": "Lỗ hổng SQL Injection (CWE-89)",
+          "message": "Phát hiện nối chuỗi trực tiếp dữ liệu người dùng vào câu lệnh SQL mà không qua escaping/parameterized queries.",
+          "suggestion": "Thay thế bằng prepared statement: `db.query(\"SELECT * FROM users WHERE id = ?\", [userId])`",
+          "accepted": true
+        },
+        {
+          "id": "iss_1791086827340_2",
+          "line": 18,
+          "type": "SECURITY",
+          "severity": "WARNING",
+          "title": "Nguy cơ rò rỉ dữ liệu nhạy cảm (CWE-532)",
+          "message": "In biến nhạy cảm hoặc mật khẩu ra console/log hệ thống.",
+          "suggestion": "Xóa bỏ console.log trước khi đẩy lên production hoặc băm dữ liệu.",
+          "accepted": true
+        },
+        {
+          "id": "iss_1791086827340_3",
+          "line": 22,
+          "type": "CLEAN_CODE",
+          "severity": "SUGGESTION",
+          "title": "Magic Number không rõ ngữ cảnh",
+          "message": "Giá trị thời gian hoặc số nguyên cố định nên được định nghĩa thành hằng số (CONSTANT) rõ nghĩa.",
+          "suggestion": "Khai báo: `const ONE_HOUR_IN_MS = 3600000;`",
+          "accepted": false
+        }
+      ],
+      "engine": "Security Static Heuristics Engine",
+      "createdAt": "2026-10-04T04:07:07.341Z",
+      "reviewedAt": "2026-10-04T04:07:07.341Z"
+    },
+    {
       "id": "rev_101",
       "repoId": "repo_ecom",
       "pullNumber": 42,
@@ -100,6 +226,15 @@
     }
   ],
   "syncLogs": [
+    {
+      "id": "sim_1791087117137",
+      "event": "github:pull_request.opened (Simulated)",
+      "repo": "quan-tech/ecommerce-payment-service",
+      "pullNumber": 48,
+      "sender": "quantech-developer",
+      "actionTaken": "Kích hoạt n8n AI Review & Kiểm tra Quality Gate",
+      "timestamp": "2026-10-04T04:11:57.137Z"
+    },
     {
       "id": "hook_1",
       "event": "pull_request.opened",
