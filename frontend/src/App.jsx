@@ -1100,25 +1100,44 @@ export default function App() {
 
             <form onSubmit={handleAuthSubmit}>
               {authMode === 'register' && (
-                <div className="form-group">
-                  <label className="form-label">Họ và tên:</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={authForm.fullName}
-                    onChange={(e) => setAuthForm({ ...authForm, fullName: e.target.value })}
-                    required
-                  />
-                </div>
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Họ và tên:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={authForm.fullName}
+                      onChange={(e) => setAuthForm({ ...authForm, fullName: e.target.value })}
+                      placeholder="vd: Lê Hoàng Quân"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Vai trò trong nhóm:</label>
+                    <select
+                      className="form-input"
+                      value={authForm.role || 'Software Engineer'}
+                      onChange={(e) => setAuthForm({ ...authForm, role: e.target.value })}
+                    >
+                      <option value="Tech Lead / Reviewer">Tech Lead / Reviewer</option>
+                      <option value="Senior Developer">Senior Developer</option>
+                      <option value="Junior Developer">Junior Developer</option>
+                      <option value="Security Specialist">Security Specialist</option>
+                      <option value="QA Automation Engineer">QA Automation Engineer</option>
+                    </select>
+                  </div>
+                </>
               )}
 
               <div className="form-group">
-                <label className="form-label">Email:</label>
+                <label className="form-label">Email tài khoản:</label>
                 <input
                   type="email"
                   className="form-input"
                   value={authForm.email}
                   onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+                  placeholder="name@company.com"
                   required
                 />
               </div>
@@ -1130,46 +1149,83 @@ export default function App() {
                   className="form-input"
                   value={authForm.password}
                   onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                  placeholder="••••••••"
                   required
                 />
               </div>
 
               <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
-                {authMode === 'login' ? 'Đăng nhập ngay' : 'Đăng ký tài khoản'}
+                {authMode === 'login' ? 'Đăng nhập ngay' : 'Tạo tài khoản mới'}
               </button>
 
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ width: '100%', marginTop: '0.6rem', justifyContent: 'center' }}
-                onClick={() => {
-                  setAuthForm({ email: 'lead-dev@aicodereviewer.com', password: 'password123', fullName: 'Nguyễn Văn Tech Lead' });
-                  fetch(`${API_BASE}/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: 'lead-dev@aicodereviewer.com', password: 'password123' })
-                  }).then(r => r.json()).then(data => {
-                    if (data.success) {
-                      localStorage.setItem('token', data.token);
-                      localStorage.setItem('user', JSON.stringify(data.user));
-                      setToken(data.token);
-                      setUser(data.user);
-                      setShowAuthModal(false);
-                      showToast('Đăng nhập thành công với tài khoản Demo!', 'success');
-                      if (data.activeRepoId) setActiveRepoId(data.activeRepoId);
-                    }
-                  });
-                }}
-              >
-                ⚡ Đăng nhập nhanh với tài khoản Demo (1-Click)
-              </button>
+              {/* Danh sách tài khoản mẫu để chuyển đổi nhanh */}
+              <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem', fontWeight: 600 }}>
+                  ⚡ Tài khoản mẫu có sẵn (Bấm để đăng nhập ngay):
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', justifyContent: 'space-between' }}
+                    onClick={() => {
+                      setAuthForm({ email: 'lead-dev@aicodereviewer.com', password: 'password123', fullName: 'Nguyễn Văn Tech Lead', role: 'Tech Lead / Reviewer' });
+                      fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: 'lead-dev@aicodereviewer.com', password: 'password123' })
+                      }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                          localStorage.setItem('token', data.token);
+                          localStorage.setItem('user', JSON.stringify(data.user));
+                          setToken(data.token);
+                          setUser(data.user);
+                          setShowAuthModal(false);
+                          showToast(`Đăng nhập thành công: ${data.user.fullName} (${data.user.role})!`, 'success');
+                          if (data.activeRepoId) setActiveRepoId(data.activeRepoId);
+                        }
+                      });
+                    }}
+                  >
+                    <span>👨‍💻 <strong>Nguyễn Văn Tech Lead</strong> (lead-dev@aicodereviewer.com)</span>
+                    <span style={{ color: '#34d399', fontSize: '0.7rem' }}>Chọn</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', justifyContent: 'space-between' }}
+                    onClick={() => {
+                      setAuthForm({ email: 'quantech@student.edu.vn', password: 'mysecretpassword', fullName: 'Lê Hoàng Quân', role: 'Security Lead' });
+                      fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: 'quantech@student.edu.vn', password: 'mysecretpassword' })
+                      }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                          localStorage.setItem('token', data.token);
+                          localStorage.setItem('user', JSON.stringify(data.user));
+                          setToken(data.token);
+                          setUser(data.user);
+                          setShowAuthModal(false);
+                          showToast(`Đăng nhập thành công: ${data.user.fullName} (${data.user.role})!`, 'success');
+                          if (data.activeRepoId) setActiveRepoId(data.activeRepoId);
+                        }
+                      });
+                    }}
+                  >
+                    <span>🛡️ <strong>Lê Hoàng Quân</strong> (quantech@student.edu.vn)</span>
+                    <span style={{ color: '#34d399', fontSize: '0.7rem' }}>Chọn</span>
+                  </button>
+                </div>
+              </div>
             </form>
 
             <div style={{ marginTop: '1.25rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {authMode === 'login' ? (
-                <>Chưa có tài khoản? <span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => setAuthMode('register')}>Đăng ký</span></>
+                <>Chưa có tài khoản? <span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setAuthMode('register'); setAuthForm({ email: '', password: '', fullName: '', role: 'Junior Developer' }); }}>Đăng ký tài khoản mới</span></>
               ) : (
-                <>Đã có tài khoản? <span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => setAuthMode('login')}>Đăng nhập</span></>
+                <>Đã có tài khoản? <span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setAuthMode('login'); setAuthForm({ email: 'lead-dev@aicodereviewer.com', password: 'password123', fullName: '' }); }}>Quay lại Đăng nhập</span></>
               )}
             </div>
           </div>
