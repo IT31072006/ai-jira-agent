@@ -1,18 +1,22 @@
-const express = require('express');
-const cors = require('cors');
-const app = express();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-// Cho phép Frontend gọi API mà không bị chặn lỗi CORS
-app.use(cors());
-// Hỗ trợ đọc dữ liệu JSON gửi lên từ web
-app.use(express.json());
+const app = require('./src/app');
+const { pool } = require('./src/config/db');
 
-// API test thử
-app.get('/api/test', (req, res) => {
-    res.json({ message: 'Backend Express đã sẵn sàng nhận dữ liệu!' });
-});
+const PORT = process.env.PORT || 5000;
 
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server đang chạy tại http://localhost:${PORT}`);
-});
+// Test DB connection before listening
+pool.connect()
+  .then((client) => {
+    client.release();
+    console.log('✓ Kết nối cơ sở dữ liệu PostgreSQL thành công!');
+    
+    app.listen(PORT, () => {
+      console.log(`✓ Server Express đang chạy tại http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('✗ Lỗi kết nối PostgreSQL:', err.message);
+    process.exit(1);
+  });
