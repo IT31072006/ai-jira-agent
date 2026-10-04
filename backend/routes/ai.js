@@ -5,283 +5,226 @@ const { verifyToken } = require('./auth');
 
 const router = express.Router();
 
-// Hàm phân tích thông minh dự phòng khi offline hoặc test nhanh
-function generateFallbackBreakdown(text, projectKey) {
-  const pKey = projectKey || 'PROJ';
+// Fallback phân tích bảo mật khi offline hoặc demo nhanh
+function generateFallbackSecurityReview(diffText, language) {
+  const issues = [];
+  let score = 92;
+
+  if (diffText.includes('SELECT') && (diffText.includes('+') || diffText.includes('${') || diffText.includes('" + '))) {
+    issues.push({
+      id: 'iss_' + Date.now() + '_1',
+      line: 14,
+      type: 'SECURITY',
+      severity: 'CRITICAL',
+      title: 'Lỗ hổng SQL Injection (CWE-89)',
+      message: 'Phát hiện nối chuỗi trực tiếp dữ liệu người dùng vào câu lệnh SQL mà không qua escaping/parameterized queries.',
+      suggestion: 'Thay thế bằng prepared statement: `db.query("SELECT * FROM users WHERE id = ?", [userId])`',
+      accepted: true
+    });
+    score -= 25;
+  }
+
+  if (diffText.includes('console.log') || diffText.includes('password') || diffText.includes('token') || diffText.includes('secret')) {
+    issues.push({
+      id: 'iss_' + Date.now() + '_2',
+      line: 18,
+      type: 'SECURITY',
+      severity: 'WARNING',
+      title: 'Nguy cơ rò rỉ dữ liệu nhạy cảm (CWE-532)',
+      message: 'In biến nhạy cảm hoặc mật khẩu ra console/log hệ thống.',
+      suggestion: 'Xóa bỏ console.log trước khi đẩy lên production hoặc băm dữ liệu.',
+      accepted: true
+    });
+    score -= 10;
+  }
+
+  if (diffText.includes('3600000') || diffText.includes('86400') || diffText.includes('1000')) {
+    issues.push({
+      id: 'iss_' + Date.now() + '_3',
+      line: 22,
+      type: 'CLEAN_CODE',
+      severity: 'SUGGESTION',
+      title: 'Magic Number không rõ ngữ cảnh',
+      message: 'Giá trị thời gian hoặc số nguyên cố định nên được định nghĩa thành hằng số (CONSTANT) rõ nghĩa.',
+      suggestion: 'Khai báo: `const ONE_HOUR_IN_MS = 3600000;`',
+      accepted: false
+    });
+    score -= 5;
+  }
+
+  const grade = score >= 90 ? 'A' : (score >= 80 ? 'B' : (score >= 65 ? 'C' : 'D'));
+
   return {
-    epics: [
-      {
-        id: 'epic_' + Date.now(),
-        summary: `Hệ thống tính năng: ${text.slice(0, 45)}...`,
-        description: `Bóc tách toàn diện từ yêu cầu: "${text}"`,
-        jiraKey: `${pKey}-${Math.floor(Math.random() * 800 + 100)}`,
-        stories: [
-          {
-            id: 'story_' + Date.now() + '_1',
-            summary: `Thiết kế API & Kiến trúc cơ sở dữ liệu cho yêu cầu`,
-            description: `As a developer, I want to design clean database tables and RESTful endpoints so that data is securely processed.`,
-            acceptanceCriteria: [
-              'Tạo bảng dữ liệu với ràng buộc khóa ngoại',
-              'Định nghĩa các DTO và mã phản hồi HTTP chuẩn',
-              'Kiểm tra validation dữ liệu đầu vào'
-            ],
-            storyPoints: 5,
-            priority: 'High',
-            status: 'To Do',
-            assignee: 'Backend Lead',
-            tasks: [
-              { id: 'task_' + Date.now() + '_1', summary: 'Viết migration schema & model', estimatedHours: 4, status: 'To Do' },
-              { id: 'task_' + Date.now() + '_2', summary: 'Xây dựng controller & service logic', estimatedHours: 6, status: 'To Do' }
-            ]
-          },
-          {
-            id: 'story_' + Date.now() + '_2',
-            summary: `Giao diện người dùng (UI/UX) và tương tác người dùng`,
-            description: `As an end user, I want an intuitive and responsive interface so that I can easily interact with this feature.`,
-            acceptanceCriteria: [
-              'Giao diện responsive trên mobile và desktop',
-              'Hiển thị trạng thái loading và thông báo lỗi rõ ràng'
-            ],
-            storyPoints: 3,
-            priority: 'Medium',
-            status: 'To Do',
-            assignee: 'Frontend Dev',
-            tasks: [
-              { id: 'task_' + Date.now() + '_3', summary: 'Tạo component giao diện React', estimatedHours: 4, status: 'To Do' },
-              { id: 'task_' + Date.now() + '_4', summary: 'Tích hợp gọi API từ Client', estimatedHours: 3, status: 'To Do' }
-            ]
-          },
-          {
-            id: 'story_' + Date.now() + '_3',
-            summary: `Kiểm thử bảo mật, tích hợp và tối ưu hiệu năng`,
-            description: `As a QA engineer, I want automated test suites so that no regression bugs reach production.`,
-            acceptanceCriteria: [
-              'Độ bao phủ Unit Test đạt ít nhất 80%',
-              'Thời gian phản hồi API dưới 300ms'
-            ],
-            storyPoints: 2,
-            priority: 'Low',
-            status: 'To Do',
-            assignee: 'QA Engineer',
-            tasks: [
-              { id: 'task_' + Date.now() + '_5', summary: 'Viết Integration & Unit Tests', estimatedHours: 3, status: 'To Do' }
-            ]
-          }
-        ]
-      }
-    ]
+    qualityScore: Math.max(40, score),
+    grade,
+    summary: issues.length > 0
+      ? `Phát hiện ${issues.length} vấn đề cần lưu ý, bao gồm ${issues.filter(i => i.severity === 'CRITICAL').length} lỗi bảo mật mức nghiêm trọng.`
+      : 'Mã nguồn được viết sạch, tuân thủ tiêu chuẩn an toàn và clean code!',
+    issues
   };
 }
 
-// 4. Gửi yêu cầu phân tích (Core - Thành viên 2)
-// Gọi n8n Webhook, nếu n8n chưa chạy thì fallback trực tiếp sang Gemini API hoặc fallback generator
-router.post('/analyze', verifyToken, async (req, res) => {
-  const { workspaceId, requirementText, projectKey } = req.body;
+// 4. Gửi yêu cầu phân tích Code Diff (Core AI - Thành viên 2)
+// Gọi n8n Webhook, nếu n8n chưa mở thì gọi trực tiếp Gemini hoặc Fallback Engine
+router.post('/review-diff', verifyToken, async (req, res) => {
+  const { repoId, pullNumber, pullTitle, diffText, language } = req.body;
 
-  if (!requirementText || requirementText.trim().length < 5) {
-    return res.status(400).json({ success: false, message: 'Vui lòng nhập đoạn mô tả yêu cầu nghiệp vụ dài hơn' });
+  if (!diffText || diffText.trim().length < 10) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập đoạn git diff hoặc code cần review' });
   }
 
   const db = readDB();
-  const config = db.apiConfigs[workspaceId] || {};
-  const n8nUrl = config.n8nWebhookUrl || 'http://localhost:5678/webhook/analyze-requirement';
+  const config = db.apiConfigs[repoId] || {};
+  const n8nUrl = config.n8nReviewWebhookUrl || 'http://localhost:5678/webhook/review-code-diff';
   const geminiKey = config.geminiKey || process.env.GEMINI_API_KEY;
-  const pKey = projectKey || 'PROJ';
 
-  let breakdownData = null;
+  let reviewData = null;
   let processingEngine = '';
 
-  // BƯỚC 1: Thử gọi n8n Webhook trước (theo đúng yêu cầu đồ án)
+  // BƯỚC 1: Thử gọi Webhook n8n
   try {
-    console.log(`[AI Analyze] Đang gọi Webhook n8n tại: ${n8nUrl}...`);
-    const n8nResponse = await axios.post(n8nUrl, {
-      requirementText,
-      projectKey: pKey,
+    console.log(`[AI Review] Đang gọi Webhook n8n tại: ${n8nUrl}...`);
+    const n8nRes = await axios.post(n8nUrl, {
+      diffText,
+      language: language || 'javascript',
       geminiApiKey: geminiKey
     }, { timeout: 8000 });
 
-    if (n8nResponse.data && (n8nResponse.data.data || n8nResponse.data.epics)) {
-      breakdownData = n8nResponse.data.data || n8nResponse.data;
-      processingEngine = 'n8n Webhook Engine';
+    if (n8nRes.data && n8nRes.data.data) {
+      reviewData = n8nRes.data.data;
+      processingEngine = 'n8n Automation Engine';
     }
   } catch (n8nErr) {
-    console.log(`[AI Analyze] n8n Webhook chưa mở hoặc không phản hồi (${n8nErr.message}). Đang chuyển sang Gemini Direct Engine...`);
+    console.log(`[AI Review] n8n Webhook chưa mở. Chuyển sang Gemini Direct: ${n8nErr.message}`);
   }
 
-  // BƯỚC 2: Nếu n8n chưa mở, gọi trực tiếp Gemini API nếu có key
-  if (!breakdownData && geminiKey) {
+  // BƯỚC 2: Gọi Gemini API trực tiếp nếu có key
+  if (!reviewData && geminiKey) {
     try {
-      const systemInstruction = `Bạn là Senior Business Analyst và Scrum Master.
-Hãy phân tích yêu cầu sau thành Epic -> User Stories -> Sub-tasks.
-BẮT BUỘC chỉ trả về JSON thuần túy (không kèm markdown):
+      const prompt = `Bạn là Senior Principal Security & Code Reviewer.
+Hãy phân tích đoạn git diff sau và trả về JSON thuần túy theo schema:
 {
-  "epics": [
+  "qualityScore": 85,
+  "grade": "B",
+  "summary": "Tóm tắt đánh giá chất lượng",
+  "issues": [
     {
-      "summary": "Tên Epic",
-      "description": "Mục tiêu",
-      "stories": [
-        {
-          "summary": "Tên User Story",
-          "description": "As a [role], I want [feature] so that [benefit]",
-          "acceptanceCriteria": ["Tiêu chí 1", "Tiêu chí 2"],
-          "storyPoints": 3,
-          "priority": "High",
-          "tasks": [
-            { "summary": "Tên Task kỹ thuật", "type": "Sub-task", "estimatedHours": 4 }
-          ]
-        }
-      ]
+      "id": "iss_1",
+      "line": 14,
+      "type": "SECURITY",
+      "severity": "CRITICAL",
+      "title": "Lỗ hổng SQL Injection",
+      "message": "Chi tiết vấn đề",
+      "suggestion": "Cách sửa cụ thể"
     }
   ]
-}`;
+}
+
+NGÔN NGỮ: ${language || 'javascript'}
+DIFF:
+${diffText}`;
 
       const geminiRes = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
         {
-          contents: [{ role: 'user', parts: [{ text: `${systemInstruction}\n\nYÊU CẦU NGHIỆP VỤ:\n${requirementText}` }] }],
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
         },
         { timeout: 15000 }
       );
 
-      let textRes = geminiRes.data.candidates[0].content.parts[0].text;
-      textRes = textRes.replace(/```json/gi, '').replace(/```/gi, '').trim();
-      breakdownData = JSON.parse(textRes);
+      let raw = geminiRes.data.candidates[0].content.parts[0].text;
+      raw = raw.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      reviewData = JSON.parse(raw);
       processingEngine = 'Gemini 2.0 Flash Direct';
-    } catch (geminiErr) {
-      console.log(`[AI Analyze] Gemini API lỗi: ${geminiErr.message}. Dùng Fallback generator...`);
+    } catch (gErr) {
+      console.log('Gemini API lỗi:', gErr.message);
     }
   }
 
-  // BƯỚC 3: Fallback Heuristic Generator nếu offline
-  if (!breakdownData) {
-    breakdownData = generateFallbackBreakdown(requirementText, pKey);
-    processingEngine = 'Mock BA Engine (Offline Demo)';
+  // BƯỚC 3: Fallback Heuristic
+  if (!reviewData) {
+    reviewData = generateFallbackSecurityReview(diffText, language);
+    processingEngine = 'Security Static Heuristics Engine';
   }
 
-  // Đảm bảo ID định danh cho từng node
-  if (breakdownData.epics) {
-    breakdownData.epics.forEach((epic, eIdx) => {
-      epic.id = epic.id || `epic_${Date.now()}_${eIdx}`;
-      epic.jiraKey = epic.jiraKey || `${pKey}-${Math.floor(Math.random() * 800 + 100)}`;
-      if (epic.stories) {
-        epic.stories.forEach((st, sIdx) => {
-          st.id = st.id || `story_${Date.now()}_${eIdx}_${sIdx}`;
-          st.priority = st.priority || 'Medium';
-          st.storyPoints = st.storyPoints || 3;
-          st.status = st.status || 'To Do';
-          if (st.tasks) {
-            st.tasks.forEach((t, tIdx) => {
-              t.id = t.id || `task_${Date.now()}_${eIdx}_${sIdx}_${tIdx}`;
-              t.estimatedHours = t.estimatedHours || 3;
-              t.status = t.status || 'To Do';
-            });
-          }
-        });
-      }
+  // Chuẩn hóa danh sách issues
+  if (reviewData.issues) {
+    reviewData.issues.forEach((iss, idx) => {
+      iss.id = iss.id || `iss_${Date.now()}_${idx}`;
+      iss.accepted = iss.accepted !== undefined ? iss.accepted : true;
     });
   }
 
-  // Lưu phiên phân tích vào Database
-  const newSession = {
-    id: 'req_' + Date.now(),
-    workspaceId: workspaceId || 'ws_default',
-    title: requirementText.slice(0, 60) + '...',
-    rawText: requirementText,
-    status: 'ANALYZED',
-    processingEngine,
+  const newReview = {
+    id: 'rev_' + Date.now(),
+    repoId: repoId || 'repo_default',
+    pullNumber: pullNumber || Math.floor(Math.random() * 50 + 1),
+    pullTitle: pullTitle || 'Pull Request: Cập nhật mã nguồn & tính năng',
+    author: req.user ? req.user.fullName : 'Developer',
+    status: reviewData.qualityScore >= (config.minQualityScore || 80) ? 'APPROVED' : 'CHANGES_REQUESTED',
+    qualityScore: reviewData.qualityScore || 80,
+    grade: reviewData.grade || 'B',
+    summary: reviewData.summary || 'Đã hoàn tất rà soát chất lượng code',
+    diffText,
+    issues: reviewData.issues || [],
+    engine: processingEngine,
     createdAt: new Date().toISOString(),
-    pushedToJira: false,
-    epics: breakdownData.epics || []
+    reviewedAt: new Date().toISOString()
   };
 
-  db.requirements.unshift(newSession);
+  db.reviews.unshift(newReview);
   writeDB(db);
 
   res.json({
     success: true,
-    message: `Phân tích thành công bằng ${processingEngine}`,
+    message: `Đã phân tích code thành công qua ${processingEngine}!`,
     engine: processingEngine,
-    session: newSession,
-    data: breakdownData
+    review: newReview
   });
 });
 
-// Lấy danh sách các session/requirements đã phân tích của Workspace
-router.get('/sessions/:workspaceId', verifyToken, (req, res) => {
-  const { workspaceId } = req.params;
+// 5. Lấy danh sách reviews của Repo
+router.get('/reviews/:repoId', verifyToken, (req, res) => {
+  const { repoId } = req.params;
   const db = readDB();
-  const list = db.requirements.filter(r => r.workspaceId === workspaceId);
-  res.json({ success: true, sessions: list });
+  const list = db.reviews.filter(r => r.repoId === repoId);
+  res.json({ success: true, reviews: list });
 });
 
-// 6. Chỉnh sửa kết quả (Human-in-the-loop: Edit/Validate - Thành viên 2)
-router.put('/sessions/:sessionId', verifyToken, (req, res) => {
-  const { sessionId } = req.params;
-  const { epics, title } = req.body;
+// 6. Chỉnh sửa & Chốt duyệt nhận xét (Human-in-the-loop - Thành viên 2)
+router.put('/reviews/:reviewId/toggle-issue', verifyToken, (req, res) => {
+  const { reviewId } = req.params;
+  const { issueId } = req.body;
 
   const db = readDB();
-  const session = db.requirements.find(r => r.id === sessionId);
-  if (!session) {
-    return res.status(404).json({ success: false, message: 'Không tìm thấy phiên làm việc' });
+  const review = db.reviews.find(r => r.id === reviewId);
+  if (!review) return res.status(404).json({ success: false, message: 'Không tìm thấy review' });
+
+  const issue = (review.issues || []).find(i => i.id === issueId);
+  if (issue) {
+    issue.accepted = !issue.accepted;
+    writeDB(db);
+    return res.json({ success: true, issue, message: `Đã ${issue.accepted ? 'chấp nhận' : 'bỏ qua'} nhận xét này` });
   }
 
-  if (epics) session.epics = epics;
-  if (title) session.title = title;
-  session.updatedAt = new Date().toISOString();
+  res.status(404).json({ success: false, message: 'Không tìm thấy nhận xét' });
+});
 
+// 6. Chốt duyệt trạng thái Pull Request (Approve / Reject)
+router.put('/reviews/:reviewId/status', verifyToken, (req, res) => {
+  const { reviewId } = req.params;
+  const { status } = req.body; // 'APPROVED' or 'CHANGES_REQUESTED'
+
+  const db = readDB();
+  const review = db.reviews.find(r => r.id === reviewId);
+  if (!review) return res.status(404).json({ success: false, message: 'Không tìm thấy review' });
+
+  review.status = status;
+  review.updatedAt = new Date().toISOString();
   writeDB(db);
-  res.json({ success: true, message: 'Đã lưu chỉnh sửa thành công', session });
-});
 
-// Tái tạo một User Story riêng biệt bằng AI
-router.post('/regenerate-story', verifyToken, async (req, res) => {
-  const { workspaceId, epicSummary, currentStorySummary } = req.body;
-  const db = readDB();
-  const config = db.apiConfigs[workspaceId] || {};
-  const geminiKey = config.geminiKey || process.env.GEMINI_API_KEY;
-
-  if (geminiKey) {
-    try {
-      const prompt = `Bạn là Scrum Master. Hãy viết lại User Story sau cho thật chuẩn Agile và chi tiết:
-Epic: ${epicSummary}
-Story hiện tại: ${currentStorySummary}
-
-Chỉ trả về JSON theo mẫu:
-{
-  "summary": "Tên Story mới",
-  "description": "As a [role], I want [feature] so that [benefit]",
-  "acceptanceCriteria": ["Tiêu chí 1", "Tiêu chí 2"],
-  "storyPoints": 5,
-  "priority": "High"
-}`;
-      const geminiRes = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-        {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        },
-        { timeout: 8000 }
-      );
-      let textRes = geminiRes.data.candidates[0].content.parts[0].text;
-      textRes = textRes.replace(/```json/gi, '').replace(/```/gi, '').trim();
-      return res.json({ success: true, story: JSON.parse(textRes) });
-    } catch (e) {
-      // Fallback
-    }
-  }
-
-  // Fallback demo story
-  res.json({
-    success: true,
-    story: {
-      summary: `Tối ưu hóa: ${currentStorySummary}`,
-      description: `As a user, I want an enhanced experience for ${currentStorySummary} so that I can achieve my goal effectively.`,
-      acceptanceCriteria: ['Xử lý ngoại lệ chuẩn', 'Giao diện mượt mà, phản hồi ngay lập tức'],
-      storyPoints: 5,
-      priority: 'High'
-    }
-  });
+  res.json({ success: true, review, message: `Đã chốt duyệt trạng thái: ${status}` });
 });
 
 module.exports = router;

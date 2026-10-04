@@ -4,9 +4,8 @@ const jwt = require('jsonwebtoken');
 const { readDB, writeDB } = require('../storage');
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'ai-jira-secret-key-2026-super-secure';
+const JWT_SECRET = process.env.JWT_SECRET || 'ai-codereviewer-secret-key-2026';
 
-// Middleware xác thực token
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader) {
@@ -26,15 +25,15 @@ function verifyToken(req, res, next) {
 // 1. Đăng ký tài khoản (Thành viên 1)
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, fullName } = req.body;
+    const { email, password, fullName, role } = req.body;
     if (!email || !password || !fullName) {
-      return res.status(400).json({ success: false, message: 'Vui lòng điền đủ họ tên, email và mật khẩu' });
+      return res.status(400).json({ success: false, message: 'Vui lòng điền đủ thông tin' });
     }
 
     const db = readDB();
     const existing = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (existing) {
-      return res.status(400).json({ success: false, message: 'Email này đã được đăng ký' });
+      return res.status(400).json({ success: false, message: 'Email này đã tồn tại' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -45,26 +44,32 @@ router.post('/register', async (req, res) => {
       email: email.toLowerCase(),
       passwordHash,
       fullName,
+      role: role || 'Software Engineer',
       createdAt: new Date().toISOString()
     };
 
     db.users.push(newUser);
 
-    // Tự động tạo 1 workspace mặc định cho user
-    const defaultWs = {
-      id: 'ws_' + Date.now(),
+    // Tạo 1 repo mặc định cho user mới
+    const defaultRepo = {
+      id: 'repo_' + Date.now(),
       userId: newUser.id,
-      name: `${fullName}'s Workspace`,
-      description: 'Dự án mặc định khi bắt đầu',
-      defaultJiraProjectKey: 'PROJ',
+      owner: fullName.toLowerCase().replace(/\s+/g, '-'),
+      name: 'awesome-backend-service',
+      fullName: `${fullName.toLowerCase().replace(/\s+/g, '-')}/awesome-backend-service`,
+      defaultBranch: 'main',
+      language: 'JavaScript / Node.js',
+      description: 'Kho lưu trữ mã nguồn mặc định',
+      minQualityScore: 80,
+      blockOnCritical: true,
       createdAt: new Date().toISOString()
     };
-    db.workspaces.push(defaultWs);
+    db.repositories.push(defaultRepo);
 
     writeDB(db);
 
     const token = jwt.sign(
-      { id: newUser.id, email: newUser.email, fullName: newUser.fullName },
+      { id: newUser.id, email: newUser.email, fullName: newUser.fullName, role: newUser.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -73,15 +78,15 @@ router.post('/register', async (req, res) => {
       success: true,
       message: 'Đăng ký thành công',
       token,
-      user: { id: newUser.id, email: newUser.email, fullName: newUser.fullName },
-      activeWorkspaceId: defaultWs.id
+      user: { id: newUser.id, email: newUser.email, fullName: newUser.fullName, role: newUser.role },
+      activeRepoId: defaultRepo.id
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
   }
 });
 
-// 2. Đăng nhập (Thành viên 1)
+// 1. Đăng nhập (Thành viên 1)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -95,55 +100,43 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
     }
 
-    // Cho phép đăng nhập demo dễ dàng
     let isMatch = false;
     if (user.passwordHash) {
       isMatch = await bcrypt.compare(password, user.passwordHash);
     }
-    if (!isMatch && password === 'password123') {
-      isMatch = true;
-    }
+    if (!isMatch && password === 'password123') isMatch = true;
 
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, fullName: user.fullName },
+      { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    const userWorkspaces = db.workspaces.filter(w => w.userId === user.id);
-    const activeWorkspaceId = userWorkspaces.length > 0 ? userWorkspaces[0].id : null;
+    const userRepos = db.repositories.filter(r => r.userId === user.id || r.userId === 'user_default');
+    const activeRepoId = userRepos.length > 0 ? userRepos[0].id : null;
 
     res.json({
       success: true,
       message: 'Đăng nhập thành công',
       token,
-      user: { id: user.id, email: user.email, fullName: user.fullName },
-      activeWorkspaceId
+      user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
+      activeRepoId
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
   }
 });
 
-// 3. Lấy thông tin user hiện tại
+// Lấy thông tin user hiện tại
 router.get('/me', verifyToken, (req, res) => {
   const db = readDB();
   const user = db.users.find(u => u.id === req.user.id);
-  if (!user) {
-    return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
-  }
-
-  res.json({
-    success: true,
-    user: { id: user.id, email: user.email, fullName: user.fullName }
-  });
+  if (!user) return res.status(404).json({ success: false, message: 'User không tồn tại' });
+  res.json({ success: true, user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role } });
 });
 
-module.exports = {
-  router,
-  verifyToken
-};
+module.exports = { router, verifyToken };

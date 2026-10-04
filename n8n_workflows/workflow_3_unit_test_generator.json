@@ -1,0 +1,79 @@
+{
+  "name": "Workflow 3: Automated Unit Test Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-unit-tests",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-testgen",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst codeSnippet = body.codeSnippet || '';\nconst language = body.language || 'javascript';\nconst geminiKey = body.geminiApiKey;\n\nconst prompt = `Bạn là Senior QA Automation Engineer.\\nHãy viết bộ kiểm thử Unit Test (Jest cho JavaScript hoặc PyTest cho Python) có độ bao phủ 100% (Positive, Negative, Boundary Cases) cho đoạn code sau:\\n\\n${codeSnippet}\\n\\nBẮT BUỘC chỉ trả về JSON thuần túy:\\n{\\n  \"framework\": \"Jest\",\\n  \"testCode\": \"test code string\",\\n  \"testCasesCount\": 4\\n}`;\n\nreturn {\n  json: {\n    geminiKey,\n    requestBody: {\n      contents: [{ role: \"user\", parts: [{ text: prompt }] }],\n      generationConfig: { temperature: 0.2, responseMimeType: \"application/json\" }\n    }\n  }\n};"
+      },
+      "id": "node-build-test-prompt",
+      "name": "Build Unit Test Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{$json.geminiKey}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json.requestBody)}}",
+        "options": {}
+      },
+      "id": "node-call-gemini-test",
+      "name": "Call Gemini 2.0 Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet raw = response.candidates[0].content.parts[0].text;\nraw = raw.replace(/```json/gi, '').replace(/```/gi, '').trim();\nconst parsed = JSON.parse(raw);\nreturn { json: { success: true, data: parsed } };"
+      },
+      "id": "node-clean-test-json",
+      "name": "Sanitize & Parse Test Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json)}}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-respond-test",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Build Unit Test Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Unit Test Prompt": {
+      "main": [[{ "node": "Call Gemini 2.0 Flash", "type": "main", "index": 0 }]]
+    },
+    "Call Gemini 2.0 Flash": {
+      "main": [[{ "node": "Sanitize & Parse Test Code", "type": "main", "index": 0 }]]
+    },
+    "Sanitize & Parse Test Code": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

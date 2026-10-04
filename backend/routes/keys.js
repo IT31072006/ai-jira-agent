@@ -5,143 +5,134 @@ const { verifyToken } = require('./auth');
 
 const router = express.Router();
 
-// Lấy cấu hình keys của workspace (Thành viên 1)
-router.get('/:workspaceId', verifyToken, (req, res) => {
-  const { workspaceId } = req.params;
+// 3. Lấy cấu hình Vault của Repo (Thành viên 1)
+router.get('/:repoId', verifyToken, (req, res) => {
+  const { repoId } = req.params;
   const db = readDB();
-  const config = db.apiConfigs[workspaceId] || {
-    jiraDomain: '',
-    jiraEmail: '',
-    jiraToken: '',
+  const config = db.apiConfigs[repoId] || {
+    githubToken: '',
     geminiKey: '',
+    minQualityScore: 80,
+    blockOnCritical: true,
     discordWebhookUrl: '',
-    n8nWebhookUrl: 'http://localhost:5678/webhook/analyze-requirement',
-    n8nPushWebhookUrl: 'http://localhost:5678/webhook/push-to-jira'
+    n8nReviewWebhookUrl: 'http://localhost:5678/webhook/review-code-diff',
+    n8nCommentWebhookUrl: 'http://localhost:5678/webhook/comment-github-pr',
+    n8nTestGenWebhookUrl: 'http://localhost:5678/webhook/generate-unit-tests'
   };
 
-  // Mask token khi trả về frontend để bảo mật
-  const maskedConfig = {
+  const masked = {
     ...config,
-    jiraTokenMasked: config.jiraToken ? (config.jiraToken.slice(0, 6) + '...' + config.jiraToken.slice(-4)) : '',
+    githubTokenMasked: config.githubToken ? (config.githubToken.slice(0, 6) + '...' + config.githubToken.slice(-4)) : '',
     geminiKeyMasked: config.geminiKey ? (config.geminiKey.slice(0, 6) + '...' + config.geminiKey.slice(-4)) : '',
-    hasJiraToken: !!config.jiraToken,
+    hasGithubToken: !!config.githubToken,
     hasGeminiKey: !!config.geminiKey
   };
 
-  res.json({ success: true, config: maskedConfig });
+  res.json({ success: true, config: masked });
 });
 
-// Lưu cấu hình keys (Thành viên 1)
-router.post('/:workspaceId', verifyToken, (req, res) => {
-  const { workspaceId } = req.params;
-  const { jiraDomain, jiraEmail, jiraToken, geminiKey, discordWebhookUrl, n8nWebhookUrl, n8nPushWebhookUrl } = req.body;
+// 3. Lưu cấu hình Vault (Thành viên 1)
+router.post('/:repoId', verifyToken, (req, res) => {
+  const { repoId } = req.params;
+  const {
+    githubToken,
+    geminiKey,
+    minQualityScore,
+    blockOnCritical,
+    discordWebhookUrl,
+    n8nReviewWebhookUrl,
+    n8nCommentWebhookUrl,
+    n8nTestGenWebhookUrl
+  } = req.body;
 
   const db = readDB();
-  const current = db.apiConfigs[workspaceId] || {};
+  const current = db.apiConfigs[repoId] || {};
 
-  // Nếu người dùng không nhập token mới (để trống khi edit), giữ nguyên token cũ
   const updated = {
-    jiraDomain: jiraDomain !== undefined ? jiraDomain.trim() : current.jiraDomain,
-    jiraEmail: jiraEmail !== undefined ? jiraEmail.trim() : current.jiraEmail,
-    jiraToken: jiraToken ? jiraToken.trim() : current.jiraToken,
+    githubToken: githubToken ? githubToken.trim() : current.githubToken,
     geminiKey: geminiKey ? geminiKey.trim() : current.geminiKey,
+    minQualityScore: minQualityScore !== undefined ? parseInt(minQualityScore) : (current.minQualityScore || 80),
+    blockOnCritical: blockOnCritical !== undefined ? blockOnCritical : (current.blockOnCritical ?? true),
     discordWebhookUrl: discordWebhookUrl !== undefined ? discordWebhookUrl.trim() : current.discordWebhookUrl,
-    n8nWebhookUrl: n8nWebhookUrl !== undefined ? n8nWebhookUrl.trim() : current.n8nWebhookUrl,
-    n8nPushWebhookUrl: n8nPushWebhookUrl !== undefined ? n8nPushWebhookUrl.trim() : current.n8nPushWebhookUrl
+    n8nReviewWebhookUrl: n8nReviewWebhookUrl !== undefined ? n8nReviewWebhookUrl.trim() : current.n8nReviewWebhookUrl,
+    n8nCommentWebhookUrl: n8nCommentWebhookUrl !== undefined ? n8nCommentWebhookUrl.trim() : current.n8nCommentWebhookUrl,
+    n8nTestGenWebhookUrl: n8nTestGenWebhookUrl !== undefined ? n8nTestGenWebhookUrl.trim() : current.n8nTestGenWebhookUrl
   };
 
-  db.apiConfigs[workspaceId] = updated;
+  db.apiConfigs[repoId] = updated;
+
+  // Đồng bộ sang thông tin repo
+  const repo = db.repositories.find(r => r.id === repoId);
+  if (repo) {
+    repo.minQualityScore = updated.minQualityScore;
+    repo.blockOnCritical = updated.blockOnCritical;
+  }
+
   writeDB(db);
 
   res.json({
     success: true,
-    message: 'Đã lưu cấu hình API Keys thành công',
-    hasJiraToken: !!updated.jiraToken,
+    message: 'Đã lưu cấu hình API Keys & Quality Gate Policy thành công',
+    hasGithubToken: !!updated.githubToken,
     hasGeminiKey: !!updated.geminiKey
   });
 });
 
-// Kiểm tra kết nối Jira trực tiếp (Thành viên 1 & 3)
-router.post('/:workspaceId/test-jira', verifyToken, async (req, res) => {
-  const { workspaceId } = req.params;
+// 3. Kiểm tra kết nối GitHub qua Personal Access Token
+router.post('/:repoId/test-github', verifyToken, async (req, res) => {
+  const { repoId } = req.params;
   const db = readDB();
-  const config = db.apiConfigs[workspaceId];
+  const config = db.apiConfigs[repoId];
+  const token = req.body.githubToken || (config && config.githubToken);
 
-  const domain = req.body.jiraDomain || (config && config.jiraDomain);
-  const email = req.body.jiraEmail || (config && config.jiraEmail);
-  const token = req.body.jiraToken || (config && config.jiraToken);
-
-  if (!domain || !email || !token) {
-    return res.status(400).json({
-      success: false,
-      message: 'Vui lòng điền đủ Jira Domain, Email và API Token để kiểm tra kết nối'
-    });
+  if (!token) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập GitHub Personal Access Token' });
   }
 
-  // Chuẩn hóa domain
-  let cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-
   try {
-    const authHeader = 'Basic ' + Buffer.from(`${email}:${token}`).toString('base64');
-    const response = await axios.get(`https://${cleanDomain}/rest/api/3/myself`, {
+    const response = await axios.get('https://api.github.com/user', {
       headers: {
-        'Authorization': authHeader,
-        'Accept': 'application/json'
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'AI-Code-Reviewer'
       },
       timeout: 8000
     });
 
     res.json({
       success: true,
-      message: `Kết nối Jira thành công! Đã xác thực người dùng: ${response.data.displayName} (${response.data.emailAddress || email})`,
-      jiraUser: {
-        displayName: response.data.displayName,
-        accountId: response.data.accountId
-      }
+      message: `Kết nối GitHub thành công! Tài khoản: ${response.data.login} (${response.data.name || 'Developer'})`,
+      githubUser: response.data.login
     });
   } catch (err) {
     const msg = err.response ? `HTTP ${err.response.status}: ${JSON.stringify(err.response.data)}` : err.message;
-    res.status(400).json({
-      success: false,
-      message: `Không thể kết nối đến Jira (${cleanDomain}): ${msg}`
-    });
+    res.status(400).json({ success: false, message: `Không thể kết nối GitHub: ${msg}` });
   }
 });
 
-// Kiểm tra kết nối Gemini AI (Thành viên 1 & 2)
-router.post('/:workspaceId/test-gemini', verifyToken, async (req, res) => {
-  const { workspaceId } = req.params;
+// 3. Kiểm tra kết nối Gemini AI
+router.post('/:repoId/test-gemini', verifyToken, async (req, res) => {
+  const { repoId } = req.params;
   const db = readDB();
-  const config = db.apiConfigs[workspaceId];
+  const config = db.apiConfigs[repoId];
   const apiKey = req.body.geminiKey || (config && config.geminiKey) || process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(400).json({
-      success: false,
-      message: 'Vui lòng nhập Gemini API Key để kiểm tra'
-    });
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập Gemini API Key' });
   }
 
   try {
-    const response = await axios.post(
+    await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
-        contents: [{ role: 'user', parts: [{ text: 'Hello, respond with {"status": "ok"}' }] }],
+        contents: [{ role: 'user', parts: [{ text: 'Respond with {"status": "ok"}' }] }],
         generationConfig: { responseMimeType: 'application/json' }
       },
       { timeout: 8000 }
     );
-
-    res.json({
-      success: true,
-      message: 'Kết nối Google Gemini 2.0 Flash thành công!'
-    });
+    res.json({ success: true, message: 'Kết nối Google Gemini 2.0 Flash AI thành công!' });
   } catch (err) {
-    const msg = err.response ? `HTTP ${err.response.status}: ${JSON.stringify(err.response.data)}` : err.message;
-    res.status(400).json({
-      success: false,
-      message: `Lỗi kết nối Gemini API: ${msg}`
-    });
+    res.status(400).json({ success: false, message: `Lỗi kết nối Gemini: ${err.message}` });
   }
 });
 

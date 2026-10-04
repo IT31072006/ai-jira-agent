@@ -1,0 +1,81 @@
+{
+  "name": "Workflow 1: AI Code Reviewer (Gemini)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "review-code-diff",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-review",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst diffText = body.diffText || '';\nconst language = body.language || 'javascript';\nconst geminiKey = body.geminiApiKey;\n\nconst systemInstruction = `Bạn là Senior Principal Security & Code Reviewer.\\nHãy phân tích đoạn git diff sau và trả về JSON thuần túy theo schema:\\n{\\n  \"qualityScore\": 85,\\n  \"grade\": \"B\",\\n  \"summary\": \"Tóm tắt đánh giá chất lượng\",\\n  \"issues\": [\\n    {\\n      \"id\": \"iss_1\",\\n      \"line\": 14,\\n      \"type\": \"SECURITY\",\\n      \"severity\": \"CRITICAL\",\\n      \"message\": \"Lỗ hổng SQL Injection phát hiện tại câu lệnh query\",\\n      \"suggestion\": \"Sử dụng parameterized query thay vì nối chuỗi trực tiếp\",\\n      \"refactoredCode\": \"db.query('SELECT * FROM users WHERE id = ?', [userId])\"\\n    }\\n  ]\\n}`;\n\nreturn {\n  json: {\n    geminiKey,\n    requestBody: {\n      contents: [\n        {\n          role: \"user\",\n          parts: [\n            { text: `${systemInstruction}\\n\\nNGÔN NGỮ: ${language}\\n\\nGIT DIFF CẦN REVIEW:\\n${diffText}` }\n          ]\n        }\n      ],\n      generationConfig: {\n        temperature: 0.2,\n        responseMimeType: \"application/json\"\n      }\n    }\n  }\n};"
+      },
+      "id": "node-build-review-prompt",
+      "name": "Build Code Review Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{$json.geminiKey}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json.requestBody)}}",
+        "options": {}
+      },
+      "id": "node-call-gemini-review",
+      "name": "Call Gemini 2.0 Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet rawText = response.candidates[0].content.parts[0].text;\nrawText = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();\nconst parsed = JSON.parse(rawText);\n\nreturn {\n  json: {\n    success: true,\n    data: parsed\n  }\n};"
+      },
+      "id": "node-clean-review-json",
+      "name": "Sanitize & Parse Review JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json)}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-review",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Build Code Review Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Code Review Prompt": {
+      "main": [[{ "node": "Call Gemini 2.0 Flash", "type": "main", "index": 0 }]]
+    },
+    "Call Gemini 2.0 Flash": {
+      "main": [[{ "node": "Sanitize & Parse Review JSON", "type": "main", "index": 0 }]]
+    },
+    "Sanitize & Parse Review JSON": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

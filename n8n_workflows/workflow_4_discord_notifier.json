@@ -1,0 +1,66 @@
+{
+  "name": "Workflow 4: Automated Code Review Discord Notifier",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notify-pr-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-notify-pr",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst repo = body.repo || 'my-app';\nconst prTitle = body.prTitle || 'Pull Request';\nconst score = body.qualityScore || 85;\nconst grade = body.grade || 'B';\nconst statusColor = score >= 80 ? 3066993 : (score >= 60 ? 15844367 : 15158332);\nconst prUrl = body.prUrl || 'https://github.com';\n\nconst discordPayload = {\n  username: 'AI Code Reviewer Bot',\n  avatar_url: 'https://cdn-icons-png.flaticon.com/512/2111/2111432.png',\n  embeds: [\n    {\n      title: `⚡ [CODE REVIEW] ${repo} - PR: ${prTitle}`,\n      color: statusColor,\n      description: `Kết quả rà soát tự động Pull Request:\\n**Điểm chất lượng:** ${score}/100 (Hạng: **${grade}**)`,\n      fields: [\n        { name: 'Kho mã nguồn', value: repo, inline: true },\n        { name: 'Số lỗi bảo mật', value: `${body.criticalCount || 0}`, inline: true },\n        { name: 'Xem trên GitHub', value: `[Mở Pull Request](${prUrl})`, inline: true }\n      ],\n      footer: { text: 'Automated by AI Code Reviewer • Software Engineering Automation' },\n      timestamp: new Date().toISOString()\n    }\n  ]\n};\n\nreturn {\n  json: {\n    discordWebhookUrl: body.discordWebhookUrl,\n    discordPayload\n  }\n};"
+      },
+      "id": "node-format-discord-card",
+      "name": "Format Discord Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.discordWebhookUrl}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json.discordPayload)}}",
+        "options": {}
+      },
+      "id": "node-send-discord-req",
+      "name": "Send Discord Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Đã gửi thông báo review PR thành công!\"\n}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-respond-notify-pr",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Format Discord Card", "type": "main", "index": 0 }]]
+    },
+    "Format Discord Card": {
+      "main": [[{ "node": "Send Discord Webhook", "type": "main", "index": 0 }]]
+    },
+    "Send Discord Webhook": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

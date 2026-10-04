@@ -1,0 +1,74 @@
+{
+  "name": "Workflow 2: GitHub PR Commenter",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "comment-github-pr",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-pr-comment",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst owner = body.owner || 'facebook';\nconst repo = body.repo || 'react';\nconst pullNumber = body.pullNumber || 1;\nconst githubToken = body.githubToken;\nconst reviewSummary = body.reviewSummary || 'AI Code Review Summary';\nconst issues = body.issues || [];\n\nlet markdownComment = `### 🤖 AI-Powered Code Reviewer Report\\n\\n`;\nmarkdownComment += `**Điểm chất lượng:** ${body.qualityScore || 85}/100 (Hạng: ${body.grade || 'B'})\\n\\n`;\nmarkdownComment += `> ${reviewSummary}\\n\\n`;\n\nif (issues.length > 0) {\n  markdownComment += `#### 🔍 Chi tiết vấn đề phát hiện:\\n\\n`;\n  issues.forEach((iss, idx) => {\n    markdownComment += `* **[${iss.severity || 'WARNING'}] Dòng ${iss.line || 'N/A'}**: ${iss.message}\\n`;\n    if (iss.suggestion) markdownComment += `  - 💡 *Đề xuất*: ${iss.suggestion}\\n`;\n  });\n} else {\n  markdownComment += `✅ **Mã nguồn sạch! Không phát hiện lỗ hổng nghiêm trọng.**\\n`;\n}\n\nreturn {\n  json: {\n    url: `https://api.github.com/repos/${owner}/${repo}/issues/${pullNumber}/comments`,\n    authHeader: `Bearer ${githubToken}`,\n    bodyPayload: { body: markdownComment }\n  }\n};"
+      },
+      "id": "node-build-pr-comment",
+      "name": "Format GitHub Markdown Comment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{$json.authHeader}}" },
+            { "name": "Accept", "value": "application/vnd.github.v3+json" },
+            { "name": "User-Agent", "value": "AI-Code-Reviewer-Agent" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json.bodyPayload)}}",
+        "options": {}
+      },
+      "id": "node-call-github-api",
+      "name": "GitHub API: Post PR Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Đã post comment nhận xét thành công lên GitHub PR!\"\n}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-respond-github-comment",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Format GitHub Markdown Comment", "type": "main", "index": 0 }]]
+    },
+    "Format GitHub Markdown Comment": {
+      "main": [[{ "node": "GitHub API: Post PR Comment", "type": "main", "index": 0 }]]
+    },
+    "GitHub API: Post PR Comment": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

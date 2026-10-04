@@ -4,147 +4,166 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-// Khởi tạo thư mục và dữ liệu ban đầu nếu chưa có
 function initStorage() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 
-  if (!fs.existsSync(DB_FILE)) {
-    const initialData = {
-      users: [
-        {
-          id: 'user_default',
-          email: 'demo@jira-agent.ai',
-          // hash của 'password123'
-          passwordHash: '$2a$10$wK1kKkI5k82oG8aP8t1q2u0B9eM.qQYp8mXb/gI4M2rW5zYxKzO7C',
-          fullName: 'Nguyễn Văn Quản Trị',
-          createdAt: new Date().toISOString()
-        }
-      ],
-      workspaces: [
-        {
-          id: 'ws_demo_ecommerce',
-          userId: 'user_default',
-          name: 'E-Commerce Platform 2026',
-          description: 'Hệ thống thương mại điện tử tích hợp cổng thanh toán và quản lý đơn hàng',
-          defaultJiraProjectKey: 'ECOM',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'ws_demo_hrm',
-          userId: 'user_default',
-          name: 'Smart HRM System',
-          description: 'Phần mềm quản lý nhân sự, chấm công và tính lương tự động',
-          defaultJiraProjectKey: 'HRM',
-          createdAt: new Date().toISOString()
-        }
-      ],
-      apiConfigs: {
-        ws_demo_ecommerce: {
-          jiraDomain: 'mycompany.atlassian.net',
-          jiraEmail: 'lead-dev@mycompany.com',
-          jiraToken: '',
-          geminiKey: '',
-          discordWebhookUrl: '',
-          n8nWebhookUrl: 'http://localhost:5678/webhook/analyze-requirement',
-          n8nPushWebhookUrl: 'http://localhost:5678/webhook/push-to-jira'
-        }
+  // Khởi tạo dữ liệu mẫu cho hệ thống AI-Powered Code Reviewer
+  const initialData = {
+    users: [
+      {
+        id: 'user_default',
+        email: 'lead-dev@aicodereviewer.com',
+        passwordHash: '$2a$10$wK1kKkI5k82oG8aP8t1q2u0B9eM.qQYp8mXb/gI4M2rW5zYxKzO7C',
+        fullName: 'Nguyễn Văn Tech Lead',
+        role: 'Tech Lead / Reviewer',
+        createdAt: new Date().toISOString()
+      }
+    ],
+    repositories: [
+      {
+        id: 'repo_ecom',
+        userId: 'user_default',
+        owner: 'quan-tech',
+        name: 'ecommerce-payment-service',
+        fullName: 'quan-tech/ecommerce-payment-service',
+        defaultBranch: 'main',
+        language: 'JavaScript / Node.js',
+        description: 'Dịch vụ cổng thanh toán và xử lý đơn hàng trực tuyến',
+        minQualityScore: 80,
+        blockOnCritical: true,
+        createdAt: new Date().toISOString()
       },
-      requirements: [
-        {
-          id: 'req_1',
-          workspaceId: 'ws_demo_ecommerce',
-          title: 'Tích hợp thanh toán qua VNPay & MoMo',
-          rawText: 'Xây dựng module thanh toán cho khách hàng mua sắm online. Khách có thể chọn thanh toán qua VNPay QR hoặc Ví MoMo. Hệ thống cần bảo mật mã hóa chữ ký số (HMAC-SHA512), tự động cập nhật trạng thái đơn hàng khi nhận IPN webhook và gửi email xác nhận cho khách hàng.',
-          status: 'ANALYZED',
-          createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-          pushedToJira: true,
-          pushedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-          epics: [
-            {
-              id: 'epic_1',
-              summary: 'Cổng thanh toán điện tử VNPay & MoMo',
-              description: 'Tích hợp toàn diện các phương thức thanh toán ví điện tử và ngân hàng',
-              jiraKey: 'ECOM-101',
-              stories: [
-                {
-                  id: 'story_1',
-                  summary: 'Thanh toán đơn hàng qua VNPay QR',
-                  description: 'As a customer, I want to scan VNPay QR code so that I can pay quickly from mobile banking.',
-                  acceptanceCriteria: [
-                    'Tạo mã QR code động theo số tiền đơn hàng',
-                    'Thời gian hết hạn mã QR là 15 phút',
-                    'Kiểm tra checksum chữ ký HMAC-SHA512 an toàn'
-                  ],
-                  storyPoints: 5,
-                  priority: 'High',
-                  assignee: 'Nguyễn Văn Developer',
-                  jiraKey: 'ECOM-102',
-                  status: 'In Progress',
-                  tasks: [
-                    { id: 'task_1_1', summary: 'Xây dựng API tạo URL thanh toán VNPay', estimatedHours: 4, jiraKey: 'ECOM-103', status: 'Done' },
-                    { id: 'task_1_2', summary: 'Xây dựng Endpoint xử lý VNPay IPN Webhook', estimatedHours: 4, jiraKey: 'ECOM-104', status: 'In Progress' },
-                    { id: 'task_1_3', summary: 'Giao diện quét mã QR trên React Frontend', estimatedHours: 3, jiraKey: 'ECOM-105', status: 'To Do' }
-                  ]
-                },
-                {
-                  id: 'story_2',
-                  summary: 'Thanh toán đơn hàng qua Ví MoMo',
-                  description: 'As a customer, I want to pay using MoMo wallet app so that I can utilize my MoMo balance.',
-                  acceptanceCriteria: [
-                    'Redirect sang ứng dụng MoMo trên điện thoại',
-                    'Lưu mã giao dịch MoMo transId vào Database'
-                  ],
-                  storyPoints: 3,
-                  priority: 'Medium',
-                  assignee: 'Trần Thị QA',
-                  jiraKey: 'ECOM-106',
-                  status: 'To Do',
-                  tasks: [
-                    { id: 'task_2_1', summary: 'Tích hợp SDK MoMo Payment Gateway', estimatedHours: 3, jiraKey: 'ECOM-107', status: 'To Do' },
-                    { id: 'task_2_2', summary: 'Viết Unit Test cho flow thanh toán thất bại/hết hạn', estimatedHours: 2, jiraKey: 'ECOM-108', status: 'To Do' }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ],
-      syncLogs: [
-        {
-          id: 'log_1',
-          issueKey: 'ECOM-103',
-          oldStatus: 'In Progress',
-          newStatus: 'Done',
-          event: 'jira:issue_updated',
-          timestamp: new Date(Date.now() - 3600000 * 2).toISOString()
-        }
-      ]
-    };
+      {
+        id: 'repo_bank',
+        userId: 'user_default',
+        owner: 'quan-tech',
+        name: 'mobile-banking-backend',
+        fullName: 'quan-tech/mobile-banking-backend',
+        defaultBranch: 'develop',
+        language: 'TypeScript',
+        description: 'Core banking API & chuyển tiền liên ngân hàng',
+        minQualityScore: 85,
+        blockOnCritical: true,
+        createdAt: new Date().toISOString()
+      }
+    ],
+    apiConfigs: {
+      repo_ecom: {
+        githubToken: '',
+        geminiKey: '',
+        minQualityScore: 80,
+        blockOnCritical: true,
+        discordWebhookUrl: '',
+        n8nReviewWebhookUrl: 'http://localhost:5678/webhook/review-code-diff',
+        n8nCommentWebhookUrl: 'http://localhost:5678/webhook/comment-github-pr',
+        n8nTestGenWebhookUrl: 'http://localhost:5678/webhook/generate-unit-tests'
+      }
+    },
+    reviews: [
+      {
+        id: 'rev_101',
+        repoId: 'repo_ecom',
+        pullNumber: 42,
+        pullTitle: 'Feature: Endpoint đăng nhập và xác thực JWT người dùng',
+        author: 'Junior Developer A',
+        status: 'CHANGES_REQUESTED', // 'APPROVED', 'CHANGES_REQUESTED', 'REVIEWING'
+        qualityScore: 68,
+        grade: 'C',
+        createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+        reviewedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+        engine: 'Gemini 2.0 Flash AI Reviewer',
+        summary: 'Phát hiện 1 lỗi bảo mật nghiêm trọng (SQL Injection) và 1 trường hợp ghi log mật khẩu thô. Cần khắc phục trước khi merge vào nhánh main.',
+        diffText: `diff --git a/src/controllers/auth.js b/src/controllers/auth.js
+index 8a34bc1..9f82d1a 100644
+--- a/src/controllers/auth.js
++++ b/src/controllers/auth.js
+@@ -12,8 +12,14 @@ exports.login = async (req, res) => {
++  const { username, password } = req.body;
++  // LỖ HỔNG BẢO MẬT: Nối chuỗi trực tiếp
++  const query = "SELECT * FROM users WHERE username = '" + username + "' AND password = '" + password + "'";
++  const user = await db.query(query);
++  console.log("Raw user password received:", password);
++  const token = jwt.sign({ id: user.id }, "secret123", { expiresIn: 3600000 });
++  return res.json({ token });
+ }`,
+        issues: [
+          {
+            id: 'iss_1',
+            line: 15,
+            type: 'SECURITY',
+            severity: 'CRITICAL',
+            title: 'Lỗ hổng SQL Injection nghiêm trọng',
+            message: 'Tham số `username` và `password` được nối chuỗi trực tiếp vào câu lệnh SQL, cho phép kẻ tấn công vượt qua xác thực bằng payload: "\' OR 1=1 --".',
+            suggestion: 'Sử dụng Parameterized Queries hoặc Prepared Statements (ví dụ: `db.query("SELECT * FROM users WHERE username = ? AND password = ?", [username, hashedPassword])`).',
+            accepted: true
+          },
+          {
+            id: 'iss_2',
+            line: 17,
+            type: 'SECURITY',
+            severity: 'WARNING',
+            title: 'Rò rỉ thông tin nhạy cảm qua Console Log',
+            message: 'Lệnh `console.log(password)` in mật khẩu chưa mã hóa ra file log máy chủ. Có nguy cơ lộ lọt dữ liệu khi phân quyền log.',
+            suggestion: 'Xóa bỏ câu lệnh ghi log mật khẩu hoặc sử dụng logger có cơ chế mask dữ liệu.',
+            accepted: true
+          },
+          {
+            id: 'iss_3',
+            line: 18,
+            type: 'CLEAN_CODE',
+            severity: 'SUGGESTION',
+            title: 'Hardcoded Secret & Magic Number',
+            message: 'Secret key "secret123" và thời gian hết hạn 3600000 nên được đưa vào biến môi trường process.env.',
+            suggestion: 'Dùng `process.env.JWT_SECRET` và hằng số `TOKEN_EXPIRES_IN`.',
+            accepted: false
+          }
+        ],
+        unitTests: `describe('Auth Login Controller', () => {
+  it('nên từ chối đăng nhập khi username có ký tự SQL Injection', async () => {
+    const res = await request(app).post('/login').send({ username: "' OR 1=1 --", password: '123' });
+    expect(res.status).toBe(400);
+  });
 
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), 'utf-8');
-  }
+  it('nên trả về token JWT hợp lệ khi thông tin đăng nhập đúng', async () => {
+    const res = await request(app).post('/login').send({ username: 'valid_user', password: 'correct_password' });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('token');
+  });
+});`
+      }
+    ],
+    syncLogs: [
+      {
+        id: 'hook_1',
+        event: 'pull_request.opened',
+        repo: 'quan-tech/ecommerce-payment-service',
+        pullNumber: 42,
+        sender: 'junior-dev-a',
+        actionTaken: 'Tự động kích hoạt n8n AI Review',
+        timestamp: new Date(Date.now() - 3600000 * 4).toISOString()
+      }
+    ]
+  };
+
+  fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), 'utf-8');
 }
 
 function readDB() {
-  initStorage();
+  if (!fs.existsSync(DB_FILE)) initStorage();
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     return JSON.parse(raw);
   } catch (err) {
     console.error('Lỗi đọc database file:', err);
-    return { users: [], workspaces: [], apiConfigs: {}, requirements: [], syncLogs: [] };
+    return { users: [], repositories: [], apiConfigs: {}, reviews: [], syncLogs: [] };
   }
 }
 
 function writeDB(data) {
-  initStorage();
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-module.exports = {
-  readDB,
-  writeDB,
-  initStorage
-};
+module.exports = { readDB, writeDB, initStorage };

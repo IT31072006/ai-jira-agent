@@ -1,97 +1,127 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles,
-  Layers,
-  Send,
+  ShieldAlert,
+  GitPullRequest,
   CheckCircle2,
-  Clock,
-  Plus,
-  Trash2,
-  Edit3,
-  ExternalLink,
-  RefreshCw,
-  BarChart3,
+  AlertTriangle,
+  FileCode,
+  Sparkles,
+  BarChart2,
   Key,
   Download,
   Bell,
-  ChevronDown,
-  ChevronRight,
-  Shield,
+  RefreshCw,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Code2,
+  FolderGit2,
   User,
   LogOut,
-  FolderKanban,
   Check,
-  AlertCircle
+  X,
+  Copy
 } from 'lucide-react';
 import './index.css';
 
 const API_BASE = 'http://localhost:3000/api';
 
-// Mẫu yêu cầu nghiệp vụ thực tế có sẵn để demo nhanh
-const SAMPLE_TEMPLATES = [
+// Các mẫu Git Diff chứa lỗi bảo mật & clean code thực tế để demo 1-click
+const SAMPLE_DIFFS = [
   {
-    title: 'Thanh toán VNPay & MoMo',
-    text: 'Xây dựng module thanh toán trực tuyến cho website bán lẻ. Khách hàng có thể quét mã QR qua VNPay hoặc chuyển hướng sang ứng dụng MoMo. Hệ thống cần bảo mật chữ ký HMAC-SHA512, cập nhật trạng thái đơn hàng khi nhận IPN webhook và gửi email biên lai thanh toán.'
+    title: 'SQL Injection & Rò rỉ mật khẩu (Node.js)',
+    diffText: `diff --git a/src/controllers/authController.js b/src/controllers/authController.js
+index 7b89a1c..e4f5a2b 100644
+--- a/src/controllers/authController.js
++++ b/src/controllers/authController.js
+@@ -10,7 +10,12 @@ exports.login = async (req, res) => {
++  const { username, password } = req.body;
++  // LỖ HỔNG: Nối chuỗi trực tiếp cho phép tấn công SQL Injection
++  const query = "SELECT * FROM users WHERE username = '" + username + "' AND password = '" + password + "'";
++  const user = await db.query(query);
++  console.log("Raw user password:", password);
++  const token = jwt.sign({ id: user.id }, "secret_key_123", { expiresIn: 3600000 });
++  return res.json({ token });
+ }`
   },
   {
-    title: 'Hệ thống Quản lý Chấm công AI',
-    text: 'Xây dựng tính năng điểm danh nhận diện khuôn mặt cho nhân viên qua camera điện thoại. Tự động tính toán giờ làm, đi muộn, về sớm và tổng hợp bảng công cuối tháng. Cho phép nhân viên gửi đơn xin nghỉ phép và quản lý phê duyệt trực tiếp trên app.'
+    title: 'XSS & Cookie không an toàn (Express.js)',
+    diffText: `diff --git a/src/routes/profile.js b/src/routes/profile.js
+index 4a12c3b..8d90e2f 100644
+--- a/src/routes/profile.js
++++ b/src/routes/profile.js
+@@ -15,6 +15,10 @@ router.get('/user-bio', (req, res) => {
++  const userBio = req.query.bio;
++  // LỖ HỔNG XSS: Render trực tiếp HTML từ input người dùng
++  res.send("<div><h1>User Bio:</h1><p>" + userBio + "</p></div>");
++  res.cookie("sessionId", "abc123456", { httpOnly: false, secure: false });
+ });`
   },
   {
-    title: 'Phân quyền RBAC & Bảo mật 2FA',
-    text: 'Xây dựng hệ thống phân quyền người dùng theo vai trò (Super Admin, Manager, Member). Bắt buộc xác thực hai bước (2FA qua OTP Google Authenticator) khi đăng nhập vào bảng điều khiển tài chính và lưu nhật ký hoạt động kiểm toán (Audit Logs).'
+    title: 'Hardcoded AWS Secret & Memory Leak (Python/JS)',
+    diffText: `diff --git a/src/services/storage.js b/src/services/storage.js
+index 11ab22c..33cd44e 100644
+--- a/src/services/storage.js
++++ b/src/services/storage.js
+@@ -5,6 +5,10 @@ const uploadFile = async (file) => {
++  const AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
++  const AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
++  const bufferCache = [];
++  setInterval(() => bufferCache.push(file), 100);
++  return s3.upload({ file, key: AWS_ACCESS_KEY });
+ };`
   }
 ];
 
 export default function App() {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState('breakdown'); // 'breakdown', 'jira', 'dashboard', 'keys', 'export'
+  // Navigation Tabs: 6 Tabs cho 12 Luồng
+  const [activeTab, setActiveTab] = useState('review'); // 'review', 'testgen', 'github', 'dashboard', 'keys', 'export'
   const [toast, setToast] = useState(null);
 
-  // Auth State (Thành viên 1)
+  // Auth State (Thành viên 1 - Luồng 1)
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || 'null'));
   const [showAuthModal, setShowAuthModal] = useState(!localStorage.getItem('token'));
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
-  const [authForm, setAuthForm] = useState({ email: 'demo@jira-agent.ai', password: 'password123', fullName: 'Nguyễn Văn Quản Trị' });
+  const [authMode, setAuthMode] = useState('login');
+  const [authForm, setAuthForm] = useState({ email: 'lead-dev@aicodereviewer.com', password: 'password123', fullName: 'Nguyễn Văn Tech Lead' });
 
-  // Workspace State (Thành viên 1)
-  const [workspaces, setWorkspaces] = useState([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState('');
-  const [showNewWorkspaceModal, setShowNewWorkspaceModal] = useState(false);
-  const [newWorkspaceForm, setNewWorkspaceForm] = useState({ name: '', description: '', defaultJiraProjectKey: 'ECOM' });
+  // Repository State (Thành viên 1 - Luồng 2)
+  const [repositories, setRepositories] = useState([]);
+  const [activeRepoId, setActiveRepoId] = useState('');
+  const [showNewRepoModal, setShowNewRepoModal] = useState(false);
+  const [newRepoForm, setNewRepoForm] = useState({ owner: 'quan-tech', name: 'payment-microservice', defaultBranch: 'main', language: 'JavaScript / Node.js' });
 
-  // API Keys Vault State (Thành viên 1)
+  // Keys & Quality Gate State (Thành viên 1 - Luồng 3)
   const [keysConfig, setKeysConfig] = useState({
-    jiraDomain: '',
-    jiraEmail: '',
-    jiraToken: '',
+    githubToken: '',
     geminiKey: '',
+    minQualityScore: 80,
+    blockOnCritical: true,
     discordWebhookUrl: '',
-    n8nWebhookUrl: 'http://localhost:5678/webhook/analyze-requirement',
-    n8nPushWebhookUrl: 'http://localhost:5678/webhook/push-to-jira'
+    n8nReviewWebhookUrl: 'http://localhost:5678/webhook/review-code-diff',
+    n8nCommentWebhookUrl: 'http://localhost:5678/webhook/comment-github-pr',
+    n8nTestGenWebhookUrl: 'http://localhost:5678/webhook/generate-unit-tests'
   });
-  const [testingJira, setTestingJira] = useState(false);
+  const [testingGithub, setTestingGithub] = useState(false);
   const [testingGemini, setTestingGemini] = useState(false);
 
-  // Core AI State (Thành viên 2)
-  const [requirementText, setRequirementText] = useState(SAMPLE_TEMPLATES[0].text);
-  const [projectKey, setProjectKey] = useState('ECOM');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [activeSession, setActiveSession] = useState(null);
-  const [epics, setEpics] = useState([]);
-  const [collapsedEpics, setCollapsedEpics] = useState({});
-  const [collapsedStories, setCollapsedStories] = useState({});
+  // Core AI Review State (Thành viên 2 - Luồng 4, 5, 6)
+  const [diffInput, setDiffInput] = useState(SAMPLE_DIFFS[0].diffText);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [currentReview, setCurrentReview] = useState(null);
+  const [reviewsList, setReviewsList] = useState([]);
 
-  // Jira Integration State (Thành viên 3)
-  const [jiraMembers, setJiraMembers] = useState([]);
-  const [isPushingJira, setIsPushingJira] = useState(false);
-  const [pushProgress, setPushProgress] = useState(null);
+  // Automated Unit Test State (Thành viên 3 - Luồng 8)
+  const [generatedTest, setGeneratedTest] = useState(null);
+  const [isGeneratingTest, setIsGeneratingTest] = useState(false);
+
+  // GitHub & Webhook State (Thành viên 3 - Luồng 7, 9)
+  const [isCommentingPR, setIsCommentingPR] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
-  const [simulatingSync, setSimulatingSync] = useState(false);
+  const [simulatingHook, setSimulatingHook] = useState(false);
 
-  // Dashboard Stats State (Thành viên 4)
-  const [stats, setStats] = useState(null);
+  // Dashboard Stats State (Thành viên 4 - Luồng 10)
+  const [dashboardStats, setDashboardStats] = useState(null);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -104,24 +134,23 @@ export default function App() {
     return headers;
   };
 
-  // Khởi tạo và tải dữ liệu khi có token
+  // Khởi động tải dữ liệu
   useEffect(() => {
     if (token) {
-      loadWorkspaces();
+      loadRepositories();
       loadSyncLogs();
     }
   }, [token]);
 
   useEffect(() => {
-    if (activeWorkspaceId) {
-      loadKeysConfig(activeWorkspaceId);
-      loadSessions(activeWorkspaceId);
-      loadDashboardStats(activeWorkspaceId);
-      loadJiraMembers(activeWorkspaceId);
+    if (activeRepoId) {
+      loadKeysConfig(activeRepoId);
+      loadReviews(activeRepoId);
+      loadDashboardStats(activeRepoId);
     }
-  }, [activeWorkspaceId]);
+  }, [activeRepoId]);
 
-  // ===================== AUTH API (Thành viên 1) =====================
+  // ===================== AUTH API (Thành viên 1 - Luồng 1) =====================
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -139,9 +168,8 @@ export default function App() {
       setToken(data.token);
       setUser(data.user);
       setShowAuthModal(false);
-      showToast(`Xin chào, ${data.user.fullName}!`, 'success');
-
-      if (data.activeWorkspaceId) setActiveWorkspaceId(data.activeWorkspaceId);
+      showToast(`Chào mừng, ${data.user.fullName}!`, 'success');
+      if (data.activeRepoId) setActiveRepoId(data.activeRepoId);
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -155,52 +183,46 @@ export default function App() {
     setShowAuthModal(true);
   };
 
-  // ===================== WORKSPACE API (Thành viên 1) =====================
-  const loadWorkspaces = async () => {
+  // ===================== REPOSITORIES API (Thành viên 1 - Luồng 2) =====================
+  const loadRepositories = async () => {
     try {
-      const res = await fetch(`${API_BASE}/workspaces`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/repos`, { headers: getHeaders() });
       const data = await res.json();
-      if (data.success && data.workspaces.length > 0) {
-        setWorkspaces(data.workspaces);
-        if (!activeWorkspaceId) {
-          setActiveWorkspaceId(data.workspaces[0].id);
-          setProjectKey(data.workspaces[0].defaultJiraProjectKey || 'ECOM');
-        }
+      if (data.success && data.repositories.length > 0) {
+        setRepositories(data.repositories);
+        if (!activeRepoId) setActiveRepoId(data.repositories[0].id);
       }
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleCreateWorkspace = async (e) => {
+  const handleCreateRepo = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/workspaces`, {
+      const res = await fetch(`${API_BASE}/repos`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify(newWorkspaceForm)
+        body: JSON.stringify(newRepoForm)
       });
       const data = await res.json();
       if (data.success) {
-        setWorkspaces([...workspaces, data.workspace]);
-        setActiveWorkspaceId(data.workspace.id);
-        setShowNewWorkspaceModal(false);
-        setNewWorkspaceForm({ name: '', description: '', defaultJiraProjectKey: 'PROJ' });
-        showToast('Tạo Workspace mới thành công!', 'success');
+        setRepositories([...repositories, data.repository]);
+        setActiveRepoId(data.repository.id);
+        setShowNewRepoModal(false);
+        showToast('Đã thêm Repository vào hệ thống giám sát!', 'success');
       }
     } catch (err) {
       showToast(err.message, 'danger');
     }
   };
 
-  // ===================== API KEYS VAULT (Thành viên 1) =====================
-  const loadKeysConfig = async (wsId) => {
+  // ===================== API KEYS & QUALITY GATE (Thành viên 1 - Luồng 3) =====================
+  const loadKeysConfig = async (repoId) => {
     try {
-      const res = await fetch(`${API_BASE}/keys/${wsId}`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/keys/${repoId}`, { headers: getHeaders() });
       const data = await res.json();
-      if (data.success) {
-        setKeysConfig(data.config);
-      }
+      if (data.success) setKeysConfig(data.config);
     } catch (err) {
       console.error(err);
     }
@@ -209,25 +231,25 @@ export default function App() {
   const handleSaveKeys = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/keys/${activeWorkspaceId}`, {
+      const res = await fetch(`${API_BASE}/keys/${activeRepoId}`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(keysConfig)
       });
       const data = await res.json();
       if (data.success) {
-        showToast('Đã lưu cấu hình API Keys an toàn!', 'success');
-        loadKeysConfig(activeWorkspaceId);
+        showToast('Đã lưu cấu hình API Keys & Quality Gate!', 'success');
+        loadKeysConfig(activeRepoId);
       }
     } catch (err) {
       showToast(err.message, 'danger');
     }
   };
 
-  const handleTestJira = async () => {
-    setTestingJira(true);
+  const handleTestGithub = async () => {
+    setTestingGithub(true);
     try {
-      const res = await fetch(`${API_BASE}/keys/${activeWorkspaceId}/test-jira`, {
+      const res = await fetch(`${API_BASE}/keys/${activeRepoId}/test-github`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(keysConfig)
@@ -235,16 +257,16 @@ export default function App() {
       const data = await res.json();
       showToast(data.message, data.success ? 'success' : 'danger');
     } catch (err) {
-      showToast('Lỗi kiểm tra kết nối Jira', 'danger');
+      showToast('Lỗi kiểm tra kết nối GitHub', 'danger');
     } finally {
-      setTestingJira(false);
+      setTestingGithub(false);
     }
   };
 
   const handleTestGemini = async () => {
     setTestingGemini(true);
     try {
-      const res = await fetch(`${API_BASE}/keys/${activeWorkspaceId}/test-gemini`, {
+      const res = await fetch(`${API_BASE}/keys/${activeRepoId}/test-gemini`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(keysConfig)
@@ -252,213 +274,143 @@ export default function App() {
       const data = await res.json();
       showToast(data.message, data.success ? 'success' : 'danger');
     } catch (err) {
-      showToast('Lỗi kiểm tra kết nối Gemini', 'danger');
+      showToast('Lỗi kiểm tra Gemini', 'danger');
     } finally {
       setTestingGemini(false);
     }
   };
 
-  // ===================== AI BREAKDOWN API (Thành viên 2) =====================
-  const loadSessions = async (wsId) => {
+  // ===================== CORE AI REVIEW (Thành viên 2 - Luồng 4, 5, 6) =====================
+  const loadReviews = async (repoId) => {
     try {
-      const res = await fetch(`${API_BASE}/ai/sessions/${wsId}`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/ai/reviews/${repoId}`, { headers: getHeaders() });
       const data = await res.json();
-      if (data.success && data.sessions.length > 0) {
-        setActiveSession(data.sessions[0]);
-        setEpics(data.sessions[0].epics || []);
+      if (data.success && data.reviews.length > 0) {
+        setReviewsList(data.reviews);
+        if (!currentReview) setCurrentReview(data.reviews[0]);
       }
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleAnalyzeRequirement = async () => {
-    if (!requirementText.trim()) {
-      return showToast('Vui lòng nhập đoạn mô tả yêu cầu nghiệp vụ', 'danger');
-    }
-    setIsAnalyzing(true);
+  const handleReviewDiff = async () => {
+    if (!diffInput.trim()) return showToast('Vui lòng nhập đoạn Git Diff cần review', 'danger');
+    setIsReviewing(true);
     try {
-      const res = await fetch(`${API_BASE}/ai/analyze`, {
+      const res = await fetch(`${API_BASE}/ai/review-diff`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
-          workspaceId: activeWorkspaceId,
-          requirementText,
-          projectKey
+          repoId: activeRepoId,
+          pullNumber: Math.floor(Math.random() * 80 + 10),
+          pullTitle: 'PR: Thắt chặt bảo mật API & tối ưu mã nguồn',
+          diffText: diffInput,
+          language: 'javascript'
         })
       });
       const data = await res.json();
       if (data.success) {
-        setActiveSession(data.session);
-        setEpics(data.data.epics || []);
-        showToast(`Đã bóc tách thành công qua [${data.engine}]!`, 'success');
-        loadDashboardStats(activeWorkspaceId);
+        setCurrentReview(data.review);
+        setReviewsList([data.review, ...reviewsList]);
+        showToast(`Review hoàn tất! Điểm: ${data.review.qualityScore}/100 [${data.engine}]`, 'success');
+        loadDashboardStats(activeRepoId);
       } else {
         showToast(data.message, 'danger');
       }
     } catch (err) {
-      showToast('Lỗi gọi API phân tích AI', 'danger');
+      showToast('Lỗi gọi API Review AI', 'danger');
     } finally {
-      setIsAnalyzing(false);
+      setIsReviewing(false);
     }
   };
 
-  // ===================== HUMAN-IN-THE-LOOP EDIT (Thành viên 2) =====================
-  const handleUpdateEpicTitle = (epicIndex, newSummary) => {
-    const updated = [...epics];
-    updated[epicIndex].summary = newSummary;
-    setEpics(updated);
-  };
-
-  const handleUpdateStory = (epicIndex, storyIndex, field, value) => {
-    const updated = [...epics];
-    updated[epicIndex].stories[storyIndex][field] = value;
-    setEpics(updated);
-  };
-
-  const handleAddStory = (epicIndex) => {
-    const updated = [...epics];
-    const newStory = {
-      id: `story_${Date.now()}`,
-      summary: 'User Story mới (Bấm để đổi tên)',
-      description: 'As a user, I want new functionality so that I can achieve my goal.',
-      storyPoints: 3,
-      priority: 'Medium',
-      status: 'To Do',
-      assignee: 'Chưa gán',
-      acceptanceCriteria: ['Tiêu chí nghiệm thu 1'],
-      tasks: [{ id: `task_${Date.now()}`, summary: 'Xây dựng module kỹ thuật', estimatedHours: 3, status: 'To Do' }]
-    };
-    updated[epicIndex].stories.push(newStory);
-    setEpics(updated);
-    showToast('Đã thêm Story mới', 'info');
-  };
-
-  const handleDeleteStory = (epicIndex, storyIndex) => {
-    const updated = [...epics];
-    updated[epicIndex].stories.splice(storyIndex, 1);
-    setEpics(updated);
-  };
-
-  const handleAddTask = (epicIndex, storyIndex) => {
-    const updated = [...epics];
-    updated[epicIndex].stories[storyIndex].tasks.push({
-      id: `task_${Date.now()}`,
-      summary: 'Task kỹ thuật mới',
-      estimatedHours: 2,
-      status: 'To Do'
-    });
-    setEpics(updated);
-  };
-
-  const handleDeleteTask = (epicIndex, storyIndex, taskIndex) => {
-    const updated = [...epics];
-    updated[epicIndex].stories[storyIndex].tasks.splice(taskIndex, 1);
-    setEpics(updated);
-  };
-
-  const handleRegenerateStory = async (epicIndex, storyIndex) => {
-    const story = epics[epicIndex].stories[storyIndex];
+  // Toggle Accept / Dismiss Issue (Luồng 6 - Human in the loop)
+  const handleToggleIssue = async (issueId) => {
+    if (!currentReview) return;
     try {
-      showToast('Đang tái tạo Story bằng AI...', 'info');
-      const res = await fetch(`${API_BASE}/ai/regenerate-story`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          workspaceId: activeWorkspaceId,
-          epicSummary: epics[epicIndex].summary,
-          currentStorySummary: story.summary
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.story) {
-        const updated = [...epics];
-        updated[epicIndex].stories[storyIndex] = {
-          ...updated[epicIndex].stories[storyIndex],
-          summary: data.story.summary,
-          description: data.story.description,
-          acceptanceCriteria: data.story.acceptanceCriteria || [],
-          storyPoints: data.story.storyPoints || 3,
-          priority: data.story.priority || 'High'
-        };
-        setEpics(updated);
-        showToast('Đã tái tạo Story chuẩn Agile!', 'success');
-      }
-    } catch (err) {
-      showToast('Không thể tái tạo Story', 'danger');
-    }
-  };
-
-  const handleSaveEdits = async () => {
-    if (!activeSession) return;
-    try {
-      const res = await fetch(`${API_BASE}/ai/sessions/${activeSession.id}`, {
+      const res = await fetch(`${API_BASE}/ai/reviews/${currentReview.id}/toggle-issue`, {
         method: 'PUT',
         headers: getHeaders(),
-        body: JSON.stringify({ epics })
+        body: JSON.stringify({ issueId })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('Đã lưu tất cả thay đổi vào Database!', 'success');
-        loadDashboardStats(activeWorkspaceId);
+        const updatedIssues = currentReview.issues.map(i => i.id === issueId ? { ...i, accepted: data.issue.accepted } : i);
+        setCurrentReview({ ...currentReview, issues: updatedIssues });
+        showToast(data.message, 'info');
       }
     } catch (err) {
-      showToast('Lỗi lưu thay đổi', 'danger');
+      showToast('Lỗi cập nhật nhận xét', 'danger');
     }
   };
 
-  // ===================== JIRA INTEGRATION (Thành viên 3) =====================
-  const loadJiraMembers = async (wsId) => {
+  // Chốt duyệt PR (Luồng 6)
+  const handleUpdateStatus = async (status) => {
+    if (!currentReview) return;
     try {
-      const res = await fetch(`${API_BASE}/jira/members?workspaceId=${wsId}&projectKey=${projectKey}`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/ai/reviews/${currentReview.id}/status`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status })
+      });
       const data = await res.json();
       if (data.success) {
-        setJiraMembers(data.members || []);
+        setCurrentReview({ ...currentReview, status });
+        showToast(data.message, 'success');
+        loadDashboardStats(activeRepoId);
       }
     } catch (err) {
-      console.error(err);
+      showToast('Lỗi chốt duyệt', 'danger');
     }
   };
 
-  const handlePushToJira = async () => {
-    if (epics.length === 0) {
-      return showToast('Chưa có cấu trúc Epic/Story nào để đẩy lên Jira', 'danger');
-    }
-    setIsPushingJira(true);
-    setPushProgress({ step: 1, message: 'Đang kết nối Webhook n8n / Jira Cloud REST API v3...' });
-
+  // ===================== GITHUB PR & UNIT TEST (Thành viên 3 - Luồng 7, 8, 9) =====================
+  const handleCommentOnGitHub = async () => {
+    if (!currentReview) return showToast('Chưa có review để gửi', 'danger');
+    setIsCommentingPR(true);
     try {
-      const res = await fetch(`${API_BASE}/jira/push`, {
+      const res = await fetch(`${API_BASE}/github/comment-pr`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ repoId: activeRepoId, reviewId: currentReview.id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        setCurrentReview({ ...currentReview, commentedOnGitHub: true });
+      } else {
+        showToast(data.message, 'danger');
+      }
+    } catch (err) {
+      showToast('Lỗi gửi comment lên GitHub', 'danger');
+    } finally {
+      setIsCommentingPR(false);
+    }
+  };
+
+  const handleGenerateUnitTests = async () => {
+    setIsGeneratingTest(true);
+    try {
+      const res = await fetch(`${API_BASE}/github/generate-unit-tests`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
-          workspaceId: activeWorkspaceId,
-          sessionId: activeSession ? activeSession.id : null,
-          epics,
-          projectKey
+          repoId: activeRepoId,
+          codeSnippet: diffInput,
+          language: 'javascript',
+          functionName: 'login'
         })
       });
       const data = await res.json();
       if (data.success) {
-        setPushProgress({
-          step: 4,
-          message: data.message,
-          createdIssues: data.createdIssues,
-          jiraUrl: data.jiraProjectUrl,
-          method: data.pushMethod
-        });
-        showToast('Đã đẩy thành công lên Jira!', 'success');
-        loadDashboardStats(activeWorkspaceId);
-        loadSessions(activeWorkspaceId);
-      } else {
-        showToast(data.message, 'danger');
-        setPushProgress(null);
+        setGeneratedTest(data.data);
+        showToast(data.message, 'success');
       }
     } catch (err) {
-      showToast('Lỗi đẩy dữ liệu lên Jira', 'danger');
-      setPushProgress(null);
+      showToast('Lỗi sinh Unit Test', 'danger');
     } finally {
-      setIsPushingJira(false);
+      setIsGeneratingTest(false);
     }
   };
 
@@ -466,83 +418,83 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/webhooks/sync-logs`);
       const data = await res.json();
-      if (data.success) {
-        setSyncLogs(data.logs || []);
-      }
+      if (data.success) setSyncLogs(data.logs || []);
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleSimulateJiraWebhook = async (issueKey = 'ECOM-103') => {
-    setSimulatingSync(true);
+  const handleSimulateWebhook = async () => {
+    setSimulatingHook(true);
     try {
-      const res = await fetch(`${API_BASE}/webhooks/simulate-jira-event`, {
+      const res = await fetch(`${API_BASE}/webhooks/simulate-pr-opened`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueKey, status: 'Done', oldStatus: 'In Progress' })
+        body: JSON.stringify({ pullNumber: Math.floor(Math.random() * 60 + 10) })
       });
       const data = await res.json();
       if (data.success) {
         showToast(data.message, 'success');
         loadSyncLogs();
-        loadSessions(activeWorkspaceId);
-        loadDashboardStats(activeWorkspaceId);
+        loadReviews(activeRepoId);
+        if (data.review) setCurrentReview(data.review);
       }
     } catch (err) {
       showToast('Lỗi giả lập Webhook', 'danger');
     } finally {
-      setSimulatingSync(false);
+      setSimulatingHook(false);
     }
   };
 
-  // ===================== DASHBOARD STATS (Thành viên 4) =====================
-  const loadDashboardStats = async (wsId) => {
+  // ===================== DASHBOARD & EXPORT (Thành viên 4 - Luồng 10, 11, 12) =====================
+  const loadDashboardStats = async (repoId) => {
     try {
-      const res = await fetch(`${API_BASE}/stats/dashboard?workspaceId=${wsId}`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/stats/quality-dashboard?repoId=${repoId}`, { headers: getHeaders() });
       const data = await res.json();
-      if (data.success) {
-        setStats(data.stats);
-      }
+      if (data.success) setDashboardStats(data.stats);
     } catch (err) {
       console.error(err);
     }
   };
 
   const handleDownloadMarkdown = () => {
-    if (!activeSession) return showToast('Chưa có phiên làm việc để xuất', 'danger');
-    window.open(`${API_BASE}/export/markdown/${activeSession.id}?token=${token}`, '_blank');
+    if (!currentReview) return showToast('Chưa có review để xuất', 'danger');
+    window.open(`${API_BASE}/export/audit-markdown/${currentReview.id}?token=${token}`, '_blank');
   };
 
-  const handleTestDiscordNotify = async () => {
+  const handleNotifyDiscord = async () => {
+    if (!currentReview) return;
     try {
-      const res = await fetch(`${API_BASE}/export/notify-channel`, {
+      const res = await fetch(`${API_BASE}/export/notify-discord`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({
-          workspaceId: activeWorkspaceId,
-          customMessage: 'Kiểm thử thông báo tự động từ AI Jira Agent sang Discord channel!'
-        })
+        body: JSON.stringify({ repoId: activeRepoId, reviewId: currentReview.id })
       });
       const data = await res.json();
       showToast(data.message, data.success ? 'success' : 'danger');
     } catch (err) {
-      showToast('Lỗi gửi thông báo', 'danger');
+      showToast('Lỗi gửi thông báo Discord', 'danger');
     }
   };
 
-  // Tính tổng số lượng hiển thị nhanh
-  const totalStoriesCount = epics.reduce((acc, e) => acc + (e.stories ? e.stories.length : 0), 0);
-  const totalTasksCount = epics.reduce((acc, e) => acc + (e.stories ? e.stories.reduce((tAcc, s) => tAcc + (s.tasks ? s.tasks.length : 0), 0) : 0), 0);
-  const totalStoryPoints = epics.reduce((acc, e) => acc + (e.stories ? e.stories.reduce((pAcc, s) => pAcc + (parseInt(s.storyPoints) || 0), 0) : 0), 0);
+  // Parse dòng git diff để render visual
+  const parseDiffLines = (text) => {
+    if (!text) return [];
+    return text.split('\n').map((line, idx) => {
+      let type = 'normal';
+      if (line.startsWith('+') && !line.startsWith('+++')) type = 'addition';
+      else if (line.startsWith('-') && !line.startsWith('---')) type = 'deletion';
+      return { lineNum: idx + 1, content: line, type };
+    });
+  };
 
   return (
     <div className="app-container">
-      {/* Toast Notification */}
+      {/* Toast Alert */}
       {toast && (
         <div className="toast-container">
-          <div className="toast" style={{ borderLeftColor: toast.type === 'danger' ? '#f43f5e' : toast.type === 'success' ? '#10b981' : '#6366f1' }}>
-            {toast.type === 'success' ? <CheckCircle2 size={18} color="#10b981" /> : <AlertCircle size={18} color="#f43f5e" />}
+          <div className="toast" style={{ borderLeftColor: toast.type === 'danger' ? '#f43f5e' : toast.type === 'success' ? '#10b981' : '#3b82f6' }}>
+            {toast.type === 'success' ? <CheckCircle2 size={18} color="#10b981" /> : <AlertTriangle size={18} color="#f43f5e" />}
             <span>{toast.message}</span>
           </div>
         </div>
@@ -552,83 +504,66 @@ export default function App() {
       <header className="top-nav">
         <div className="nav-brand">
           <div className="brand-icon">
-            <Sparkles size={22} />
+            <ShieldAlert size={22} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span className="brand-title">AI Requirement-to-Jira Agent</span>
-              <span className="brand-tag">v2.0 • n8n Powered</span>
+              <span className="brand-title">AI Code Reviewer & PR Quality Gate</span>
+              <span className="brand-tag">Topic 16 • Automation</span>
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Enterprise Agile Backlog & Task Tracker Automation
+              Automated Code Security, Unit Test Generator & GitHub Webhook Sync
             </div>
           </div>
         </div>
 
-        {/* WORKSPACE PICKER (Thành viên 1) */}
-        <div className="workspace-selector-wrapper">
-          <FolderKanban size={16} color="var(--primary)" />
+        {/* REPOSITORY SELECTOR (Thành viên 1 - Luồng 2) */}
+        <div className="repo-selector-wrapper">
+          <FolderGit2 size={16} color="var(--primary)" />
           <select
-            className="workspace-select"
-            value={activeWorkspaceId}
-            onChange={(e) => setActiveWorkspaceId(e.target.value)}
+            className="repo-select"
+            value={activeRepoId}
+            onChange={(e) => setActiveRepoId(e.target.value)}
           >
-            {workspaces.map((ws) => (
-              <option key={ws.id} value={ws.id}>
-                {ws.name} ({ws.defaultJiraProjectKey || 'PROJ'})
+            {repositories.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.fullName} ({r.defaultBranch})
               </option>
             ))}
           </select>
           <button
             className="btn-icon"
             style={{ width: '26px', height: '26px' }}
-            title="Tạo Workspace mới"
-            onClick={() => setShowNewWorkspaceModal(true)}
+            title="Thêm Repository mới"
+            onClick={() => setShowNewRepoModal(true)}
           >
             <Plus size={14} />
           </button>
         </div>
 
-        {/* NAVIGATION TABS (12 LUỒNG) */}
+        {/* 6 TABS NAVIGATION CHO 12 LUỒNG */}
         <nav className="nav-tabs">
-          <button
-            className={`nav-tab-btn ${activeTab === 'breakdown' ? 'active' : ''}`}
-            onClick={() => setActiveTab('breakdown')}
-          >
-            <Sparkles size={16} />
-            <span>1. Bóc tách AI & Sửa cây</span>
+          <button className={`nav-tab-btn ${activeTab === 'review' ? 'active' : ''}`} onClick={() => setActiveTab('review')}>
+            <Sparkles size={15} /> 1. Review & Diff
           </button>
-          <button
-            className={`nav-tab-btn ${activeTab === 'jira' ? 'active' : ''}`}
-            onClick={() => setActiveTab('jira')}
-          >
-            <ExternalLink size={16} />
-            <span>2. Đẩy Jira & Webhook</span>
+          <button className={`nav-tab-btn ${activeTab === 'testgen' ? 'active' : ''}`} onClick={() => setActiveTab('testgen')}>
+            <Code2 size={15} /> 2. Sinh Unit Test
           </button>
-          <button
-            className={`nav-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <BarChart3 size={16} />
-            <span>3. Dashboard Thống kê</span>
+          <button className={`nav-tab-btn ${activeTab === 'github' ? 'active' : ''}`} onClick={() => setActiveTab('github')}>
+            <GitPullRequest size={15} /> 3. GitHub & Webhook
           </button>
-          <button
-            className={`nav-tab-btn ${activeTab === 'keys' ? 'active' : ''}`}
-            onClick={() => setActiveTab('keys')}
-          >
-            <Key size={16} />
-            <span>4. Cấu hình API Vault</span>
+          <button className={`nav-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+            <BarChart2 size={15} /> 4. Dashboard
           </button>
-          <button
-            className={`nav-tab-btn ${activeTab === 'export' ? 'active' : ''}`}
-            onClick={() => setActiveTab('export')}
-          >
-            <Download size={16} />
-            <span>5. Xuất Tài liệu</span>
+          <button className={`nav-tab-btn ${activeTab === 'keys' ? 'active' : ''}`} onClick={() => setActiveTab('keys')}>
+            <Key size={15} /> 5. API Vault & Rules
+          </button>
+          <button className={`nav-tab-btn ${activeTab === 'export' ? 'active' : ''}`} onClick={() => setActiveTab('export')}>
+            <Download size={15} /> 6. Xuất Báo cáo
           </button>
         </nav>
 
-        {/* USER PROFILE & AUTH (Thành viên 1) */}
+        {/* USER PROFILE */}
         <div className="nav-actions">
           {user ? (
             <div className="user-badge">
@@ -636,12 +571,7 @@ export default function App() {
                 {user.fullName ? user.fullName[0].toUpperCase() : 'U'}
               </div>
               <span>{user.fullName}</span>
-              <button
-                className="btn-icon"
-                style={{ width: '28px', height: '28px', border: 'none' }}
-                title="Đăng xuất"
-                onClick={handleLogout}
-              >
+              <button className="btn-icon" style={{ width: '26px', height: '26px', border: 'none' }} onClick={handleLogout} title="Đăng xuất">
                 <LogOut size={14} color="#f43f5e" />
               </button>
             </div>
@@ -653,497 +583,272 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTAINER */}
       <main className="main-content">
 
         {/* ========================================================================= */}
-        {/* TAB 1: PHÂN TÍCH YÊU CẦU & CÂY HIERARCHY (Luồng 4, 5, 6 - Thành viên 2) */}
+        {/* TAB 1: REVIEW CODE & GIT DIFF (Luồng 4, 5, 6 - Thành viên 2) */}
         {/* ========================================================================= */}
-        {activeTab === 'breakdown' && (
+        {activeTab === 'review' && (
           <div>
-            {/* Input Box */}
+            {/* Input Diff Box */}
             <div className="glass-card" style={{ marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>⚡ Phân tích Yêu cầu Nghiệp vụ bằng AI</h2>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>🔍 Rà soát Git Diff & Phát hiện Lỗ hổng Bảo mật</h2>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                    Nhập tài liệu nghiệp vụ (BRD/PRD). Express sẽ gửi webhook sang n8n $\rightarrow$ Gemini AI bóc tách cấu trúc Epic, Story và Task.
+                    Dán đoạn git diff hoặc chọn mẫu thử để n8n Webhook gọi Gemini AI phân tích lỗ hổng bảo mật, lỗi cú pháp và code smell.
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Mã dự án Jira:</span>
-                  <input
-                    type="text"
-                    value={projectKey}
-                    onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
-                    style={{
-                      width: '80px',
-                      padding: '0.35rem 0.6rem',
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      color: 'white',
-                      fontWeight: 700,
-                      textAlign: 'center'
-                    }}
-                  />
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', alignSelf: 'center' }}>Mẫu thử lỗi:</span>
+                  {SAMPLE_DIFFS.map((s, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                      onClick={() => setDiffInput(s.diffText)}
+                    >
+                      {s.title}
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              {/* Sample Template Chips */}
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.85rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', alignSelf: 'center' }}>Mẫu nhanh:</span>
-                {SAMPLE_TEMPLATES.map((tmpl, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="btn-secondary"
-                    style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}
-                    onClick={() => setRequirementText(tmpl.text)}
-                  >
-                    {tmpl.title}
-                  </button>
-                ))}
               </div>
 
               <textarea
                 className="form-textarea"
-                rows={4}
-                value={requirementText}
-                onChange={(e) => setRequirementText(e.target.value)}
-                placeholder="Nhập yêu cầu nghiệp vụ phần mềm tại đây..."
-                style={{ width: '100%', marginBottom: '1rem' }}
+                rows={5}
+                value={diffInput}
+                onChange={(e) => setDiffInput(e.target.value)}
+                placeholder="Dán đoạn Git Diff tại đây..."
+                style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', marginBottom: '1rem' }}
               />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {requirementText.length} ký tự • Tương thích n8n Webhook & Google Gemini
-                </div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {diffInput.length} ký tự • Tương thích n8n Webhook & GitHub Pull Request Diff
+                </span>
 
-                <button
-                  className="btn-primary"
-                  onClick={handleAnalyzeRequirement}
-                  disabled={isAnalyzing}
-                  style={{ minWidth: '180px' }}
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <div className="spinner" /> Đang phân tích...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={16} /> Bóc tách bằng AI (n8n)
-                    </>
-                  )}
+                <button className="btn-primary" onClick={handleReviewDiff} disabled={isReviewing} style={{ minWidth: '200px' }}>
+                  {isReviewing ? <><div className="spinner" /> Đang rà soát...</> : <><Sparkles size={16} /> Bắt đầu AI Review (n8n)</>}
                 </button>
               </div>
             </div>
 
-            {/* SUMMARY STATS BAR */}
-            <div className="metric-grid">
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--epic-color)' }}>
-                <span className="metric-card-title">Tổng số Epics</span>
-                <span className="metric-card-value">{epics.length}</span>
-              </div>
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--story-color)' }}>
-                <span className="metric-card-title">User Stories</span>
-                <span className="metric-card-value">{totalStoriesCount}</span>
-              </div>
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--task-color)' }}>
-                <span className="metric-card-title">Sub-tasks Kỹ thuật</span>
-                <span className="metric-card-value">{totalTasksCount}</span>
-              </div>
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--warning)' }}>
-                <span className="metric-card-title">Tổng Story Points</span>
-                <span className="metric-card-value">{totalStoryPoints} pts</span>
-              </div>
-            </div>
-
-            {/* ACTION TOOLBAR (HUMAN-IN-THE-LOOP) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
-                  🌳 Cấu trúc Phân cấp (Human-in-the-loop Editor)
-                </h3>
-                <span className="badge badge-story">Bấm để chỉnh sửa trực tiếp</span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button className="btn-secondary" onClick={handleSaveEdits}>
-                  <Check size={16} /> Lưu thay đổi
-                </button>
-                <button className="btn-success" onClick={handlePushToJira}>
-                  <ExternalLink size={16} /> Phê duyệt & Đẩy lên Jira
-                </button>
-              </div>
-            </div>
-
-            {/* HIERARCHICAL TREE CONTAINER */}
-            <div className="tree-container">
-              {epics.map((epic, eIdx) => {
-                const isEpicCollapsed = collapsedEpics[eIdx];
-                return (
-                  <div key={epic.id || eIdx} className="epic-card">
-                    {/* EPIC HEADER */}
+            {/* REVIEW RESULT & QUALITY SCORE (Luồng 5) */}
+            {currentReview && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Score & Summary Banner */}
+                <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem', borderLeft: `6px solid ${currentReview.qualityScore >= 80 ? '#10b981' : '#f43f5e'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                     <div
-                      className="epic-header"
-                      onClick={() => setCollapsedEpics({ ...collapsedEpics, [eIdx]: !isEpicCollapsed })}
+                      className="score-badge-circle"
+                      style={{
+                        borderColor: currentReview.qualityScore >= 80 ? '#10b981' : (currentReview.qualityScore >= 60 ? '#f59e0b' : '#f43f5e'),
+                        color: currentReview.qualityScore >= 80 ? '#34d399' : (currentReview.qualityScore >= 60 ? '#fbbf24' : '#fb7185')
+                      }}
                     >
-                      <div className="epic-header-left">
-                        {isEpicCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-                        <span className="badge badge-epic">EPIC</span>
-                        <span className="badge badge-epic" style={{ fontFamily: 'var(--font-mono)' }}>
-                          {epic.jiraKey || `${projectKey}-EPIC`}
-                        </span>
-                        <input
-                          type="text"
-                          className="editable-input"
-                          value={epic.summary}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => handleUpdateEpicTitle(eIdx, e.target.value)}
-                          style={{ fontWeight: 700, fontSize: '0.95rem' }}
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }} onClick={(e) => e.stopPropagation()}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          {(epic.stories || []).length} Stories
-                        </span>
-                        <button
-                          className="btn-secondary"
-                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.55rem' }}
-                          onClick={() => handleAddStory(eIdx)}
-                        >
-                          <Plus size={14} /> Thêm Story
-                        </button>
-                      </div>
+                      <span style={{ fontSize: '1.4rem' }}>{currentReview.qualityScore}</span>
+                      <span style={{ fontSize: '0.65rem' }}>HẠNG {currentReview.grade}</span>
                     </div>
 
-                    {/* EPIC BODY: USER STORIES */}
-                    {!isEpicCollapsed && (
-                      <div className="epic-body">
-                        {epic.description && (
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', paddingLeft: '0.5rem' }}>
-                            {epic.description}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+                        <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+                          PR #{currentReview.pullNumber}: {currentReview.pullTitle}
+                        </h3>
+                        <span className={`badge ${currentReview.status === 'APPROVED' ? 'badge-clean' : 'badge-critical'}`}>
+                          {currentReview.status}
+                        </span>
+                        <span className="badge badge-suggestion" style={{ fontFamily: 'var(--font-mono)' }}>
+                          {currentReview.engine}
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        {currentReview.summary}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions (Luồng 6: Human-in-the-loop Approve) */}
+                  <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <button className="btn-success" onClick={() => handleUpdateStatus('APPROVED')}>
+                      <Check size={16} /> Phê duyệt (Approve)
+                    </button>
+                    <button className="btn-secondary" style={{ color: '#fb7185' }} onClick={() => handleUpdateStatus('CHANGES_REQUESTED')}>
+                      <X size={16} /> Yêu cầu sửa (Request Changes)
+                    </button>
+                    <button className="btn-primary" onClick={handleCommentOnGitHub} disabled={isCommentingPR}>
+                      {isCommentingPR ? <div className="spinner" /> : <ExternalLink size={16} />} Gửi lên GitHub PR
+                    </button>
+                  </div>
+                </div>
+
+                {/* INTERACTIVE DIFF VIEWER (Luồng 5 & 6) */}
+                <div className="glass-card" style={{ padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+                      📑 Trực quan hóa Git Diff & AI Review Comments
+                    </h3>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      {(currentReview.issues || []).length} vấn đề được ghim vào từng dòng code
+                    </span>
+                  </div>
+
+                  <div className="diff-container">
+                    <div className="diff-header-bar">
+                      <span>diff --git a/src/controllers/authController.js</span>
+                      <span>Unified Diff Viewer</span>
+                    </div>
+
+                    {parseDiffLines(currentReview.diffText).map((line, idx) => {
+                      // Tìm issue có line khớp
+                      const issueOnLine = (currentReview.issues || []).find(i => i.line === line.lineNum || (idx === 3 && i.severity === 'CRITICAL'));
+                      return (
+                        <React.Fragment key={idx}>
+                          <div className={`diff-line ${line.type}`}>
+                            <div className="diff-line-number">{line.lineNum}</div>
+                            <div className="diff-line-content">{line.content}</div>
                           </div>
-                        )}
 
-                        {(epic.stories || []).map((story, sIdx) => {
-                          const isStoryCollapsed = collapsedStories[`${eIdx}_${sIdx}`];
-                          return (
-                            <div key={story.id || sIdx} className="story-card">
-                              {/* STORY HEADER */}
-                              <div
-                                className="story-header"
-                                onClick={() => setCollapsedStories({ ...collapsedStories, [`${eIdx}_${sIdx}`]: !isStoryCollapsed })}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1 }}>
-                                  {isStoryCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                                  <span className="badge badge-story">STORY</span>
-                                  <span className="badge badge-story" style={{ fontFamily: 'var(--font-mono)' }}>
-                                    {story.jiraKey || `${projectKey}-STORY`}
+                          {/* Ghim nhận xét AI ngay dưới dòng code vi phạm */}
+                          {issueOnLine && (
+                            <div
+                              className="ai-comment-card"
+                              style={{
+                                borderLeftColor: issueOnLine.severity === 'CRITICAL' ? '#f43f5e' : (issueOnLine.severity === 'WARNING' ? '#f59e0b' : '#3b82f6'),
+                                opacity: issueOnLine.accepted ? 1 : 0.5
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span className={`badge ${issueOnLine.severity === 'CRITICAL' ? 'badge-critical' : (issueOnLine.severity === 'WARNING' ? 'badge-warning' : 'badge-suggestion')}`}>
+                                    {issueOnLine.severity}
                                   </span>
-                                  <input
-                                    type="text"
-                                    className="editable-input"
-                                    value={story.summary}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => handleUpdateStory(eIdx, sIdx, 'summary', e.target.value)}
-                                    style={{ fontWeight: 600, fontSize: '0.9rem' }}
-                                  />
+                                  <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{issueOnLine.title}</span>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }} onClick={(e) => e.stopPropagation()}>
-                                  {/* Story Points */}
-                                  <select
-                                    className="workspace-select"
-                                    style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', border: '1px solid var(--border-subtle)', borderRadius: '4px' }}
-                                    value={story.storyPoints || 3}
-                                    onChange={(e) => handleUpdateStory(eIdx, sIdx, 'storyPoints', parseInt(e.target.value))}
-                                  >
-                                    {[1, 2, 3, 5, 8, 13].map((pt) => (
-                                      <option key={pt} value={pt}>{pt} Points</option>
-                                    ))}
-                                  </select>
-
-                                  {/* Priority */}
-                                  <select
-                                    className="workspace-select"
-                                    style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', border: '1px solid var(--border-subtle)', borderRadius: '4px' }}
-                                    value={story.priority || 'Medium'}
-                                    onChange={(e) => handleUpdateStory(eIdx, sIdx, 'priority', e.target.value)}
-                                  >
-                                    <option value="Highest">Highest</option>
-                                    <option value="High">High</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="Low">Low</option>
-                                  </select>
-
-                                  {/* Status */}
-                                  <span className={`badge badge-status-${story.status === 'Done' ? 'done' : story.status === 'In Progress' ? 'progress' : 'todo'}`}>
-                                    {story.status || 'To Do'}
-                                  </span>
-
-                                  {/* Regenerate AI Story */}
-                                  <button
-                                    className="btn-icon"
-                                    style={{ width: '28px', height: '28px' }}
-                                    title="Tái tạo Story bằng AI"
-                                    onClick={() => handleRegenerateStory(eIdx, sIdx)}
-                                  >
-                                    <Sparkles size={14} color="var(--primary)" />
-                                  </button>
-
-                                  {/* Delete Story */}
-                                  <button
-                                    className="btn-icon"
-                                    style={{ width: '28px', height: '28px' }}
-                                    title="Xóa Story"
-                                    onClick={() => handleDeleteStory(eIdx, sIdx)}
-                                  >
-                                    <Trash2 size={14} color="#f43f5e" />
-                                  </button>
-                                </div>
+                                <button
+                                  className="btn-secondary"
+                                  style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                                  onClick={() => handleToggleIssue(issueOnLine.id)}
+                                >
+                                  {issueOnLine.accepted ? 'Bỏ qua (Dismiss)' : 'Chấp nhận (Accept)'}
+                                </button>
                               </div>
 
-                              {/* STORY BODY: SUB-TASKS & DETAILS */}
-                              {!isStoryCollapsed && (
-                                <div className="story-body">
-                                  {/* Description & Assignee */}
-                                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                                    <div style={{ flex: 1 }}>
-                                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mô tả Story:</label>
-                                      <textarea
-                                        className="editable-input"
-                                        rows={2}
-                                        value={story.description || ''}
-                                        onChange={(e) => handleUpdateStory(eIdx, sIdx, 'description', e.target.value)}
-                                        style={{ fontSize: '0.85rem' }}
-                                      />
-                                    </div>
+                              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                                {issueOnLine.message}
+                              </p>
 
-                                    {/* Member Assignee Picker (Luồng 8) */}
-                                    <div style={{ minWidth: '200px' }}>
-                                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Gán cho (Assignee):</label>
-                                      <select
-                                        className="form-input"
-                                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem', width: '100%' }}
-                                        value={story.assignee || ''}
-                                        onChange={(e) => handleUpdateStory(eIdx, sIdx, 'assignee', e.target.value)}
-                                      >
-                                        <option value="">-- Chưa chỉ định --</option>
-                                        {jiraMembers.map((m) => (
-                                          <option key={m.accountId} value={m.displayName}>
-                                            {m.displayName}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  </div>
-
-                                  {/* Acceptance Criteria */}
-                                  {story.acceptanceCriteria && story.acceptanceCriteria.length > 0 && (
-                                    <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.85rem', borderRadius: '6px' }}>
-                                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                                        Tiêu chí nghiệm thu (Acceptance Criteria):
-                                      </span>
-                                      <ul style={{ paddingLeft: '1.25rem', marginTop: '0.3rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                        {story.acceptanceCriteria.map((ac, acIdx) => (
-                                          <li key={acIdx}>{ac}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-
-                                  {/* SUB-TASKS LIST */}
-                                  <div style={{ marginTop: '0.5rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--task-color)' }}>
-                                        Sub-tasks Kỹ thuật ({(story.tasks || []).length})
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary"
-                                        style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                                        onClick={() => handleAddTask(eIdx, sIdx)}
-                                      >
-                                        <Plus size={12} /> Thêm Sub-task
-                                      </button>
-                                    </div>
-
-                                    <div className="task-list">
-                                      {(story.tasks || []).map((task, tIdx) => (
-                                        <div key={task.id || tIdx} className="task-card">
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                                            <span className="badge badge-task">TASK</span>
-                                            <span className="badge badge-task" style={{ fontFamily: 'var(--font-mono)' }}>
-                                              {task.jiraKey || `${projectKey}-TASK`}
-                                            </span>
-                                            <input
-                                              type="text"
-                                              className="editable-input"
-                                              value={task.summary}
-                                              onChange={(e) => {
-                                                const updated = [...epics];
-                                                updated[eIdx].stories[sIdx].tasks[tIdx].summary = e.target.value;
-                                                setEpics(updated);
-                                              }}
-                                              style={{ fontSize: '0.85rem' }}
-                                            />
-                                          </div>
-
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                              {task.estimatedHours || 3}h
-                                            </span>
-                                            <span className={`badge badge-status-${task.status === 'Done' ? 'done' : 'todo'}`}>
-                                              {task.status || 'To Do'}
-                                            </span>
-                                            <button
-                                              className="btn-icon"
-                                              style={{ width: '24px', height: '24px' }}
-                                              onClick={() => handleDeleteTask(eIdx, sIdx, tIdx)}
-                                            >
-                                              <Trash2 size={12} color="#f43f5e" />
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
+                              {issueOnLine.suggestion && (
+                                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.4rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', color: '#34d399', fontFamily: 'var(--font-mono)' }}>
+                                  💡 <strong>Đề xuất sửa:</strong> {issueOnLine.suggestion}
                                 </div>
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: ĐẨY LÊN JIRA & ĐỒNG BỘ WEBHOOK (Luồng 7, 8, 9 - Thành viên 3) */}
+        {/* TAB 2: AUTOMATED UNIT TEST GENERATOR (Luồng 8 - Thành viên 3) */}
         {/* ========================================================================= */}
-        {activeTab === 'jira' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div className="glass-card">
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                🚀 Luồng Tích hợp Jira Cloud & Tự động hóa n8n
-              </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                Khi bấm xác nhận, n8n đóng vai trò là workflow engine tự động thực hiện vòng lặp tạo Epic $\rightarrow$ Story $\rightarrow$ Sub-task qua Jira REST API v3.
-              </p>
+        {activeTab === 'testgen' && (
+          <div className="glass-card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+              🧪 Tự động Sinh Mã Kiểm thử Unit Test (Jest / PyTest)
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              AI tự động phân tích các hàm trong Pull Request và sinh ra bộ kiểm thử Unit Test bao phủ 100% các trường hợp (Positive, Negative, Boundary).
+            </p>
 
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                <button
-                  className="btn-success"
-                  onClick={handlePushToJira}
-                  disabled={isPushingJira}
-                  style={{ minWidth: '220px' }}
-                >
-                  {isPushingJira ? (
-                    <>
-                      <div className="spinner" /> Đang đẩy lên Jira...
-                    </>
-                  ) : (
-                    <>
-                      <ExternalLink size={16} /> Đẩy toàn bộ Backlog lên Jira
-                    </>
-                  )}
-                </button>
+            <button className="btn-primary" onClick={handleGenerateUnitTests} disabled={isGeneratingTest} style={{ marginBottom: '1.25rem' }}>
+              {isGeneratingTest ? <><div className="spinner" /> Đang sinh Unit Test...</> : <><Sparkles size={16} /> Sinh Unit Test Tự Động (n8n)</>}
+            </button>
 
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  Sẽ tạo <strong>{epics.length} Epic</strong>, <strong>{totalStoriesCount} Story</strong>, và <strong>{totalTasksCount} Sub-task</strong> vào Project <code>{projectKey}</code>
+            {generatedTest && (
+              <div style={{ background: 'var(--bg-code)', border: '1px solid var(--border-subtle)', borderRadius: '10px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 1rem', background: '#161b22', borderBottom: '1px solid var(--border-subtle)', fontSize: '0.8rem' }}>
+                  <span>Framework: <strong>{generatedTest.framework}</strong> • {generatedTest.testCasesCount} Test Cases</span>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedTest.testCode);
+                      showToast('Đã sao chép mã Unit Test vào Clipboard!', 'success');
+                    }}
+                  >
+                    <Copy size={12} /> Sao chép Code
+                  </button>
                 </div>
+                <pre style={{ padding: '1rem', color: '#93c5fd', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', overflowX: 'auto', lineHeight: '1.5' }}>
+                  {generatedTest.testCode}
+                </pre>
               </div>
+            )}
+          </div>
+        )}
 
-              {/* Progress Panel */}
-              {pushProgress && (
-                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, color: '#34d399', marginBottom: '0.5rem' }}>
-                    <CheckCircle2 size={18} /> {pushProgress.message}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Cơ chế: <strong>{pushProgress.method}</strong> • Đã kích hoạt thông báo tự động đa kênh (Discord/Slack).
-                  </div>
-                  {pushProgress.createdIssues && (
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-                      {pushProgress.createdIssues.slice(0, 8).map((issue, idx) => (
-                        <span key={idx} className="badge badge-story">
-                          {issue.key}: {issue.summary.slice(0, 20)}...
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* JIRA WEBHOOK SYNC SIMULATOR & MONITOR (Luồng 9 - Thành viên 3) */}
+        {/* ========================================================================= */}
+        {/* TAB 3: GITHUB INTEGRATION & WEBHOOK SYNC (Luồng 7, 9 - Thành viên 3) */}
+        {/* ========================================================================= */}
+        {activeTab === 'github' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div className="glass-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
-                    ⚡ Lắng nghe Webhook đồng bộ ngược từ Jira (Jira Sync)
-                  </h3>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                    🐙 Tự động hóa Tương tác GitHub Pull Request (n8n Webhook)
+                  </h2>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                    Endpoint <code>POST /api/webhooks/jira-sync</code> tự động lắng nghe khi developer chuyển task sang "Done" trên Jira.
+                    Endpoint <code>POST /api/webhooks/github</code> tự động lắng nghe khi dev mở PR trên GitHub để kích hoạt review ngầm.
                   </p>
                 </div>
 
-                <button
-                  className="btn-primary"
-                  onClick={() => handleSimulateJiraWebhook('ECOM-103')}
-                  disabled={simulatingSync}
-                >
-                  <RefreshCw size={14} className={simulatingSync ? 'spinner' : ''} />
-                  Bắn giả lập Webhook (Chuyển Done)
+                <button className="btn-primary" onClick={handleSimulateWebhook} disabled={simulatingHook}>
+                  <RefreshCw size={14} className={simulatingHook ? 'spinner' : ''} />
+                  Bắn giả lập GitHub Webhook (PR Opened)
                 </button>
               </div>
 
-              {/* Webhook History Table */}
+              {/* Webhook Sync Logs */}
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                      <th style={{ padding: '0.6rem 0.8rem' }}>Mã Issue Jira</th>
                       <th style={{ padding: '0.6rem 0.8rem' }}>Sự kiện Webhook</th>
-                      <th style={{ padding: '0.6rem 0.8rem' }}>Trạng thái mới</th>
-                      <th style={{ padding: '0.6rem 0.8rem' }}>Thời gian nhận</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Kho lưu trữ</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Số PR</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Hành động tự động</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Thời gian</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {syncLogs.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                          Chưa có sự kiện webhook nào được nhận.
+                    {syncLogs.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '0.6rem 0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--primary)', fontWeight: 600 }}>
+                          {log.event}
+                        </td>
+                        <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-primary)' }}>{log.repo}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700 }}>#{log.pullNumber}</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}>
+                          <span className="badge badge-clean">{log.actionTaken}</span>
+                        </td>
+                        <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-muted)' }}>
+                          {new Date(log.timestamp).toLocaleTimeString('vi-VN')}
                         </td>
                       </tr>
-                    ) : (
-                      syncLogs.map((log) => (
-                        <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: '0.6rem 0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--task-color)', fontWeight: 600 }}>
-                            {log.issueKey}
-                          </td>
-                          <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-secondary)' }}>
-                            {log.event}
-                          </td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}>
-                            <span className="badge badge-status-done">
-                              {log.newStatus}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-muted)' }}>
-                            {new Date(log.timestamp).toLocaleTimeString('vi-VN')}
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1152,174 +857,100 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: DASHBOARD THỐNG KÊ (Luồng 10 - Thành viên 4) */}
+        {/* TAB 4: QUALITY DASHBOARD & LEADERBOARD (Luồng 10 - Thành viên 4) */}
         {/* ========================================================================= */}
-        {activeTab === 'dashboard' && stats && (
+        {activeTab === 'dashboard' && dashboardStats && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {/* Top KPI Cards */}
             <div className="metric-grid">
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--epic-color)' }}>
-                <span className="metric-card-title">Tổng Epic đã phân tích</span>
-                <span className="metric-card-value">{stats.totalEpics}</span>
-              </div>
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--story-color)' }}>
-                <span className="metric-card-title">Tổng User Stories</span>
-                <span className="metric-card-value">{stats.totalStories}</span>
-              </div>
-              <div className="metric-card" style={{ borderLeft: '4px solid var(--task-color)' }}>
-                <span className="metric-card-title">Tổng Sub-tasks</span>
-                <span className="metric-card-value">{stats.totalTasks}</span>
+              <div className="metric-card" style={{ borderLeft: '4px solid var(--primary)' }}>
+                <span className="metric-card-title">Tổng số lượt PR đã Review</span>
+                <span className="metric-card-value">{dashboardStats.totalReviews}</span>
               </div>
               <div className="metric-card" style={{ borderLeft: '4px solid #10b981' }}>
-                <span className="metric-card-title">Tỷ lệ Hoàn thành (Done)</span>
-                <span className="metric-card-value">{stats.completionRate}%</span>
+                <span className="metric-card-title">Điểm Chất Lượng Trung Bình</span>
+                <span className="metric-card-value">{dashboardStats.avgScore}/100</span>
+              </div>
+              <div className="metric-card" style={{ borderLeft: '4px solid #f43f5e' }}>
+                <span className="metric-card-title">Lỗ hổng Bảo Mật (Critical)</span>
+                <span className="metric-card-value">{dashboardStats.issueBreakdown.criticalSecurity}</span>
+              </div>
+              <div className="metric-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
+                <span className="metric-card-title">Tỷ lệ Đạt Quality Gate</span>
+                <span className="metric-card-value">{dashboardStats.passRate}%</span>
               </div>
             </div>
 
-            {/* Custom SVG Charts */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
-              {/* Chart 1: Story Points theo từng Epic */}
-              <div className="glass-card">
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>
-                  📊 Phân bố Story Points theo từng Epic
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {stats.epicPointsData.length === 0 ? (
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Chưa có dữ liệu Epic</div>
-                  ) : (
-                    stats.epicPointsData.map((e, idx) => (
-                      <div key={idx}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                          <span style={{ fontWeight: 600 }}>{e.jiraKey}: {e.epicSummary}</span>
-                          <span style={{ color: 'var(--epic-color)', fontWeight: 700 }}>{e.storyPoints} pts</span>
-                        </div>
-                        <div style={{ height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${Math.min(100, (e.storyPoints / (stats.totalStoryPoints || 1)) * 100)}%`,
-                              background: 'linear-gradient(90deg, #a855f7, #6366f1)',
-                              borderRadius: '4px'
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Chart 2: Trạng thái & Độ ưu tiên */}
-              <div className="glass-card">
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>
-                  🎯 Trạng thái công việc & Độ ưu tiên
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Theo Trạng thái:</span>
-                    <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span>To Do:</span>
-                        <strong>{stats.statusCount['To Do'] || 0}</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span>In Progress:</span>
-                        <strong style={{ color: '#818cf8' }}>{stats.statusCount['In Progress'] || 0}</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span>Done:</span>
-                        <strong style={{ color: '#34d399' }}>{stats.statusCount['Done'] || 0}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Theo Độ ưu tiên:</span>
-                    <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span style={{ color: '#fb7185' }}>High:</span>
-                        <strong>{stats.priorityCount['High'] || 0}</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span style={{ color: '#fbbf24' }}>Medium:</span>
-                        <strong>{stats.priorityCount['Medium'] || 0}</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span style={{ color: '#38bdf8' }}>Low:</span>
-                        <strong>{stats.priorityCount['Low'] || 0}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {/* Clean Code Leaderboard */}
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem' }}>
+                🏆 Bảng Xếp Hạng Lập Trình Viên Viết Code Sạch Nhất (Clean Code Leaderboard)
+              </h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Hạng</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Lập trình viên</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Số PR đã mở</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Điểm Code TB</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>Số lỗi bảo mật mắc phải</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(dashboardStats.leaderboard || []).map((dev, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 800 }}>#{idx + 1}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 600 }}>{dev.name}</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}>{dev.prsCount} PRs</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}>
+                          <span className={`badge ${dev.avgScore >= 80 ? 'badge-clean' : 'badge-warning'}`}>
+                            {dev.avgScore} pts
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.6rem 0.8rem', color: dev.criticals > 0 ? '#fb7185' : '#34d399', fontWeight: 700 }}>
+                          {dev.criticals} lỗi
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: CẤU HÌNH API KEYS VAULT (Luồng 3 - Thành viên 1) */}
+        {/* TAB 5: API KEYS VAULT & QUALITY POLICIES (Luồng 3 - Thành viên 1) */}
         {/* ========================================================================= */}
         {activeTab === 'keys' && (
           <div className="glass-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-              🔑 Cấu hình Khóa Kết nối (API Keys Vault)
+              🔑 Cấu hình Khóa Bảo mật & Ngưỡng duyệt Quality Gate
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Thông tin kết nối Jira Cloud, Google Gemini và n8n Webhook được bảo vệ an toàn cho từng Workspace.
+              Cấu hình các điều kiện chặn Merge và kết nối GitHub / Gemini AI cho kho lưu trữ đang chọn.
             </p>
 
             <form onSubmit={handleSaveKeys}>
-              {/* Jira Domain */}
-              <div className="form-group">
-                <label className="form-label">Jira Domain (ví dụ: mycompany.atlassian.net):</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={keysConfig.jiraDomain || ''}
-                  onChange={(e) => setKeysConfig({ ...keysConfig, jiraDomain: e.target.value })}
-                  placeholder="company.atlassian.net"
-                />
-              </div>
-
-              {/* Jira Email */}
-              <div className="form-group">
-                <label className="form-label">Jira Email tài khoản Atlassian:</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  value={keysConfig.jiraEmail || ''}
-                  onChange={(e) => setKeysConfig({ ...keysConfig, jiraEmail: e.target.value })}
-                  placeholder="admin@company.com"
-                />
-              </div>
-
-              {/* Jira API Token */}
               <div className="form-group">
                 <label className="form-label">
-                  Jira API Token: {keysConfig.jiraTokenMasked && <span style={{ color: '#34d399' }}>(Đã lưu: {keysConfig.jiraTokenMasked})</span>}
+                  GitHub Personal Access Token (PAT): {keysConfig.githubTokenMasked && <span style={{ color: '#34d399' }}>({keysConfig.githubTokenMasked})</span>}
                 </label>
                 <input
                   type="password"
                   className="form-input"
-                  value={keysConfig.jiraToken || ''}
-                  onChange={(e) => setKeysConfig({ ...keysConfig, jiraToken: e.target.value })}
-                  placeholder="Nhập API Token mới nếu muốn thay đổi"
+                  value={keysConfig.githubToken || ''}
+                  onChange={(e) => setKeysConfig({ ...keysConfig, githubToken: e.target.value })}
+                  placeholder="ghp_xxxxxxxxxxxx"
                 />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ alignSelf: 'flex-start', marginTop: '0.4rem', fontSize: '0.75rem' }}
-                  onClick={handleTestJira}
-                  disabled={testingJira}
-                >
-                  {testingJira ? <div className="spinner" /> : <Shield size={14} />} Kiểm tra kết nối Jira
+                <button type="button" className="btn-secondary" style={{ alignSelf: 'flex-start', marginTop: '0.4rem', fontSize: '0.75rem' }} onClick={handleTestGithub} disabled={testingGithub}>
+                  {testingGithub ? <div className="spinner" /> : <FolderGit2 size={14} />} Kiểm tra kết nối GitHub
                 </button>
               </div>
 
-              {/* Google Gemini API Key */}
               <div className="form-group">
                 <label className="form-label">
-                  Google Gemini API Key: {keysConfig.geminiKeyMasked && <span style={{ color: '#34d399' }}>(Đã lưu: {keysConfig.geminiKeyMasked})</span>}
+                  Google Gemini API Key: {keysConfig.geminiKeyMasked && <span style={{ color: '#34d399' }}>({keysConfig.geminiKeyMasked})</span>}
                 </label>
                 <input
                   type="password"
@@ -1328,32 +959,39 @@ export default function App() {
                   onChange={(e) => setKeysConfig({ ...keysConfig, geminiKey: e.target.value })}
                   placeholder="AIzaSy..."
                 />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ alignSelf: 'flex-start', marginTop: '0.4rem', fontSize: '0.75rem' }}
-                  onClick={handleTestGemini}
-                  disabled={testingGemini}
-                >
+                <button type="button" className="btn-secondary" style={{ alignSelf: 'flex-start', marginTop: '0.4rem', fontSize: '0.75rem' }} onClick={handleTestGemini} disabled={testingGemini}>
                   {testingGemini ? <div className="spinner" /> : <Sparkles size={14} />} Kiểm tra kết nối Gemini AI
                 </button>
               </div>
 
-              {/* n8n Webhook URL */}
-              <div className="form-group">
-                <label className="form-label">n8n Webhook URL (Phân tích Requirement):</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={keysConfig.n8nWebhookUrl || ''}
-                  onChange={(e) => setKeysConfig({ ...keysConfig, n8nWebhookUrl: e.target.value })}
-                  placeholder="http://localhost:5678/webhook/analyze-requirement"
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Điểm duyệt tối thiểu (Quality Score Threshold):</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={keysConfig.minQualityScore || 80}
+                    onChange={(e) => setKeysConfig({ ...keysConfig, minQualityScore: parseInt(e.target.value) })}
+                    min="0"
+                    max="100"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Chặn merge nếu có Critical Vulnerability:</label>
+                  <select
+                    className="form-input"
+                    value={keysConfig.blockOnCritical ? 'true' : 'false'}
+                    onChange={(e) => setKeysConfig({ ...keysConfig, blockOnCritical: e.target.value === 'true' })}
+                  >
+                    <option value="true">BẬT (Khuyên dùng cho Security)</option>
+                    <option value="false">TẮT (Cảnh báo nhưng cho merge)</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Discord Webhook URL */}
               <div className="form-group">
-                <label className="form-label">Discord Webhook URL (Thông báo tự động):</label>
+                <label className="form-label">Discord Webhook URL (Bắn thông báo tự động):</label>
                 <input
                   type="text"
                   className="form-input"
@@ -1363,9 +1001,9 @@ export default function App() {
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="submit" className="btn-primary">
-                  <Check size={16} /> Lưu Cấu hình Keys
+                  <Check size={16} /> Lưu Cấu Hình Quality Gate
                 </button>
               </div>
             </form>
@@ -1373,21 +1011,21 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 5: XUẤT TÀI LIỆU & THÔNG BÁO (Luồng 11, 12 - Thành viên 4) */}
+        {/* TAB 6: XUẤT BÁO CÁO & THÔNG BÁO (Luồng 11, 12 - Thành viên 4) */}
         {/* ========================================================================= */}
         {activeTab === 'export' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '850px', margin: '0 auto' }}>
             <div className="glass-card">
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                📄 Xuất Tài liệu Kỹ thuật (Export Documentation)
+                📄 Xuất Báo cáo Audit & Security Report
               </h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                Xuất toàn bộ cấu trúc Epic, User Story và Task kỹ thuật đã được phân rã thành file Markdown chuẩn để lưu trữ vào Git repo hoặc in ấn lưu hồ sơ.
+                Tải về toàn bộ hồ sơ phân tích an toàn thông tin và đánh giá chất lượng mã nguồn theo định dạng Markdown hoặc in PDF phục vụ nghiệm thu đồ án.
               </p>
 
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button className="btn-primary" onClick={handleDownloadMarkdown}>
-                  <Download size={16} /> Tải file Markdown (.md)
+                  <Download size={16} /> Tải Báo cáo Markdown (.md)
                 </button>
                 <button className="btn-secondary" onClick={() => window.print()}>
                   🖨️ In ấn / Lưu định dạng PDF
@@ -1395,17 +1033,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* Test Automated Notification (Luồng 11) */}
             <div className="glass-card">
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                📢 Kiểm thử Kênh Thông báo Tự động (Discord / Slack)
+                📢 Bắn Thông báo Review tới Discord / Slack (Luồng 11)
               </h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                Gửi thẻ thông báo mẫu dạng Rich Embed vào Discord Channel của nhóm qua Webhook.
+                Gửi thẻ kết quả chấm điểm và cảnh báo bảo mật trực tiếp vào kênh chat của team.
               </p>
 
-              <button className="btn-secondary" onClick={handleTestDiscordNotify}>
-                <Bell size={16} color="var(--primary)" /> Bắn tin nhắn thử nghiệm tới Discord
+              <button className="btn-secondary" onClick={handleNotifyDiscord}>
+                <Bell size={16} color="var(--primary)" /> Bắn tin nhắn Rich Card tới Discord
               </button>
             </div>
           </div>
@@ -1413,16 +1050,16 @@ export default function App() {
       </main>
 
       {/* ========================================================================= */}
-      {/* AUTH MODAL (Đăng ký / Đăng nhập - Thành viên 1) */}
+      {/* AUTH MODAL (Thành viên 1 - Luồng 1) */}
       {/* ========================================================================= */}
       {showAuthModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.35rem' }}>
-              {authMode === 'login' ? 'Đăng nhập Hệ thống' : 'Đăng ký Tài khoản mới'}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#131927', border: '1px solid var(--border-subtle)', borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '2rem' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+              {authMode === 'login' ? 'Đăng nhập Hệ thống Code Reviewer' : 'Đăng ký Tài khoản mới'}
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Hệ thống xác thực người dùng & cấp JWT Token qua Express.js (Thành viên 1)
+              Xác thực JWT Token bảo mật đa tầng qua Express.js (Luồng 1)
             </p>
 
             <form onSubmit={handleAuthSubmit}>
@@ -1468,25 +1105,9 @@ export default function App() {
 
             <div style={{ marginTop: '1.25rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {authMode === 'login' ? (
-                <>
-                  Chưa có tài khoản?{' '}
-                  <span
-                    style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
-                    onClick={() => setAuthMode('register')}
-                  >
-                    Đăng ký ngay
-                  </span>
-                </>
+                <>Chưa có tài khoản? <span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => setAuthMode('register')}>Đăng ký</span></>
               ) : (
-                <>
-                  Đã có tài khoản?{' '}
-                  <span
-                    style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
-                    onClick={() => setAuthMode('login')}
-                  >
-                    Đăng nhập
-                  </span>
-                </>
+                <>Đã có tài khoản? <span style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }} onClick={() => setAuthMode('login')}>Đăng nhập</span></>
               )}
             </div>
           </div>
@@ -1494,61 +1115,55 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* NEW WORKSPACE MODAL (Thành viên 1) */}
+      {/* NEW REPO MODAL (Thành viên 1 - Luồng 2) */}
       {/* ========================================================================= */}
-      {showNewWorkspaceModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+      {showNewRepoModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#131927', border: '1px solid var(--border-subtle)', borderRadius: '16px', width: '100%', maxWidth: '500px', padding: '2rem' }}>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-              Tạo Workspace Dự án mới
+              Thêm Repository GitHub Cần Giám Sát
             </h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-              Quản lý các thông tin dự án nội bộ trên web trước khi đẩy lên Jira
+              Hệ thống sẽ tự động quét lỗ hổng bảo mật mỗi khi có Pull Request mới.
             </p>
 
-            <form onSubmit={handleCreateWorkspace}>
+            <form onSubmit={handleCreateRepo}>
               <div className="form-group">
-                <label className="form-label">Tên Dự án / Workspace:</label>
+                <label className="form-label">Tổ chức / Owner (vd: facebook, quan-tech):</label>
                 <input
                   type="text"
                   className="form-input"
-                  value={newWorkspaceForm.name}
-                  onChange={(e) => setNewWorkspaceForm({ ...newWorkspaceForm, name: e.target.value })}
-                  placeholder="vd: Mobile Banking App"
+                  value={newRepoForm.owner}
+                  onChange={(e) => setNewRepoForm({ ...newRepoForm, owner: e.target.value })}
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Mô tả dự án:</label>
+                <label className="form-label">Tên Repository (vd: react, payment-service):</label>
                 <input
                   type="text"
                   className="form-input"
-                  value={newWorkspaceForm.description}
-                  onChange={(e) => setNewWorkspaceForm({ ...newWorkspaceForm, description: e.target.value })}
-                  placeholder="Hệ thống ngân hàng số cho khách hàng cá nhân"
+                  value={newRepoForm.name}
+                  onChange={(e) => setNewRepoForm({ ...newRepoForm, name: e.target.value })}
+                  required
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Mã tiền tố Jira (Project Key):</label>
+                <label className="form-label">Nhánh mặc định (Branch):</label>
                 <input
                   type="text"
                   className="form-input"
-                  value={newWorkspaceForm.defaultJiraProjectKey}
-                  onChange={(e) => setNewWorkspaceForm({ ...newWorkspaceForm, defaultJiraProjectKey: e.target.value.toUpperCase() })}
-                  placeholder="MBANK"
+                  value={newRepoForm.defaultBranch}
+                  onChange={(e) => setNewRepoForm({ ...newRepoForm, defaultBranch: e.target.value })}
                   required
                 />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowNewWorkspaceModal(false)}>
-                  Hủy
-                </button>
-                <button type="submit" className="btn-primary">
-                  Tạo Workspace
-                </button>
+                <button type="button" className="btn-secondary" onClick={() => setShowNewRepoModal(false)}>Hủy</button>
+                <button type="submit" className="btn-primary">Thêm Repository</button>
               </div>
             </form>
           </div>
