@@ -1,0 +1,113 @@
+{
+  "name": "Workflow 1: AI Requirement Analyzer (Gemini)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "analyze-requirement",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-analyze",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reqText = $input.first().json.body.requirementText || '';\nconst projectKey = $input.first().json.body.projectKey || 'PROJ';\nconst geminiKey = $input.first().json.body.geminiApiKey;\n\nconst systemInstruction = `Bạn là Senior Business Analyst và Scrum Master.\\nHãy bóc tách yêu cầu phần mềm thành cấu trúc Epic -> User Story -> Sub-tasks.\\nBẮT BUỘC chỉ trả về JSON thuần túy theo định dạng sau:\\n{\\n  \"epics\": [\\n    {\\n      \"summary\": \"Tên Epic\",\\n      \"description\": \"Mô tả ngắn gọn\",\\n      \"stories\": [\\n        {\\n          \"summary\": \"Tiêu đề Story\",\\n          \"description\": \"As a [role], I want [feature] so that [benefit]\",\\n          \"acceptanceCriteria\": [\"Tiêu chí 1\", \"Tiêu chí 2\"],\\n          \"storyPoints\": 3,\\n          \"priority\": \"High\",\\n          \"tasks\": [\\n            { \"summary\": \"Task kỹ thuật cụ thể\", \"type\": \"Sub-task\", \"estimatedHours\": 4 }\\n          ]\\n        }\\n      ]\\n    }\\n  ]\\n}`;\n\nreturn {\n  json: {\n    geminiKey,\n    requestBody: {\n      contents: [\n        {\n          role: \"user\",\n          parts: [\n            { text: `${systemInstruction}\\n\\nYÊU CẦU NGHIỆP VỤ:\\n${reqText}` }\n          ]\n        }\n      ],\n      generationConfig: {\n        temperature: 0.2,\n        responseMimeType: \"application/json\"\n      }\n    }\n  }\n};"
+      },
+      "id": "node-build-prompt",
+      "name": "Build Prompt & Schema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{$json.geminiKey}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json.requestBody)}}",
+        "options": {}
+      },
+      "id": "node-call-gemini",
+      "name": "Call Gemini 2.0 Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet rawText = response.candidates[0].content.parts[0].text;\n\n// Làm sạch ký tự markdown\nrawText = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();\n\nconst parsed = JSON.parse(rawText);\nreturn {\n  json: {\n    success: true,\n    data: parsed\n  }\n};"
+      },
+      "id": "node-clean-json",
+      "name": "Sanitize & Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json)}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-analyze",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1140, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt & Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt & Schema": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini 2.0 Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini 2.0 Flash": {
+      "main": [
+        [
+          {
+            "node": "Sanitize & Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize & Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

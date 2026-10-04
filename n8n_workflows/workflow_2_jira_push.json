@@ -1,0 +1,128 @@
+{
+  "name": "Workflow 2: Batch Push Hierarchy to Jira",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "push-to-jira",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-push",
+      "name": "Webhook Push Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst epics = body.epics || [];\nconst jiraDomain = body.jiraDomain;\nconst jiraEmail = body.jiraEmail;\nconst jiraToken = body.jiraToken;\nconst projectKey = body.projectKey;\nconst authHeader = 'Basic ' + Buffer.from(jiraEmail + ':' + jiraToken).toString('base64');\n\nreturn epics.map((epic, index) => ({\n  json: {\n    epicIndex: index,\n    epicSummary: epic.summary,\n    epicDescription: epic.description,\n    stories: epic.stories || [],\n    jiraDomain,\n    projectKey,\n    authHeader\n  }\n}));"
+      },
+      "id": "node-prepare-epics",
+      "name": "Prepare Epics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [380, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "node-loop-epics",
+      "name": "Loop Each Epic",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{$json.jiraDomain}}/rest/api/3/issue",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{$json.authHeader}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"project\": { \"key\": \"{{$json.projectKey}}\" },\n    \"summary\": \"{{$json.epicSummary}}\",\n    \"description\": {\n      \"type\": \"doc\",\n      \"version\": 1,\n      \"content\": [{\n        \"type\": \"paragraph\",\n        \"content\": [{ \"type\": \"text\", \"text\": \"{{$json.epicDescription}}\" }]\n      }]\n    },\n    \"issuetype\": { \"name\": \"Epic\" }\n  }\n}",
+        "options": {}
+      },
+      "id": "node-create-jira-epic",
+      "name": "Jira API: Create Epic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [820, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Tất cả các Epic và Story đã được đẩy lên Jira thành công!\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-push",
+      "name": "Respond Webhook Done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1080, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Push Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Epics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Epics": {
+      "main": [
+        [
+          {
+            "node": "Loop Each Epic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Each Epic": {
+      "main": [
+        [
+          {
+            "node": "Jira API: Create Epic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Webhook Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira API: Create Epic": {
+      "main": [
+        [
+          {
+            "node": "Loop Each Epic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
