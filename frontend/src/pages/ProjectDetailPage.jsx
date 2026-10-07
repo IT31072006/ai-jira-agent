@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import ProjectModal from '../components/project/ProjectModal';
 import RequirementAnalyzer from '../components/ai/RequirementAnalyzer';
+import JiraWebhookSyncBoard from '../components/jira/JiraWebhookSyncBoard';
 import { projectApi } from '../api/projectApi';
 import {
   ArrowLeft,
@@ -204,8 +205,11 @@ export const ProjectDetailPage = () => {
                 </div>
               </div>
 
-              {/* Flow 5 AI Requirement Analyzer */}
-              <RequirementAnalyzer />
+              {/* Flow 5 AI Requirement Analyzer & Flow 7 Jira Integration */}
+              <RequirementAnalyzer project={project} />
+
+              {/* Flow 9 Jira Webhook Sync Board */}
+              <JiraWebhookSyncBoard project={project} />
             </>
           )}
         </div>
