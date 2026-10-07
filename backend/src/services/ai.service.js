@@ -9,13 +9,38 @@ const analyzeRequirement = async (requirement) => {
     requirement,
   });
 
-  const text = response.data?.parts?.[0]?.text;
+  const rawData = response.data;
+  if (!rawData) {
+    throw new Error('n8n không trả về dữ liệu');
+  }
+
+  // Trường hợp n8n trả về trực tiếp object đã có epics
+  if (typeof rawData === 'object' && (rawData.epics || rawData.data?.epics)) {
+    return rawData;
+  }
+
+  // Trường hợp trả về qua parts, content, text hoặc string
+  let text =
+    rawData?.parts?.[0]?.text ||
+    rawData?.content ||
+    rawData?.text ||
+    (typeof rawData === 'string' ? rawData : null);
+
+  if (!text && typeof rawData === 'object') {
+    return rawData;
+  }
 
   if (!text) {
     throw new Error('n8n không trả về nội dung AI hợp lệ');
   }
 
-  return JSON.parse(text);
+  // Làm sạch markdown nếu LLM bọc trong ```json ... ```
+  if (typeof text === 'string') {
+    const cleaned = text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(cleaned);
+  }
+
+  return text;
 };
 
 module.exports = {
