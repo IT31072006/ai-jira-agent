@@ -51,6 +51,24 @@ class JiraController {
   }
 
   /**
+   * Endpoint lấy danh sách dự án Jira từ Jira Cloud
+   * GET /api/jira/projects
+   */
+  static async getProjects(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const projects = await JiraService.getJiraProjects(userId);
+      return res.status(200).json({
+        success: true,
+        count: projects.length,
+        projects,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Endpoint lắng nghe Webhook từ Atlassian Jira Cloud (Luồng 9: Đồng bộ trạng thái ngược)
    * POST /api/jira/webhook-sync (hoặc POST /api/webhooks/jira-sync)
    * Lưu ý: Không yêu cầu Bearer token của user vì Jira Cloud gọi trực tiếp

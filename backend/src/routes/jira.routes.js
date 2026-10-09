@@ -7,6 +7,7 @@ const router = express.Router();
 // Yêu cầu xác thực JWT để lấy cấu hình Jira của người dùng
 router.post('/push', authMiddleware, JiraController.push);
 router.get('/members', authMiddleware, JiraController.getMembers);
+router.get('/projects', authMiddleware, JiraController.getProjects);
 
 // Luồng 9: Webhook Sync từ Jira (Jira Cloud gọi trực tiếp, không dùng JWT auth)
 router.post('/webhook-sync', JiraController.handleWebhook);

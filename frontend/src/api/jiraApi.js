@@ -29,6 +29,15 @@ export const jiraApi = {
   },
 
   /**
+   * Gọi backend Express để lấy danh sách các dự án trên Jira Cloud
+   * @returns {Promise<{success: boolean, count: number, projects: Array}>}
+   */
+  getProjects: async () => {
+    const response = await apiClient.get('/jira/projects');
+    return response.data;
+  },
+
+  /**
    * Lấy danh sách các issue Jira đã đồng bộ từ database (Luồng 9: Webhook Sync)
    * @param {string} [projectKey] - Mã dự án Jira
    */

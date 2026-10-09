@@ -18,13 +18,14 @@ class JiraIssueModel {
     jiraUrl = null,
     userId = null,
     projectId = null,
+    parentKey = null,
   }) {
     const query = `
       INSERT INTO jira_issues (
         issue_key, issue_id, project_key, summary, description,
-        issue_type, status, status_category, assignee, jira_url, user_id, project_id, last_synced_at
+        issue_type, status, status_category, assignee, jira_url, user_id, project_id, parent_key, last_synced_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
       ON CONFLICT (issue_key) DO UPDATE
       SET
         issue_id = COALESCE(EXCLUDED.issue_id, jira_issues.issue_id),
@@ -37,6 +38,7 @@ class JiraIssueModel {
         jira_url = COALESCE(EXCLUDED.jira_url, jira_issues.jira_url),
         user_id = COALESCE(EXCLUDED.user_id, jira_issues.user_id),
         project_id = COALESCE(EXCLUDED.project_id, jira_issues.project_id),
+        parent_key = COALESCE(EXCLUDED.parent_key, jira_issues.parent_key),
         last_synced_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
@@ -55,6 +57,7 @@ class JiraIssueModel {
       jiraUrl,
       userId || null,
       projectId || null,
+      parentKey ? parentKey.trim().toUpperCase() : null,
     ];
 
     const { rows } = await db.query(query, values);
@@ -135,6 +138,35 @@ class JiraIssueModel {
     `;
     const { rows } = await db.query(query, [issueKey.trim().toUpperCase()]);
     return rows[0] || null;
+  }
+  /**
+   * Lấy danh sách issue phục vụ xuất tài liệu phân cấp (Luồng 12)
+   */
+  static async findByProjectForExport({ projectId, projectKey, userId }) {
+    const query = `
+      SELECT id, issue_key, issue_id, project_key, summary, description,
+             issue_type, status, status_category, assignee, jira_url,
+             parent_key, last_synced_at, created_at, updated_at
+      FROM jira_issues
+      WHERE (
+        project_id = $1
+        OR (project_key = $2 AND (user_id = $3 OR user_id IS NULL))
+      )
+      ORDER BY 
+        CASE 
+          WHEN LOWER(issue_type) = 'epic' THEN 1
+          WHEN LOWER(issue_type) = 'story' THEN 2
+          ELSE 3
+        END ASC,
+        created_at ASC,
+        issue_key ASC;
+    `;
+    const { rows } = await db.query(query, [
+      projectId || null,
+      projectKey ? projectKey.trim().toUpperCase() : null,
+      userId || null,
+    ]);
+    return rows;
   }
 }
 

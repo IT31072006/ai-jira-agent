@@ -1,12 +1,33 @@
 const axios = require('axios');
 const ConfigModel = require('../models/config.model');
 const JiraIssueModel = require('../models/jiraIssue.model');
+const ProjectModel = require('../models/project.model');
 const CryptoService = require('./crypto.service');
 const NotificationService = require('./notification.service');
 
 const N8N_JIRA_WEBHOOK_URL =
   process.env.N8N_JIRA_WEBHOOK_URL ||
   'http://localhost:5678/webhook-test/push-to-jira';
+
+async function postToN8n(url, payload, options = {}) {
+  try {
+    return await axios.post(url, payload, options);
+  } catch (err) {
+    if (err.response?.status === 404) {
+      let fallbackUrl = null;
+      if (url.includes('/webhook-test/')) {
+        fallbackUrl = url.replace('/webhook-test/', '/webhook/');
+      } else if (url.includes('/webhook/')) {
+        fallbackUrl = url.replace('/webhook/', '/webhook-test/');
+      }
+      if (fallbackUrl) {
+        console.log(`[JiraService] Thử fallback URL n8n: ${fallbackUrl}`);
+        return await axios.post(fallbackUrl, payload, options);
+      }
+    }
+    throw err;
+  }
+}
 
 class JiraService {
   /**
@@ -55,8 +76,13 @@ class JiraService {
     }
 
     // 3. Chuẩn bị payload gửi sang n8n Webhook
+    const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+    const authHeader =
+      'Basic ' +
+      Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
+
     const payload = {
-      jiraDomain: config.jira_domain.replace(/\/+$/, ''),
+      jiraDomain: cleanDomain,
       jiraEmail: config.jira_email.trim(),
       jiraApiToken,
       projectKey: projectKey.trim().toUpperCase(),
@@ -65,15 +91,46 @@ class JiraService {
 
     // 4. Express gọi sang cỗ máy n8n
     try {
-      console.log(`[JiraService] Gọi sang n8n webhook: ${N8N_JIRA_WEBHOOK_URL}`);
-      const response = await axios.post(N8N_JIRA_WEBHOOK_URL, payload, {
-        timeout: 180000, // Timeout 3 phút cho các dự án nhiều task
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      let resultData = null;
+      try {
+        console.log(`[JiraService] Gọi sang n8n webhook: ${N8N_JIRA_WEBHOOK_URL}`);
+        const response = await postToN8n(N8N_JIRA_WEBHOOK_URL, payload, {
+          timeout: 180000, // Timeout 3 phút cho các dự án nhiều task
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
 
-      const resultData = response.data;
+        resultData = response.data;
+      } catch (n8nErr) {
+        console.warn(
+          `[JiraService] n8n webhook không phản hồi hoặc gặp lỗi (${n8nErr.message}). Chuyển sang tạo trực tiếp qua Jira REST API...`
+        );
+      }
+
+      // Nếu n8n không tạo được issues, tự động tạo trực tiếp qua Jira REST API
+      if (
+        !resultData ||
+        !Array.isArray(resultData.createdIssues) ||
+        resultData.createdIssues.length === 0
+      ) {
+        console.log('[JiraService] Đang tạo toàn bộ issues trực tiếp lên Jira Cloud...');
+        resultData = await JiraService.createIssuesDirectlyOnJira({
+          cleanDomain,
+          authHeader,
+          projectKey: projectKey.trim().toUpperCase(),
+          epics,
+        });
+      }
+
+    // Tìm project liên kết với projectKey và user nếu có
+    let linkedProjectId = null;
+    try {
+      const foundProject = await ProjectModel.findByProjectKeyAndUserId(projectKey, userId);
+      if (foundProject) linkedProjectId = foundProject.id;
+    } catch (pErr) {
+      // Non-blocking
+    }
 
       // Lưu lại các issue vừa tạo vào cơ sở dữ liệu để theo dõi & đồng bộ ngược (Luồng 9)
       if (Array.isArray(resultData?.createdIssues)) {
@@ -90,6 +147,8 @@ class JiraService {
               assignee: iss.assignee || null,
               jiraUrl: iss.url || null,
               userId,
+              projectId: linkedProjectId,
+              parentKey: iss.parent || null,
             });
           } catch (dbErr) {
             console.error('[JiraService] Lỗi lưu issue vào DB:', dbErr.message);
@@ -185,7 +244,7 @@ class JiraService {
       throw err;
     }
 
-    const cleanDomain = config.jira_domain.replace(/\/+$/, '');
+    const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
     const authHeader =
       'Basic ' +
       Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
@@ -240,6 +299,246 @@ class JiraService {
   }
 
   /**
+   * Lấy danh sách các dự án thực tế trên Jira Cloud của người dùng
+   * @param {string} userId
+   */
+  static async getJiraProjects(userId) {
+    const config = await ConfigModel.findByUserId(userId);
+    if (
+      !config ||
+      !config.jira_domain ||
+      !config.jira_email ||
+      !config.jira_api_token_encrypted
+    ) {
+      return [];
+    }
+
+    let jiraApiToken;
+    try {
+      jiraApiToken = CryptoService.decrypt(config.jira_api_token_encrypted);
+    } catch (e) {
+      return [];
+    }
+
+    const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+    const authHeader =
+      'Basic ' +
+      Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
+
+    try {
+      const res = await axios.get(`${cleanDomain}/rest/api/2/project`, {
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/json',
+        },
+        timeout: 10000,
+      });
+
+      return (Array.isArray(res.data) ? res.data : []).map((p) => ({
+        id: p.id,
+        key: p.key,
+        name: p.name,
+        avatarUrl: p.avatarUrls?.['32x32'] || p.avatarUrls?.['48x48'] || '',
+      }));
+    } catch (err) {
+      console.warn('[JiraService] Lỗi khi lấy danh sách dự án Jira:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Tạo toàn bộ issues trực tiếp lên Jira REST API
+   */
+  static async createIssuesDirectlyOnJira({ cleanDomain, authHeader, projectKey, epics }) {
+    let storyTypeName = 'Story';
+    let subtaskTypeName = 'Subtask';
+    try {
+      const metaRes = await axios.get(
+        `${cleanDomain}/rest/api/2/issue/createmeta?projectKeys=${projectKey}`,
+        {
+          headers: { Authorization: authHeader, Accept: 'application/json' },
+          timeout: 10000,
+        }
+      );
+      const types = metaRes.data?.projects?.[0]?.issuetypes || [];
+      const hasStory = types.some((t) => t.name.toLowerCase() === 'story');
+      if (!hasStory) {
+        storyTypeName = 'Task';
+      }
+      const hasSubtask = types.some((t) => t.name.toLowerCase() === 'subtask');
+      const hasSub_task = types.some((t) => t.name.toLowerCase() === 'sub-task');
+      if (hasSub_task) subtaskTypeName = 'Sub-task';
+      else if (hasSubtask) subtaskTypeName = 'Subtask';
+    } catch (e) {
+      // Dùng cấu hình mặc định
+    }
+
+    const createdIssues = [];
+    let epicsCount = 0;
+    let storiesCount = 0;
+    let tasksCount = 0;
+
+    for (const epic of epics) {
+      const epicTitle = epic.title || 'Untitled Epic';
+      const epicDesc = epic.description || epicTitle;
+
+      const epicRes = await axios.post(
+        `${cleanDomain}/rest/api/2/issue`,
+        {
+          fields: {
+            project: { key: projectKey },
+            summary: epicTitle,
+            description: epicDesc,
+            issuetype: { name: 'Epic' },
+          },
+        },
+        {
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          timeout: 20000,
+        }
+      );
+
+      const epicKey = epicRes.data.key;
+      epicsCount++;
+      createdIssues.push({
+        type: 'Epic',
+        key: epicKey,
+        id: epicRes.data.id,
+        title: epicTitle,
+        parent: null,
+        assignee: null,
+        url: `${cleanDomain}/browse/${epicKey}`,
+      });
+
+      const stories = epic.stories || epic.user_stories || [];
+      for (const story of stories) {
+        const storyTitle = story.title || 'Untitled Story';
+        const storyDesc = story.description || storyTitle;
+
+        const storyFields = {
+          project: { key: projectKey },
+          summary: storyTitle,
+          description: storyDesc,
+          issuetype: { name: storyTypeName },
+          parent: { key: epicKey },
+        };
+        if (story.assigneeId) {
+          storyFields.assignee = { accountId: story.assigneeId };
+        }
+
+        const storyRes = await axios.post(
+          `${cleanDomain}/rest/api/2/issue`,
+          { fields: storyFields },
+          {
+            headers: {
+              Authorization: authHeader,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            timeout: 20000,
+          }
+        );
+
+        const storyKey = storyRes.data.key;
+        storiesCount++;
+        createdIssues.push({
+          type: storyTypeName,
+          key: storyKey,
+          id: storyRes.data.id,
+          title: storyTitle,
+          parent: epicKey,
+          assignee: story.assigneeName || null,
+          url: `${cleanDomain}/browse/${storyKey}`,
+        });
+
+        const tasks = story.tasks || story.subtasks || [];
+        for (const task of tasks) {
+          const taskTitle =
+            typeof task === 'string' ? task : task.title || 'Untitled Subtask';
+          const taskDesc =
+            typeof task === 'object' ? task.description || taskTitle : taskTitle;
+          const assigneeId = typeof task === 'object' ? task.assigneeId : null;
+          const assigneeName = typeof task === 'object' ? task.assigneeName : null;
+
+          const taskFields = {
+            project: { key: projectKey },
+            summary: taskTitle,
+            description: taskDesc,
+            issuetype: { name: subtaskTypeName },
+            parent: { key: storyKey },
+          };
+          if (assigneeId) {
+            taskFields.assignee = { accountId: assigneeId };
+          }
+
+          let taskRes;
+          try {
+            taskRes = await axios.post(
+              `${cleanDomain}/rest/api/2/issue`,
+              { fields: taskFields },
+              {
+                headers: {
+                  Authorization: authHeader,
+                  'Content-Type': 'application/json',
+                  Accept: 'application/json',
+                },
+                timeout: 20000,
+              }
+            );
+          } catch (taskErr) {
+            // Thử đổi giữa Subtask và Sub-task nếu Jira dùng tên còn lại
+            const altTypeName =
+              subtaskTypeName === 'Subtask' ? 'Sub-task' : 'Subtask';
+            taskFields.issuetype = { name: altTypeName };
+            taskRes = await axios.post(
+              `${cleanDomain}/rest/api/2/issue`,
+              { fields: taskFields },
+              {
+                headers: {
+                  Authorization: authHeader,
+                  'Content-Type': 'application/json',
+                  Accept: 'application/json',
+                },
+                timeout: 20000,
+              }
+            );
+          }
+
+          const taskKey = taskRes.data.key;
+          tasksCount++;
+          createdIssues.push({
+            type: subtaskTypeName,
+            key: taskKey,
+            id: taskRes.data.id,
+            title: taskTitle,
+            parent: storyKey,
+            assignee: assigneeName || null,
+            url: `${cleanDomain}/browse/${taskKey}`,
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `Đã tạo thành công ${epicsCount} Epic, ${storiesCount} Story, ${tasksCount} Sub-task trên Jira!`,
+      summary: {
+        epicsCount,
+        storiesCount,
+        tasksCount,
+        totalIssues: epicsCount + storiesCount + tasksCount,
+      },
+      projectKey,
+      jiraDomain: cleanDomain,
+      createdIssues,
+    };
+  }
+
+  /**
    * Xử lý Webhook gửi từ Jira Cloud (Luồng 9: Đồng bộ trạng thái ngược)
    * @param {Object} payload - Payload gửi từ Jira Webhook
    */
@@ -285,6 +584,8 @@ class JiraService {
       fields.project?.key || payload.projectKey || issueKey.split('-')[0];
     const assignee =
       fields.assignee?.displayName || payload.assignee || null;
+    const parentKey =
+      fields.parent?.key || payload.parentKey || payload.parent || null;
 
     // Tự sinh URL xem issue trên Jira nếu có domain
     let jiraUrl = payload.jiraUrl || null;
@@ -307,6 +608,7 @@ class JiraService {
       statusCategory,
       assignee,
       jiraUrl,
+      parentKey,
     });
 
     return {
