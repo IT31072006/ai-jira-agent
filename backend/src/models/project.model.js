@@ -35,6 +35,18 @@ class ProjectModel {
     return rows[0] || null;
   }
 
+  static async findByProjectKeyAndUserId(projectKey, userId) {
+    const query = `
+      SELECT id, user_id, name, description, project_key, created_at, updated_at
+      FROM projects
+      WHERE UPPER(project_key) = UPPER($1) AND user_id = $2
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const { rows } = await db.query(query, [projectKey ? projectKey.trim() : '', userId]);
+    return rows[0] || null;
+  }
+
   static async create({ userId, name, description, projectKey }) {
     const key = projectKey ? projectKey.trim().toUpperCase() : this.generateDefaultKey(name);
     const query = `

@@ -2,6 +2,7 @@ const axios = require('axios');
 const ConfigModel = require('../models/config.model');
 const JiraIssueModel = require('../models/jiraIssue.model');
 const CryptoService = require('./crypto.service');
+const NotificationService = require('./notification.service');
 
 const N8N_JIRA_WEBHOOK_URL =
   process.env.N8N_JIRA_WEBHOOK_URL ||
@@ -92,6 +93,41 @@ class JiraService {
             });
           } catch (dbErr) {
             console.error('[JiraService] Lỗi lưu issue vào DB:', dbErr.message);
+          }
+        }
+
+        // Luồng 11: Phát sự kiện thông báo tự động (Automated Notification) khi Epic được tạo thành công
+        // Backend chỉ phát sự kiện sau khi Jira xác nhận tạo Epic thành công và đã lưu DB.
+        // Thiết kế non-blocking: lỗi timeout/n8n không làm sai lệch kết quả trả về của Flow 7.
+        const createdEpics = resultData.createdIssues.filter(
+          (iss) => iss.type && iss.type.trim().toLowerCase() === 'epic'
+        );
+
+        if (createdEpics.length > 0) {
+          console.log(`[JiraService] Phát hiện ${createdEpics.length} Epic được tạo thành công. Bắt đầu phát sự kiện Luồng 11...`);
+          for (const epicIssue of createdEpics) {
+            // Tìm thông tin mô tả bổ sung từ mảng epics đầu vào nếu có
+            const matchingInputEpic = Array.isArray(epics)
+              ? epics.find((e) => (e.name || e.summary) === epicIssue.title)
+              : null;
+
+            const enrichedEpic = {
+              ...epicIssue,
+              description: epicIssue.description || matchingInputEpic?.description || '',
+            };
+
+            // Gọi bất đồng bộ (non-blocking) tới NotificationService
+            NotificationService.sendEpicCreatedNotification({
+              userId,
+              projectKey: projectKey.trim().toUpperCase(),
+              epic: enrichedEpic,
+              projectId: null,
+            }).catch((err) => {
+              console.error(
+                `[JiraService] [Luồng 11] Lỗi thông báo cho Epic ${epicIssue.key}:`,
+                err.message
+              );
+            });
           }
         }
       }
