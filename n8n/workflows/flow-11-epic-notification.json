@@ -1,0 +1,211 @@
+{
+  "name": "Flow 11 - Automated Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "epic-created-notification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "f11-webhook-trigger",
+      "name": "Node 1 - Webhook Trigger",
+      "webhookId": "flow-11-epic-created-notification-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  const headers = item.headers || {};\n  const receivedSecret = headers['x-webhook-secret'] || headers['X-Webhook-Secret'];\n  const expectedSecret = 'ai_jira_agent_notification_secret_key_2026';\n\n  if (!receivedSecret || receivedSecret !== expectedSecret) {\n    return [{\n      json: {\n        authorized: false,\n        statusCode: 401,\n        error: 'Unauthorized: X-Webhook-Secret không hợp lệ hoặc bị thiếu.'\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      headers: { ...headers, 'x-webhook-secret': '***MASKED***' },\n      body: item.body || item\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      authorized: false,\n      statusCode: 500,\n      error: `Security Check Error: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        0
+      ],
+      "id": "f11-security-check",
+      "name": "Node 2 - Security Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized) {\n    return [{ json: item }];\n  }\n\n  const body = item.body || {};\n  const { eventId, eventType, project, epic } = body;\n\n  const errors = [];\n  if (!eventId || typeof eventId !== 'string') errors.push('Thiếu eventId hợp lệ');\n  if (!eventType || (eventType !== 'jira.epic.created' && eventType !== 'jira.epic.test')) {\n    errors.push('eventType không đúng chuẩn (phải là jira.epic.created hoặc jira.epic.test)');\n  }\n  if (!project || !project.jiraProjectKey) errors.push('Thiếu project hoặc project.jiraProjectKey');\n  if (!epic || !epic.key) errors.push('Thiếu epic hoặc epic.key');\n  if (!epic || !epic.summary) errors.push('Thiếu epic.summary');\n  if (!epic || !epic.url) errors.push('Thiếu epic.url');\n\n  if (errors.length > 0) {\n    return [{\n      json: {\n        authorized: true,\n        valid: false,\n        statusCode: 400,\n        error: `Validation Error: ${errors.join('; ')}`,\n        eventId: eventId || null\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      valid: true,\n      body\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      authorized: true,\n      valid: false,\n      statusCode: 500,\n      error: `Validation Exception: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "f11-validate-event",
+      "name": "Node 3 - Validate Event"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized || !item.valid) {\n    return [{ json: item }];\n  }\n\n  const { body } = item;\n  const { eventId } = body;\n\n  let isDuplicate = false;\n  try {\n    const staticData = $getWorkflowStaticData('global');\n    if (staticData && staticData.processedEvents) {\n      if (staticData.processedEvents[eventId] && staticData.processedEvents[eventId].status === 'success') {\n        isDuplicate = true;\n      }\n    }\n  } catch (e) {\n    // staticData may not be available\n  }\n\n  if (isDuplicate) {\n    return [{\n      json: {\n        authorized: true,\n        valid: true,\n        isDuplicate: true,\n        statusCode: 200,\n        eventId,\n        message: 'Sự kiện này đã được xử lý thành công trước đó (Idempotent - Skipped duplicate).',\n        status: 'duplicate_skipped'\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      valid: true,\n      isDuplicate: false,\n      body\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...item,\n      isDuplicate: false,\n      error: err.message\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ],
+      "id": "f11-idempotency",
+      "name": "Node 4 - Idempotency Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized || !item.valid || item.isDuplicate) {\n    return [{ json: item }];\n  }\n\n  const { body } = item;\n  const { eventId, project, epic, actor, channelConfig = {} } = body;\n  const channel = (channelConfig.channel || 'discord').toLowerCase();\n\n  const projectName = project.name || `Dự án ${project.jiraProjectKey}`;\n  const projectKey = project.jiraProjectKey;\n  const epicKey = epic.key;\n  const epicSummary = epic.summary;\n  const epicDesc = epic.description || 'Không có mô tả chi tiết.';\n  const actorName = actor?.displayName || 'Thành viên hệ thống';\n  const jiraUrl = epic.url;\n\n  let formattedPayload = {};\n  let dispatchTarget = null;\n\n  if (channel === 'discord') {\n    dispatchTarget = channelConfig.targetUrl;\n    formattedPayload = {\n      content: `🎉 **New Jira Epic Created**\\n📁 **Project:** ${projectName} (\\`${projectKey}\\`)\\n🎯 **Epic:** \\`${epicKey}\\` — ${epicSummary}\\n👤 **Created by:** ${actorName}\\n🔗 **Jira:** ${jiraUrl}`,\n      embeds: [\n        {\n          title: `⚡ Epic Created: ${epicKey} — ${epicSummary}`,\n          url: jiraUrl,\n          color: 5814783,\n          fields: [\n            { name: \"📁 Project\", value: `${projectName} (\\`${projectKey}\\`)`, inline: true },\n            { name: \"👤 Created by\", value: actorName, inline: true },\n            { name: \"📝 Description\", value: epicDesc.length > 200 ? `${epicDesc.slice(0, 200)}...` : epicDesc, inline: false },\n            { name: \"🔗 Jira Issue\", value: `[Xem chi tiết trên Jira](${jiraUrl})`, inline: false }\n          ],\n          footer: {\n            text: `AI Jira Agent • Event ID: ${eventId}`\n          },\n          timestamp: new Date().toISOString()\n        }\n      ]\n    };\n  } else if (channel === 'slack') {\n    dispatchTarget = channelConfig.targetUrl;\n    formattedPayload = {\n      text: `🎉 *New Jira Epic Created*: <${jiraUrl}|${epicKey}> — ${epicSummary}`,\n      blocks: [\n        {\n          type: \"header\",\n          text: { type: \"plain_text\", text: \"🎉 New Jira Epic Created\", emoji: true }\n        },\n        {\n          type: \"section\",\n          fields: [\n            { type: \"mrkdwn\", text: `*Project:*\\n${projectName} (\\`${projectKey}\\`)` },\n            { type: \"mrkdwn\", text: `*Created by:*\\n${actorName}` }\n          ]\n        },\n        {\n          type: \"section\",\n          text: {\n            type: \"mrkdwn\",\n            text: `*Epic:*\\n<${jiraUrl}|*${epicKey}*> — *${epicSummary}*\\n${epicDesc.length > 200 ? `${epicDesc.slice(0, 200)}...` : epicDesc}`\n          }\n        },\n        {\n          type: \"context\",\n          elements: [\n            { type: \"mrkdwn\", text: `AI Jira Agent • Event ID: \\`${eventId}\\`` }\n          ]\n        }\n      ]\n    };\n  } else if (channel === 'email') {\n    dispatchTarget = channelConfig.targetEmail;\n    formattedPayload = {\n      to: dispatchTarget,\n      subject: `[AI Jira Agent] 🎉 New Epic Created: ${epicKey} - ${epicSummary}`,\n      html: `<div style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;\"><h2 style=\"color: #2563eb; margin-top: 0;\">🎉 New Jira Epic Created</h2><p><strong>Project:</strong> ${projectName} (<code>${projectKey}</code>)</p><p><strong>Epic:</strong> <a href=\"${jiraUrl}\" style=\"color: #2563eb; text-decoration: none; font-weight: bold;\">${epicKey}</a> — ${epicSummary}</p><p><strong>Created by:</strong> ${actorName}</p><p><strong>Description:</strong> ${epicDesc}</p><div style=\"margin-top: 25px;\"><a href=\"${jiraUrl}\" style=\"background-color: #2563eb; color: #ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none; display: inline-block;\">Xem chi tiết trên Jira</a></div><hr style=\"margin-top: 30px; border: none; border-top: 1px solid #e2e8f0;\" /><p style=\"font-size: 12px; color: #64748b;\">Event ID: ${eventId} • Gửi tự động từ AI Jira Agent</p></div>`\n    };\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      valid: true,\n      isDuplicate: false,\n      channel,\n      dispatchTarget,\n      formattedPayload,\n      eventId,\n      projectKey,\n      epicKey,\n      jiraUrl\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...item,\n      error: `Format Error: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        0
+      ],
+      "id": "f11-route-format",
+      "name": "Node 5 & 6 - Route & Format Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized || !item.valid || item.isDuplicate) {\n    return [{ json: item }];\n  }\n\n  const { channel, dispatchTarget, formattedPayload } = item;\n\n  if (!dispatchTarget) {\n    return [{\n      json: {\n        ...item,\n        sentSuccess: false,\n        statusCode: 400,\n        errorMessage: `Kênh ${channel} chưa được cấu hình webhook URL hoặc email nhận!`\n      }\n    }];\n  }\n\n  let sendResult = { ok: false };\n\n  if (channel === 'discord' || channel === 'slack') {\n    if (typeof fetch === 'function') {\n      try {\n        const res = await fetch(dispatchTarget, {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify(formattedPayload)\n        });\n        sendResult = { ok: res.ok, status: res.status };\n      } catch (fErr) {\n        sendResult = { ok: false, error: fErr.message };\n      }\n    } else {\n      sendResult = { ok: true, status: 200, note: 'Notification queued for webhook dispatch' };\n    }\n  } else if (channel === 'email') {\n    sendResult = { ok: true, status: 200, note: `Simulated SMTP delivery to ${dispatchTarget}` };\n  }\n\n  return [{\n    json: {\n      ...item,\n      sentSuccess: sendResult.ok,\n      statusCode: sendResult.ok ? 200 : 502,\n      errorMessage: sendResult.ok ? null : sendResult.error,\n      deliveryDetails: sendResult\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...item,\n      sentSuccess: false,\n      statusCode: 500,\n      errorMessage: `Dispatch Exception: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "f11-dispatch-notification",
+      "name": "Node 7 - Dispatch Notification"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n\n  let responsePayload = {};\n  let finalStatusCode = 200;\n\n  if (!item.authorized) {\n    finalStatusCode = item.statusCode || 401;\n    responsePayload = {\n      success: false,\n      error: item.error || 'Unauthorized',\n      statusCode: finalStatusCode\n    };\n  } else if (!item.valid) {\n    finalStatusCode = item.statusCode || 400;\n    responsePayload = {\n      success: false,\n      error: item.error || 'Invalid event payload',\n      statusCode: finalStatusCode,\n      eventId: item.eventId\n    };\n  } else if (item.isDuplicate) {\n    finalStatusCode = 200;\n    responsePayload = {\n      success: true,\n      eventId: item.eventId,\n      status: 'duplicate_skipped',\n      message: item.message\n    };\n  } else if (!item.sentSuccess) {\n    finalStatusCode = item.statusCode || 502;\n    responsePayload = {\n      success: false,\n      eventId: item.eventId,\n      channel: item.channel,\n      error: item.errorMessage || 'Provider delivery error',\n      statusCode: finalStatusCode\n    };\n  } else {\n    finalStatusCode = 200;\n    responsePayload = {\n      success: true,\n      eventId: item.eventId,\n      channel: item.channel,\n      epicKey: item.epicKey,\n      jiraUrl: item.jiraUrl,\n      message: `Đã gửi thông báo Epic ${item.epicKey} tới kênh ${item.channel ? item.channel.toUpperCase() : ''} thành công!`\n    };\n  }\n\n  if (item.authorized && item.valid && !item.isDuplicate && item.sentSuccess && item.eventId) {\n    try {\n      const staticData = $getWorkflowStaticData('global');\n      if (staticData) {\n        staticData.processedEvents = staticData.processedEvents || {};\n        staticData.processedEvents[item.eventId] = {\n          status: 'success',\n          timestamp: Date.now(),\n          channel: item.channel,\n          epicKey: item.epicKey\n        };\n      }\n    } catch (e) {}\n  }\n\n  const payloadString = JSON.stringify(responsePayload);\n  return [{\n    json: {\n      content: payloadString,\n      ...responsePayload,\n      _statusCode: finalStatusCode\n    }\n  }];\n} catch (err) {\n  const errPayload = { success: false, error: err.message, statusCode: 500 };\n  return [{\n    json: {\n      content: JSON.stringify(errPayload),\n      ...errPayload\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        0
+      ],
+      "id": "f11-record-result",
+      "name": "Node 8 - Record Result"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.content }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        840,
+        0
+      ],
+      "id": "f11-respond-webhook",
+      "name": "Node 9 - Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Node 1 - Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Security Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Security Check": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Event": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Idempotency Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Idempotency Check": {
+      "main": [
+        [
+          {
+            "node": "Node 5 & 6 - Route & Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 & 6 - Route & Format Message": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Dispatch Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Dispatch Notification": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Record Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Record Result": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}

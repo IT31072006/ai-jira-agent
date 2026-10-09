@@ -47,6 +47,13 @@ class ConfigService {
         jira_api_token_masked: null,
         gemini_api_key_configured: false,
         gemini_api_key_masked: null,
+        notification_enabled: true,
+        notification_channel: 'discord',
+        discord_webhook_configured: false,
+        discord_webhook_masked: null,
+        slack_webhook_configured: false,
+        slack_webhook_masked: null,
+        notification_email: '',
         updated_at: null,
       };
     }
@@ -77,6 +84,17 @@ class ConfigService {
       }
     }
 
+    // Mask webhook URLs để bảo vệ trên frontend
+    const isDiscordConfigured = Boolean(config.discord_webhook_url);
+    const maskedDiscord = config.discord_webhook_url
+      ? CryptoService.mask(config.discord_webhook_url, 6)
+      : null;
+
+    const isSlackConfigured = Boolean(config.slack_webhook_url);
+    const maskedSlack = config.slack_webhook_url
+      ? CryptoService.mask(config.slack_webhook_url, 6)
+      : null;
+
     return {
       jira_domain: config.jira_domain || '',
       jira_email: config.jira_email || '',
@@ -84,6 +102,17 @@ class ConfigService {
       jira_api_token_masked: maskedJiraToken,
       gemini_api_key_configured: isGeminiConfigured,
       gemini_api_key_masked: maskedGeminiKey,
+      notification_enabled: config.notification_enabled !== false,
+      notification_channel: config.notification_channel || 'discord',
+      discord_webhook_configured: isDiscordConfigured,
+      discord_webhook_url_configured: isDiscordConfigured,
+      discord_webhook_masked: maskedDiscord,
+      discord_webhook_url_masked: maskedDiscord,
+      slack_webhook_configured: isSlackConfigured,
+      slack_webhook_url_configured: isSlackConfigured,
+      slack_webhook_masked: maskedSlack,
+      slack_webhook_url_masked: maskedSlack,
+      notification_email: config.notification_email || '',
       updated_at: config.updated_at,
     };
   }
@@ -114,26 +143,60 @@ class ConfigService {
       jiraEmail = null;
       jiraApiTokenEncrypted = null;
     } else if (payload.jira_api_token && typeof payload.jira_api_token === 'string' && payload.jira_api_token.trim().length > 0) {
-      // Có giá trị mới -> Mã hóa và lưu
       jiraApiTokenEncrypted = CryptoService.encrypt(payload.jira_api_token.trim());
     }
-    // Nếu để trống -> Giữ nguyên jiraApiTokenEncrypted hiện tại
 
     // 3. Gemini Key Handling
     let geminiApiKeyEncrypted = existing ? existing.gemini_api_key_encrypted : null;
     if (payload.remove_gemini === true) {
       geminiApiKeyEncrypted = null;
     } else if (payload.gemini_api_key && typeof payload.gemini_api_key === 'string' && payload.gemini_api_key.trim().length > 0) {
-      // Có giá trị mới -> Mã hóa và lưu
       geminiApiKeyEncrypted = CryptoService.encrypt(payload.gemini_api_key.trim());
     }
-    // Nếu để trống -> Giữ nguyên geminiApiKeyEncrypted hiện tại
+
+    // 4. Notification Settings (Luồng 11)
+    let notificationEnabled = existing ? (existing.notification_enabled !== false) : true;
+    if (payload.notification_enabled !== undefined) {
+      notificationEnabled = Boolean(payload.notification_enabled);
+    }
+
+    let notificationChannel = existing ? (existing.notification_channel || 'discord') : 'discord';
+    if (payload.notification_channel !== undefined) {
+      const allowed = ['discord', 'slack', 'email'];
+      if (allowed.includes(payload.notification_channel)) {
+        notificationChannel = payload.notification_channel;
+      }
+    }
+
+    let discordWebhookUrl = existing ? existing.discord_webhook_url : null;
+    if (payload.remove_discord_webhook === true) {
+      discordWebhookUrl = null;
+    } else if (payload.discord_webhook_url !== undefined && payload.discord_webhook_url.trim().length > 0) {
+      discordWebhookUrl = payload.discord_webhook_url.trim();
+    }
+
+    let slackWebhookUrl = existing ? existing.slack_webhook_url : null;
+    if (payload.remove_slack_webhook === true) {
+      slackWebhookUrl = null;
+    } else if (payload.slack_webhook_url !== undefined && payload.slack_webhook_url.trim().length > 0) {
+      slackWebhookUrl = payload.slack_webhook_url.trim();
+    }
+
+    let notificationEmail = existing ? existing.notification_email : null;
+    if (payload.notification_email !== undefined) {
+      notificationEmail = payload.notification_email.trim() || null;
+    }
 
     const saved = await ConfigModel.upsert(userId, {
       jiraDomain,
       jiraEmail,
       jiraApiTokenEncrypted,
       geminiApiKeyEncrypted,
+      notificationEnabled,
+      notificationChannel,
+      discordWebhookUrl,
+      slackWebhookUrl,
+      notificationEmail,
     });
 
     return this.formatMaskedResponse(saved);
