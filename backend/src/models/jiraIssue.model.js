@@ -16,13 +16,15 @@ class JiraIssueModel {
     statusCategory = 'To Do',
     assignee = null,
     jiraUrl = null,
+    userId = null,
+    projectId = null,
   }) {
     const query = `
       INSERT INTO jira_issues (
         issue_key, issue_id, project_key, summary, description,
-        issue_type, status, status_category, assignee, jira_url, last_synced_at
+        issue_type, status, status_category, assignee, jira_url, user_id, project_id, last_synced_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
       ON CONFLICT (issue_key) DO UPDATE
       SET
         issue_id = COALESCE(EXCLUDED.issue_id, jira_issues.issue_id),
@@ -33,6 +35,8 @@ class JiraIssueModel {
         status_category = COALESCE(EXCLUDED.status_category, jira_issues.status_category),
         assignee = COALESCE(EXCLUDED.assignee, jira_issues.assignee),
         jira_url = COALESCE(EXCLUDED.jira_url, jira_issues.jira_url),
+        user_id = COALESCE(EXCLUDED.user_id, jira_issues.user_id),
+        project_id = COALESCE(EXCLUDED.project_id, jira_issues.project_id),
         last_synced_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
@@ -49,6 +53,8 @@ class JiraIssueModel {
       statusCategory,
       assignee,
       jiraUrl,
+      userId || null,
+      projectId || null,
     ];
 
     const { rows } = await db.query(query, values);

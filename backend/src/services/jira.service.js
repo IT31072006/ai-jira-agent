@@ -88,6 +88,7 @@ class JiraService {
               statusCategory: 'To Do',
               assignee: iss.assignee || null,
               jiraUrl: iss.url || null,
+              userId,
             });
           } catch (dbErr) {
             console.error('[JiraService] Lỗi lưu issue vào DB:', dbErr.message);
