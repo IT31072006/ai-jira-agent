@@ -1,0 +1,82 @@
+{
+  "name": "Flow 7 - Push to Jira",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "push-to-jira",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -360,
+        0
+      ],
+      "id": "e7b0a881-2826-4b20-96f3-a1286b2b73c1",
+      "name": "Webhook - Push to Jira",
+      "webhookId": "flow-7-push-to-jira-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst { jiraDomain, jiraEmail, jiraApiToken, projectKey, epics } = body;\n\nif (!jiraDomain || !jiraEmail || !jiraApiToken) {\n  throw new Error(\"Thiếu thông tin kết nối Jira (jiraDomain, jiraEmail, jiraApiToken). Vui lòng kiểm tra lại cấu hình!\");\n}\n\nif (!projectKey) {\n  throw new Error(\"Thiếu Jira Project Key (ví dụ: KAN, PROJ).\");\n}\n\nif (!Array.isArray(epics) || epics.length === 0) {\n  throw new Error(\"Danh sách epics rỗng. Vui lòng phân tích yêu cầu trước khi đẩy lên Jira!\");\n}\n\nconst cleanDomain = jiraDomain.replace(/\\/+$/, \"\");\nconst authHeader = \"Basic \" + Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString(\"base64\");\n\nasync function createJiraIssue(fields) {\n  const url = `${cleanDomain}/rest/api/2/issue`;\n  const res = await fetch(url, {\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Accept\": \"application/json\"\n    },\n    body: JSON.stringify({ fields })\n  });\n\n  const data = await res.json().catch(() => ({}));\n  if (!res.ok) {\n    const errorDetails = data.errorMessages?.join(\", \") || JSON.stringify(data.errors || data);\n    throw new Error(`Jira API Error (${res.status}): ${errorDetails}`);\n  }\n\n  return data;\n}\n\nconst createdIssues = [];\nlet epicsCount = 0;\nlet storiesCount = 0;\nlet tasksCount = 0;\n\n// Vòng lặp cấp 1: Tạo các Epic\nfor (const epic of epics) {\n  const epicTitle = epic.title || \"Untitled Epic\";\n  const epicDesc = epic.description || epicTitle;\n  \n  let epicRes;\n  try {\n    epicRes = await createJiraIssue({\n      project: { key: projectKey },\n      summary: epicTitle,\n      description: epicDesc,\n      issuetype: { name: \"Epic\" }\n    });\n  } catch (err) {\n    throw new Error(`Lỗi khi tạo Epic \"${epicTitle}\": ${err.message}`);\n  }\n\n  const epicKey = epicRes.key;\n  epicsCount++;\n  createdIssues.push({\n    type: \"Epic\",\n    key: epicKey,\n    id: epicRes.id,\n    title: epicTitle,\n    parent: null,\n    assignee: null,\n    url: `${cleanDomain}/browse/${epicKey}`\n  });\n\n  // Vòng lặp cấp 2: Tạo các Story thuộc Epic này (lấy ID/Key Epic)\n  const stories = epic.stories || epic.user_stories || [];\n  for (const story of stories) {\n    const storyTitle = story.title || \"Untitled Story\";\n    const storyDesc = story.description || storyTitle;\n\n    const storyFields = {\n      project: { key: projectKey },\n      summary: storyTitle,\n      description: storyDesc,\n      issuetype: { name: \"Story\" },\n      parent: { key: epicKey }\n    };\n    if (story.assigneeId) {\n      storyFields.assignee = { accountId: story.assigneeId };\n    }\n\n    let storyRes;\n    try {\n      storyRes = await createJiraIssue(storyFields);\n    } catch (err) {\n      throw new Error(`Lỗi khi tạo Story \"${storyTitle}\" thuộc Epic ${epicKey}: ${err.message}`);\n    }\n\n    const storyKey = storyRes.key;\n    storiesCount++;\n    createdIssues.push({\n      type: \"Story\",\n      key: storyKey,\n      id: storyRes.id,\n      title: storyTitle,\n      parent: epicKey,\n      assignee: story.assigneeName || null,\n      url: `${cleanDomain}/browse/${storyKey}`\n    });\n\n    // Vòng lặp cấp 3: Tạo các Sub-task thuộc Story này (lấy ID/Key Story)\n    const tasks = story.tasks || story.subtasks || [];\n    for (const task of tasks) {\n      const taskTitle = typeof task === \"string\" ? task : task.title || \"Untitled Subtask\";\n      const taskDesc = typeof task === \"object\" ? task.description || taskTitle : taskTitle;\n      const assigneeId = typeof task === \"object\" ? task.assigneeId : null;\n      const assigneeName = typeof task === \"object\" ? task.assigneeName : null;\n\n      const taskFields = {\n        project: { key: projectKey },\n        summary: taskTitle,\n        description: taskDesc,\n        issuetype: { name: \"Subtask\" },\n        parent: { key: storyKey }\n      };\n      if (assigneeId) {\n        taskFields.assignee = { accountId: assigneeId };\n      }\n\n      let taskRes;\n      try {\n        taskRes = await createJiraIssue(taskFields);\n      } catch (err) {\n        // Thử lại với loại issue \"Sub-task\" nếu cấu hình Jira sử dụng tên này\n        try {\n          const taskFieldsRetry = {\n            project: { key: projectKey },\n            summary: taskTitle,\n            description: taskDesc,\n            issuetype: { name: \"Sub-task\" },\n            parent: { key: storyKey }\n          };\n          if (assigneeId) {\n            taskFieldsRetry.assignee = { accountId: assigneeId };\n          }\n          taskRes = await createJiraIssue(taskFieldsRetry);\n        } catch (retryErr) {\n          throw new Error(`Lỗi khi tạo Subtask \"${taskTitle}\" thuộc Story ${storyKey}: ${retryErr.message}`);\n        }\n      }\n\n      const taskKey = taskRes.key;\n      tasksCount++;\n      createdIssues.push({\n        type: \"Subtask\",\n        key: taskKey,\n        id: taskRes.id,\n        title: taskTitle,\n        parent: storyKey,\n        assignee: assigneeName || null,\n        url: `${cleanDomain}/browse/${taskKey}`\n      });\n    }\n  }\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: `Đã tạo thành công ${epicsCount} Epic, ${storiesCount} Story, ${tasksCount} Sub-task trên Jira!`,\n      summary: {\n        epicsCount,\n        storiesCount,\n        tasksCount,\n        totalIssues: epicsCount + storiesCount + tasksCount\n      },\n      projectKey,\n      jiraDomain: cleanDomain,\n      createdIssues\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ],
+      "id": "5fa23d8c-7945-4de1-968b-c678a1e27a92",
+      "name": "Jira Engine: Loop & Create Issues"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        180,
+        0
+      ],
+      "id": "c1388b39-16e7-4952-ba6f-e3c3b018b14a",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Push to Jira": {
+      "main": [
+        [
+          {
+            "node": "Jira Engine: Loop & Create Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira Engine: Loop & Create Issues": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}

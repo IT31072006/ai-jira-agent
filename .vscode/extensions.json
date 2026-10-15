@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "dsznajder.es7-react-js-snippets",
+    "formulahendry.auto-rename-tag",
+    "ms-azuretools.vscode-docker",
+    "ckolkman.vscode-postgres",
+    "rangav.vscode-thunder-client"
+  ]
+}
