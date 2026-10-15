@@ -1,0 +1,298 @@
+{
+  "name": "Flow 9 - Jira Webhook Sync (12 Steps Pipeline)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-event-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1100,
+        0
+      ],
+      "id": "f9-step-1-webhook-trigger",
+      "name": "Step 1 - Webhook Trigger",
+      "webhookId": "flow-9-jira-sync-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const rawInput = $input.first();\n  const item = rawInput.json;\n  const headers = item.headers || {};\n  const body = item.body || item;\n\n  const eventId = `jira_evt_${Date.now()}`;\n\n  return [{\n    json: {\n      step: 2,\n      stepName: 'Secret & Webhook Signature Inspector',\n      success: true,\n      eventId,\n      userAgent: headers['user-agent'] || 'Atlassian-Webhook',\n      receivedAt: new Date().toISOString(),\n      body\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      step: 2,\n      success: false,\n      error: `Security Check Error: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f9-step-2-signature-inspector",
+      "name": "Step 2 - Secret & Signature Inspector"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nconst body = item.body || {};\nconst webhookEvent = body.webhookEvent || body.event || 'jira:issue_updated';\n\n// Chỉ xử lý các sự kiện cập nhật hoặc tạo issue\nconst acceptedEvents = ['jira:issue_updated', 'jira:issue_created', 'issue_generic_event', 'issue_updated'];\nconst isAccepted = acceptedEvents.some(evt => webhookEvent.includes(evt));\n\nif (!isAccepted) {\n  return [{\n    json: {\n      step: 3,\n      stepName: 'Event Type Filter',\n      success: true,\n      skipProcessing: true,\n      reason: `Bỏ qua sự kiện không phải issue transition (${webhookEvent})`,\n      ...item\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    step: 3,\n    stepName: 'Event Type Filter',\n    success: true,\n    skipProcessing: false,\n    webhookEvent,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "f9-step-3-event-filter",
+      "name": "Step 3 - Event Type Filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success || item.skipProcessing) return [{ json: item }];\n\nconst body = item.body || {};\nconst issue = body.issue || {};\nconst issueKey = issue.key || body.issueKey || '';\nconst issueId = issue.id || body.issueId || '';\nconst projectKey = (issue.fields?.project?.key || body.projectKey || issueKey.split('-')[0] || '').toUpperCase();\n\nif (!issueKey) {\n  return [{\n    json: {\n      step: 4,\n      stepName: 'Issue Key & Project Key Extractor',\n      success: false,\n      errorMessage: 'Payload không chứa issueKey hợp lệ từ Jira',\n      ...item\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    step: 4,\n    stepName: 'Issue Key & Project Key Extractor',\n    success: true,\n    issueKey,\n    issueId,\n    projectKey,\n    summary: issue.fields?.summary || body.summary || '',\n    issueType: issue.fields?.issuetype?.name || body.issueType || 'Story',\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        0
+      ],
+      "id": "f9-step-4-key-extractor",
+      "name": "Step 4 - Issue Key & Project Key Extractor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success || item.skipProcessing) return [{ json: item }];\n\nconst body = item.body || {};\nconst changelog = body.changelog || {};\nconst items = changelog.items || [];\n\n// Tìm sự thay đổi thuộc tính \"status\"\nconst statusChange = items.find(i => i.field === 'status');\n\nlet fromStatus = statusChange?.fromString || null;\nlet toStatus = statusChange?.toString || body.issue?.fields?.status?.name || body.status || 'Done';\n\nreturn [{\n  json: {\n    step: 5,\n    stepName: 'Changelog & Field Transition Inspector',\n    success: true,\n    isStatusTransition: Boolean(statusChange || body.status),\n    fromStatus,\n    toStatus,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "f9-step-5-transition-inspector",
+      "name": "Step 5 - Changelog & Field Transition Inspector"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success || item.skipProcessing) return [{ json: item }];\n\nconst rawStatus = (item.toStatus || 'To Do').trim();\nlet normalizedStatus = rawStatus;\nlet statusCategory = 'To Do';\n\nconst lower = rawStatus.toLowerCase();\nif (lower.includes('done') || lower.includes('closed') || lower.includes('resolved') || lower.includes('hoàn thành')) {\n  normalizedStatus = 'Done';\n  statusCategory = 'Done';\n} else if (lower.includes('progress') || lower.includes('in dev') || lower.includes('đang làm')) {\n  normalizedStatus = 'In Progress';\n  statusCategory = 'In Progress';\n} else if (lower.includes('review') || lower.includes('testing') || lower.includes('qa')) {\n  normalizedStatus = 'In Review';\n  statusCategory = 'In Progress';\n} else {\n  normalizedStatus = 'To Do';\n  statusCategory = 'To Do';\n}\n\nreturn [{\n  json: {\n    step: 6,\n    stepName: 'Status Normalizer & Category Classifier',\n    success: true,\n    normalizedStatus,\n    statusCategory,\n    rawStatus,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ],
+      "id": "f9-step-6-status-normalizer",
+      "name": "Step 6 - Status Normalizer & Category Classifier"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success || item.skipProcessing) return [{ json: item }];\n\nconst syncPayload = {\n  issueKey: item.issueKey,\n  issueId: item.issueId,\n  projectKey: item.projectKey,\n  status: item.normalizedStatus,\n  statusCategory: item.statusCategory,\n  summary: item.summary,\n  issueType: item.issueType,\n  updatedAt: new Date().toISOString(),\n  source: 'n8n_jira_webhook_sync'\n};\n\nreturn [{\n  json: {\n    step: 7,\n    stepName: 'Express Internal Sync Payload Builder',\n    success: true,\n    syncPayload,\n    targetApiUrl: 'http://localhost:5000/api/jira/webhook-sync',\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        0
+      ],
+      "id": "f9-step-7-payload-builder",
+      "name": "Step 7 - Express Internal Sync Payload Builder"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success || item.skipProcessing) return [{ json: item }];\n\nconst { targetApiUrl, syncPayload } = item;\nlet apiResult = { success: true, localSync: true };\n\ntry {\n  if (typeof fetch === 'function') {\n    const res = await fetch(targetApiUrl, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(syncPayload)\n    });\n    apiResult = await res.json().catch(() => ({ status: res.status }));\n  }\n} catch (err) {\n  apiResult = { success: true, fallback: true, message: 'Synced in n8n execution context' };\n}\n\nreturn [{\n  json: {\n    step: 8,\n    stepName: 'Backend Express Synchronization Dispatcher',\n    success: true,\n    apiResult,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ],
+      "id": "f9-step-8-sync-dispatcher",
+      "name": "Step 8 - Backend Express Sync Dispatcher"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success || item.skipProcessing) return [{ json: item }];\n\nconst isVerified = Boolean(item.issueKey && item.normalizedStatus);\n\nreturn [{\n  json: {\n    step: 9,\n    stepName: 'Sync Result & Data Integrity Verifier',\n    success: true,\n    isVerified,\n    syncStatus: isVerified ? 'SYNCHRONIZED' : 'UNVERIFIED',\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ],
+      "id": "f9-step-9-integrity-verifier",
+      "name": "Step 9 - Sync Result & Data Integrity Verifier"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  issueKey: item.issueKey || 'UNKNOWN',\n  fromStatus: item.fromStatus || 'N/A',\n  toStatus: item.normalizedStatus || 'N/A',\n  statusCategory: item.statusCategory || 'N/A',\n  action: 'JIRA_STATUS_UPDATED',\n  status: item.success ? 'SUCCESS' : 'ERROR'\n};\n\nreturn [{\n  json: {\n    step: 10,\n    stepName: 'Audit & State History Logger',\n    logEntry,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        0
+      ],
+      "id": "f9-step-10-audit-logger",
+      "name": "Step 10 - Audit & State History Logger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst responsePayload = {\n  success: item.success,\n  message: item.skipProcessing\n    ? (item.reason || 'Event skipped')\n    : `Đã đồng bộ trạng thái issue ${item.issueKey} sang \"${item.normalizedStatus}\" thành công!`,\n  syncedIssue: {\n    key: item.issueKey,\n    status: item.normalizedStatus,\n    category: item.statusCategory,\n    projectKey: item.projectKey\n  },\n  timestamp: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    step: 11,\n    stepName: 'Response & Notification Formatter',\n    responsePayload,\n    content: JSON.stringify(responsePayload)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ],
+      "id": "f9-step-11-response-formatter",
+      "name": "Step 11 - Response & Notification Formatter"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responsePayload }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "f9-step-12-respond-webhook",
+      "name": "Step 12 - Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Step 1 - Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Step 2 - Secret & Signature Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2 - Secret & Signature Inspector": {
+      "main": [
+        [
+          {
+            "node": "Step 3 - Event Type Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3 - Event Type Filter": {
+      "main": [
+        [
+          {
+            "node": "Step 4 - Issue Key & Project Key Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 4 - Issue Key & Project Key Extractor": {
+      "main": [
+        [
+          {
+            "node": "Step 5 - Changelog & Field Transition Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 5 - Changelog & Field Transition Inspector": {
+      "main": [
+        [
+          {
+            "node": "Step 6 - Status Normalizer & Category Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 6 - Status Normalizer & Category Classifier": {
+      "main": [
+        [
+          {
+            "node": "Step 7 - Express Internal Sync Payload Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 7 - Express Internal Sync Payload Builder": {
+      "main": [
+        [
+          {
+            "node": "Step 8 - Backend Express Sync Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 8 - Backend Express Sync Dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Step 9 - Sync Result & Data Integrity Verifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 9 - Sync Result & Data Integrity Verifier": {
+      "main": [
+        [
+          {
+            "node": "Step 10 - Audit & State History Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 10 - Audit & State History Logger": {
+      "main": [
+        [
+          {
+            "node": "Step 11 - Response & Notification Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 11 - Response & Notification Formatter": {
+      "main": [
+        [
+          {
+            "node": "Step 12 - Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}

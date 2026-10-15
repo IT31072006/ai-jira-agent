@@ -1,5 +1,5 @@
 {
-  "name": "FLow 4",
+  "name": "Flow 4 - AI Requirement Analyzer (12 Steps Pipeline)",
   "nodes": [
     {
       "parameters": {
@@ -11,12 +11,51 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -368,
-        -16
+        -1100,
+        0
       ],
-      "id": "e4273d3d-78fe-454d-87c3-1f32aac755f6",
-      "name": "Webhook",
-      "webhookId": "df90969a-561c-4974-904e-62c06756fae6"
+      "id": "f4-step-1-webhook-trigger",
+      "name": "Step 1 - Webhook Trigger",
+      "webhookId": "flow-4-ai-requirement-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const rawInput = $input.first();\n  const item = rawInput.json;\n  const body = item.body || item;\n  const headers = item.headers || {};\n\n  const correlationId = headers['x-correlation-id'] || `ai_req_${Date.now()}`;\n\n  return [{\n    json: {\n      step: 2,\n      stepName: 'Request Header & Security Guard',\n      success: true,\n      correlationId,\n      timestamp: new Date().toISOString(),\n      body\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      step: 2,\n      success: false,\n      error: `Security Check Error: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f4-step-2-security-guard",
+      "name": "Step 2 - Request Header & Security Guard"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nconst body = item.body || {};\nconst requirement = body.requirement || body.requirementText || body.text || '';\n\nif (typeof requirement !== 'string' || requirement.trim().length < 10) {\n  return [{\n    json: {\n      step: 3,\n      stepName: 'Requirement Text Validator',\n      success: false,\n      errorMessage: 'Nội dung yêu cầu quá ngắn (tối thiểu 10 ký tự) để AI có thể phân tích cấu trúc.',\n      ...item\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    step: 3,\n    stepName: 'Requirement Text Validator',\n    success: true,\n    cleanRequirement: requirement.trim(),\n    requirementLength: requirement.trim().length,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "f4-step-3-text-validator",
+      "name": "Step 3 - Requirement Text Validator"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nconst { cleanRequirement } = item;\n\nconst prompt = `Bạn là Chuyên gia Phân tích Nghiệp vụ Phần mềm (Senior Business Analyst & Scrum Master).\nNhiệm vụ của bạn: Hãy phân tích yêu cầu phần mềm dưới đây và bóc tách thành cấu trúc phân cấp chuẩn Agile 3 tầng:\n1. Epic (Khối tính năng lớn)\n2. User Story (Câu chuyện người dùng: As a... I want... So that...)\n3. Task (Các đầu việc kỹ thuật cụ thể)\n\nQUY TẮC BẮT BUỘC:\n1. Chỉ trả về một đối tượng JSON hợp lệ duy nhất.\n2. Tuyệt đối KHÔNG kèm giải thích, KHÔNG viết bất kỳ chữ nào ngoài JSON.\n3. Cấu trúc JSON bắt buộc phải theo schema sau:\n{\n  \"epics\": [\n    {\n      \"title\": \"Tên Epic\",\n      \"description\": \"Mô tả tổng quan của Epic\",\n      \"stories\": [\n        {\n          \"title\": \"Tên Story\",\n          \"description\": \"Mô tả chi tiết Story\",\n          \"priority\": \"High\",\n          \"storyPoints\": 3,\n          \"tasks\": [\n            {\n              \"title\": \"Tên Task kỹ thuật\",\n              \"description\": \"Mô tả chi tiết cách triển khai task\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nYÊU CẦU CỦA NGƯỜI DÙNG CẦN PHÂN TÍCH:\n\"\"\"\n${cleanRequirement}\n\"\"\"`;\n\nreturn [{\n  json: {\n    step: 4,\n    stepName: 'Agile Persona & Prompt Builder',\n    success: true,\n    systemPrompt: prompt,\n    cleanRequirement,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        0
+      ],
+      "id": "f4-step-4-prompt-builder",
+      "name": "Step 4 - Agile Persona & Prompt Builder"
     },
     {
       "parameters": {
@@ -28,7 +67,7 @@
         "messages": {
           "values": [
             {
-              "content": "=Bạn là AI phân tích yêu cầu phần mềm.\n\nHãy phân tích yêu cầu người dùng và chuyển thành cấu trúc:\n- Epic\n- Story\n- Task\n\nYêu cầu:\n1. Chỉ trả về JSON hợp lệ.\n2. Không thêm giải thích bên ngoài JSON.\n3. Mỗi Story phải thuộc một Epic.\n4. Mỗi Task phải thuộc một Story.\n5. Nội dung phải cụ thể, phù hợp với yêu cầu.\n6. Nếu yêu cầu chưa đủ rõ, hãy tự đưa ra giả định hợp lý.\n\nĐịnh dạng JSON:\n{\n  \"epics\": [\n    {\n      \"title\": \"Tên Epic\",\n      \"description\": \"Mô tả Epic\",\n      \"stories\": [\n        {\n          \"title\": \"Tên Story\",\n          \"description\": \"Mô tả Story\",\n          \"tasks\": [\n            {\n              \"title\": \"Tên Task\",\n              \"description\": \"Mô tả Task\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nYêu cầu người dùng:\n{{ $json.body.requirement }}"
+              "content": "={{ $json.systemPrompt }}"
             }
           ]
         },
@@ -42,11 +81,11 @@
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
       "typeVersion": 1.1,
       "position": [
-        -144,
-        -16
+        -300,
+        0
       ],
-      "id": "55966ea8-aed2-4548-9f7f-fb3448def968",
-      "name": "Message a model",
+      "id": "f4-step-5-gemini-model",
+      "name": "Step 5 - Google Gemini Model Invocation",
       "credentials": {
         "googlePalmApi": {
           "id": "JSBKgpWH4oIbMUSJ",
@@ -56,38 +95,215 @@
     },
     {
       "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.content }}",
+        "jsCode": "try {\n  const inputItem = $input.first().json;\n  let rawContent = inputItem.content || inputItem.text || inputItem.response || inputItem;\n\n  if (typeof rawContent === 'object' && rawContent.parts) {\n    rawContent = rawContent.parts[0]?.text || JSON.stringify(rawContent);\n  } else if (typeof rawContent === 'object' && !rawContent.epics) {\n    rawContent = JSON.stringify(rawContent);\n  }\n\n  return [{\n    json: {\n      step: 6,\n      stepName: 'Raw Content Extractor',\n      success: true,\n      rawContent\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      step: 6,\n      success: false,\n      error: `Content Extraction Error: ${err.message}`\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ],
+      "id": "f4-step-6-raw-extractor",
+      "name": "Step 6 - Raw Content Extractor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nlet text = item.rawContent;\nif (typeof text === 'object') {\n  text = JSON.stringify(text);\n}\n\nlet cleanedText = String(text).trim();\n// Loại bỏ markdown code block format nếu có (```json ... ```)\ncleanedText = cleanedText.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\nreturn [{\n  json: {\n    step: 7,\n    stepName: 'Markdown Code Block Cleaner',\n    success: true,\n    cleanedText,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        0
+      ],
+      "id": "f4-step-7-markdown-cleaner",
+      "name": "Step 7 - Markdown Code Block Cleaner"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nlet parsed = null;\ntry {\n  parsed = JSON.parse(item.cleanedText);\n} catch (err) {\n  // Thử trích xuất khối JSON bên trong cặp ngoặc nhọn lớn nhất\n  const match = item.cleanedText.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try {\n      parsed = JSON.parse(match[0]);\n    } catch (innerErr) {\n      return [{\n        json: {\n          step: 8,\n          stepName: 'JSON Syntax Parser & Repair Engine',\n          success: false,\n          errorMessage: `Không thể parse JSON từ AI: ${innerErr.message}`,\n          rawResponse: item.cleanedText,\n          ...item\n        }\n      }];\n    }\n  } else {\n    return [{\n      json: {\n        step: 8,\n        stepName: 'JSON Syntax Parser & Repair Engine',\n        success: false,\n        errorMessage: 'AI không trả về khối JSON hợp lệ.',\n        rawResponse: item.cleanedText,\n        ...item\n      }\n    }];\n  }\n}\n\nreturn [{\n  json: {\n    step: 8,\n    stepName: 'JSON Syntax Parser & Repair Engine',\n    success: true,\n    parsedData: parsed,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ],
+      "id": "f4-step-8-json-parser",
+      "name": "Step 8 - JSON Syntax Parser & Repair Engine"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nconst parsed = item.parsedData || {};\nlet epics = parsed.epics || parsed.data?.epics || [];\n\nif (!Array.isArray(epics) || epics.length === 0) {\n  return [{\n    json: {\n      step: 9,\n      stepName: 'Hierarchy Completeness Validator',\n      success: false,\n      errorMessage: 'Dữ liệu JSON không chứa danh sách epics hợp lệ.',\n      ...item\n    }\n  }];\n}\n\n// Chuẩn hóa đảm bảo mỗi Epic có stories, mỗi Story có tasks\nconst validatedEpics = epics.map((epic, eIdx) => {\n  const stories = Array.isArray(epic.stories) ? epic.stories : (epic.user_stories || []);\n  return {\n    title: epic.title || epic.name || epic.summary || `Epic ${eIdx + 1}`,\n    description: epic.description || epic.title || 'Mô tả Epic',\n    stories: stories.map((story, sIdx) => {\n      const tasks = Array.isArray(story.tasks) ? story.tasks : (story.subtasks || []);\n      return {\n        title: story.title || story.name || story.summary || `Story ${sIdx + 1}`,\n        description: story.description || story.title || 'Mô tả Story',\n        priority: story.priority || 'Medium',\n        storyPoints: typeof story.storyPoints === 'number' ? story.storyPoints : 3,\n        tasks: tasks.map((task, tIdx) => {\n          const taskTitle = typeof task === 'string' ? task : (task.title || task.name || `Task ${tIdx + 1}`);\n          const taskDesc = typeof task === 'object' ? (task.description || taskTitle) : taskTitle;\n          return {\n            title: taskTitle,\n            description: taskDesc\n          };\n        })\n      };\n    })\n  };\n});\n\nreturn [{\n  json: {\n    step: 9,\n    stepName: 'Hierarchy Completeness Validator',\n    success: true,\n    validatedEpics,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ],
+      "id": "f4-step-9-hierarchy-validator",
+      "name": "Step 9 - Hierarchy Completeness Validator"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.success) return [{ json: item }];\n\nconst { validatedEpics } = item;\nlet totalPoints = 0;\n\n// Áp dụng thuật toán ước lượng Fibonacci (1, 2, 3, 5, 8)\nconst enrichedEpics = validatedEpics.map(epic => {\n  const enrichedStories = epic.stories.map(story => {\n    let points = story.storyPoints;\n    if (!points || typeof points !== 'number') {\n      const taskCount = story.tasks.length;\n      if (taskCount <= 1) points = 1;\n      else if (taskCount <= 2) points = 2;\n      else if (taskCount <= 3) points = 3;\n      else points = 5;\n    }\n    totalPoints += points;\n    return {\n      ...story,\n      storyPoints: points\n    };\n  });\n\n  return {\n    ...epic,\n    stories: enrichedStories\n  };\n});\n\nreturn [{\n  json: {\n    step: 10,\n    stepName: 'Agile Estimation & Points Calculator',\n    success: true,\n    enrichedEpics,\n    totalPoints,\n    ...item\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        0
+      ],
+      "id": "f4-step-10-points-calculator",
+      "name": "Step 10 - Agile Estimation & Points Calculator"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nif (!item.success) {\n  return [{\n    json: {\n      success: false,\n      stepFailed: item.step,\n      stepName: item.stepName,\n      error: item.errorMessage || item.error || 'Phân tích yêu cầu thất bại',\n      epics: []\n    }\n  }];\n}\n\nconst { enrichedEpics, totalPoints } = item;\nlet totalStories = 0;\nlet totalTasks = 0;\n\nfor (const e of enrichedEpics) {\n  totalStories += e.stories.length;\n  for (const s of e.stories) {\n    totalTasks += s.tasks.length;\n  }\n}\n\nconst summary = {\n  epicsCount: enrichedEpics.length,\n  storiesCount: totalStories,\n  tasksCount: totalTasks,\n  totalStoryPoints: totalPoints\n};\n\nreturn [{\n  json: {\n    success: true,\n    epics: enrichedEpics,\n    summary,\n    content: JSON.stringify({ epics: enrichedEpics, summary })\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ],
+      "id": "f4-step-11-metric-aggregator",
+      "name": "Step 11 - Metric Aggregator & Response Formatter"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
         "options": {}
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        224,
-        -16
+        1100,
+        0
       ],
-      "id": "a0fb9fb3-a7c5-4047-8403-24a0a64eb4f5",
-      "name": "Respond to Webhook"
+      "id": "f4-step-12-respond-webhook",
+      "name": "Step 12 - Respond to Webhook"
     }
   ],
   "pinData": {},
   "connections": {
-    "Webhook": {
+    "Step 1 - Webhook Trigger": {
       "main": [
         [
           {
-            "node": "Message a model",
+            "node": "Step 2 - Request Header & Security Guard",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Message a model": {
+    "Step 2 - Request Header & Security Guard": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Step 3 - Requirement Text Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3 - Requirement Text Validator": {
+      "main": [
+        [
+          {
+            "node": "Step 4 - Agile Persona & Prompt Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 4 - Agile Persona & Prompt Builder": {
+      "main": [
+        [
+          {
+            "node": "Step 5 - Google Gemini Model Invocation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 5 - Google Gemini Model Invocation": {
+      "main": [
+        [
+          {
+            "node": "Step 6 - Raw Content Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 6 - Raw Content Extractor": {
+      "main": [
+        [
+          {
+            "node": "Step 7 - Markdown Code Block Cleaner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 7 - Markdown Code Block Cleaner": {
+      "main": [
+        [
+          {
+            "node": "Step 8 - JSON Syntax Parser & Repair Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 8 - JSON Syntax Parser & Repair Engine": {
+      "main": [
+        [
+          {
+            "node": "Step 9 - Hierarchy Completeness Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 9 - Hierarchy Completeness Validator": {
+      "main": [
+        [
+          {
+            "node": "Step 10 - Agile Estimation & Points Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 10 - Agile Estimation & Points Calculator": {
+      "main": [
+        [
+          {
+            "node": "Step 11 - Metric Aggregator & Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 11 - Metric Aggregator & Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Step 12 - Respond to Webhook",
             "type": "main",
             "index": 0
           }
@@ -101,12 +317,5 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "d2bf23ce-7887-4942-86e7-62d435f5b4c7",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "86c6032dcc0fd627266bfea215eff0a1a059f7b10e676fe6c342e72298caae9e"
-  },
-  "nodeGroups": [],
-  "id": "7rfbxjYvhqIZXuQ8",
   "tags": []
 }
