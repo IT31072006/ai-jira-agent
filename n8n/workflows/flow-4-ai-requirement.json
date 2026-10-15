@@ -23,7 +23,7 @@
         "modelId": {
           "__rl": true,
           "mode": "list",
-          "value": "models/gemini-3-flash-preview"
+          "value": "models/gemini-3.5-flash"
         },
         "messages": {
           "values": [
@@ -36,8 +36,11 @@
         "builtInTools": {},
         "options": {}
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
-      "typeVersion": 1.2,
+      "typeVersion": 1.1,
       "position": [
         -144,
         -16

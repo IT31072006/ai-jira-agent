@@ -17,6 +17,9 @@ import {
   Mail,
   Sparkles,
   Info,
+  Bell,
+  Send,
+  MessageSquare,
 } from 'lucide-react';
 
 export const SettingsPage = () => {
@@ -24,6 +27,16 @@ export const SettingsPage = () => {
   const [jiraEmail, setJiraEmail] = useState('');
   const [jiraApiToken, setJiraApiToken] = useState('');
   const [geminiApiKey, setGeminiApiKey] = useState('');
+
+  // Flow 11: Notification state
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [notificationChannel, setNotificationChannel] = useState('discord');
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [notificationEmail, setNotificationEmail] = useState('');
+  const [isTestingNotif, setIsTestingNotif] = useState(false);
+  const [testNotifSuccess, setTestNotifSuccess] = useState('');
+  const [testNotifError, setTestNotifError] = useState('');
 
   const [showJiraToken, setShowJiraToken] = useState(false);
   const [showGeminiKey, setShowGeminiKey] = useState(false);
@@ -43,6 +56,9 @@ export const SettingsPage = () => {
         setConfig(res.data);
         setJiraDomain(res.data.jira_domain || '');
         setJiraEmail(res.data.jira_email || '');
+        setNotificationEnabled(res.data.notification_enabled !== false);
+        setNotificationChannel(res.data.notification_channel || 'discord');
+        setNotificationEmail(res.data.notification_email || '');
       }
     } catch (err) {
       setErrorMsg(err?.response?.data?.message || 'Không thể tải cấu hình tích hợp.');
@@ -77,6 +93,18 @@ export const SettingsPage = () => {
       payload.gemini_api_key = geminiApiKey.trim();
     }
 
+    // Flow 11: Cấu hình thông báo tự động (Automated Notification)
+    payload.notification_enabled = notificationEnabled;
+    payload.notification_channel = notificationChannel;
+    payload.notification_email = notificationEmail.trim();
+
+    if (discordWebhookUrl.trim().length > 0) {
+      payload.discord_webhook_url = discordWebhookUrl.trim();
+    }
+    if (slackWebhookUrl.trim().length > 0) {
+      payload.slack_webhook_url = slackWebhookUrl.trim();
+    }
+
     setIsSaving(true);
     try {
       const res = await configApi.updateConfig(payload);
@@ -84,10 +112,15 @@ export const SettingsPage = () => {
         setConfig(res.data);
         setJiraDomain(res.data.jira_domain || '');
         setJiraEmail(res.data.jira_email || '');
+        setNotificationEnabled(res.data.notification_enabled !== false);
+        setNotificationChannel(res.data.notification_channel || 'discord');
+        setNotificationEmail(res.data.notification_email || '');
       }
       // Reset ô nhập secret về rỗng để bảo mật
       setJiraApiToken('');
       setGeminiApiKey('');
+      setDiscordWebhookUrl('');
+      setSlackWebhookUrl('');
       setSuccessMsg('✓ Cấu hình tích hợp đã được lưu và mã hóa AES-256 an toàn!');
       
       // Cuộn nhẹ lên đầu trang để người dùng thấy thông báo
@@ -138,6 +171,23 @@ export const SettingsPage = () => {
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
       setErrorMsg(err?.response?.data?.message || 'Không thể xóa Gemini API Key.');
+    }
+  };
+
+  const handleTestNotification = async () => {
+    setTestNotifSuccess('');
+    setTestNotifError('');
+    setIsTestingNotif(true);
+    try {
+      const res = await configApi.testNotification(notificationChannel);
+      setTestNotifSuccess(res?.message || `✓ Đã gửi thông báo thử nghiệm thành công qua kênh ${notificationChannel.toUpperCase()}!`);
+      setTimeout(() => setTestNotifSuccess(''), 6000);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Lỗi khi gửi thông báo thử nghiệm.';
+      setTestNotifError(msg);
+      setTimeout(() => setTestNotifError(''), 6000);
+    } finally {
+      setIsTestingNotif(false);
     }
   };
 
@@ -408,6 +458,229 @@ export const SettingsPage = () => {
                       </a>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Section 3: Automated Notification (Flow 11) */}
+              <div className="card settings-card">
+                <div className="card-header settings-card-header">
+                  <div className="card-title-group">
+                    <Bell className="card-icon text-primary" size={20} />
+                    <h3>3. Tự động Gửi Thông báo (Flow 11 — n8n Automated Notification)</h3>
+                  </div>
+                </div>
+
+                <div className="card-body">
+                  {/* Bật/Tắt tính năng thông báo */}
+                  <div className="notification-toggle-wrapper">
+                    <div className="notification-toggle-info">
+                      <span className="notification-toggle-title">Kích hoạt thông báo tự động khi tạo Epic thành công</span>
+                      <span className="notification-toggle-desc">
+                        Khi Flow 7 tạo Epic thành công trên Jira Cloud, hệ thống tự động phát sự kiện qua n8n để thông báo ngay lập tức.
+                      </span>
+                    </div>
+                    <label className="toggle-switch-label" htmlFor="notification-toggle">
+                      <input
+                        id="notification-toggle"
+                        type="checkbox"
+                        checked={notificationEnabled}
+                        onChange={(e) => setNotificationEnabled(e.target.checked)}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  {notificationEnabled && (
+                    <>
+                      {/* Chọn kênh nhận thông báo */}
+                      <div className="form-group">
+                        <label>Chọn kênh thông báo ưu tiên</label>
+                        <div className="channel-selector-grid">
+                          <div
+                            className={`channel-card-option discord ${notificationChannel === 'discord' ? 'active' : ''}`}
+                            onClick={() => setNotificationChannel('discord')}
+                          >
+                            {notificationChannel === 'discord' && <span className="channel-active-indicator" />}
+                            <div className="channel-icon-badge discord">
+                              <MessageSquare size={20} />
+                            </div>
+                            <span className="channel-card-name">Discord Webhook</span>
+                            <span className="channel-card-sub">Kênh Discord Team</span>
+                          </div>
+
+                          <div
+                            className={`channel-card-option slack ${notificationChannel === 'slack' ? 'active' : ''}`}
+                            onClick={() => setNotificationChannel('slack')}
+                          >
+                            {notificationChannel === 'slack' && <span className="channel-active-indicator" />}
+                            <div className="channel-icon-badge slack">
+                              <MessageSquare size={20} />
+                            </div>
+                            <span className="channel-card-name">Slack Webhook</span>
+                            <span className="channel-card-sub">Kênh Slack Team</span>
+                          </div>
+
+                          <div
+                            className={`channel-card-option email ${notificationChannel === 'email' ? 'active' : ''}`}
+                            onClick={() => setNotificationChannel('email')}
+                          >
+                            {notificationChannel === 'email' && <span className="channel-active-indicator" />}
+                            <div className="channel-icon-badge email">
+                              <Mail size={20} />
+                            </div>
+                            <span className="channel-card-name">Email (SMTP)</span>
+                            <span className="channel-card-sub">Hộp thư nhận tin</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Chi tiết cấu hình theo kênh */}
+                      {notificationChannel === 'discord' && (
+                        <div className="form-group">
+                          <label htmlFor="discord-webhook">Discord Webhook URL</label>
+                          <div className="input-with-icon">
+                            <MessageSquare className="input-icon" size={18} />
+                            <input
+                              id="discord-webhook"
+                              type="text"
+                              placeholder={
+                                config?.discord_webhook_url_configured
+                                  ? 'Để trống để giữ nguyên Discord Webhook hiện tại'
+                                  : 'https://discord.com/api/webhooks/...'
+                              }
+                              value={discordWebhookUrl}
+                              onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                              disabled={isSaving}
+                            />
+                          </div>
+                          <div className="token-status-row">
+                            {config?.discord_webhook_url_configured ? (
+                              <div className="configured-pill">
+                                <CheckCircle2 size={14} className="text-success" />
+                                <span>Đang sử dụng Webhook: <code>{config.discord_webhook_url_masked}</code></span>
+                              </div>
+                            ) : (
+                              <div className="unconfigured-pill">
+                                <Info size={14} className="text-muted" />
+                                <span>Chưa cấu hình Discord Webhook</span>
+                              </div>
+                            )}
+                            <a
+                              href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="external-token-link"
+                            >
+                              <span>Cách lấy Discord Webhook</span>
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {notificationChannel === 'slack' && (
+                        <div className="form-group">
+                          <label htmlFor="slack-webhook">Slack Incoming Webhook URL</label>
+                          <div className="input-with-icon">
+                            <MessageSquare className="input-icon" size={18} />
+                            <input
+                              id="slack-webhook"
+                              type="text"
+                              placeholder={
+                                config?.slack_webhook_url_configured
+                                  ? 'Để trống để giữ nguyên Slack Webhook hiện tại'
+                                  : 'https://hooks.slack.com/services/...'
+                              }
+                              value={slackWebhookUrl}
+                              onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                              disabled={isSaving}
+                            />
+                          </div>
+                          <div className="token-status-row">
+                            {config?.slack_webhook_url_configured ? (
+                              <div className="configured-pill">
+                                <CheckCircle2 size={14} className="text-success" />
+                                <span>Đang sử dụng Webhook: <code>{config.slack_webhook_url_masked}</code></span>
+                              </div>
+                            ) : (
+                              <div className="unconfigured-pill">
+                                <Info size={14} className="text-muted" />
+                                <span>Chưa cấu hình Slack Webhook</span>
+                              </div>
+                            )}
+                            <a
+                              href="https://api.slack.com/messaging/webhooks"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="external-token-link"
+                            >
+                              <span>Cách tạo Slack Incoming Webhook</span>
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {notificationChannel === 'email' && (
+                        <div className="form-group">
+                          <label htmlFor="notif-email">Email Nhận Thông Báo</label>
+                          <div className="input-with-icon">
+                            <Mail className="input-icon" size={18} />
+                            <input
+                              id="notif-email"
+                              type="email"
+                              placeholder="team-alerts@company.com"
+                              value={notificationEmail}
+                              onChange={(e) => setNotificationEmail(e.target.value)}
+                              disabled={isSaving}
+                            />
+                          </div>
+                          <span className="form-hint">
+                            Địa chỉ email nhóm nhận thông báo mỗi khi Epic mới được tạo thành công trên Jira.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Thanh thử nghiệm thông báo */}
+                      <div className="test-notification-bar">
+                        <div className="test-notification-info">
+                          <Send size={18} className="text-primary" />
+                          <div>
+                            <strong>Kiểm tra thông báo thử nghiệm</strong>
+                            <p>Gửi một thông báo mẫu qua cỗ máy n8n để kiểm tra kết nối tới kênh đã chọn.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-test-notif"
+                          onClick={handleTestNotification}
+                          disabled={isTestingNotif || isSaving}
+                          id="btn-test-notification"
+                        >
+                          {isTestingNotif ? (
+                            <span className="btn-spinner"></span>
+                          ) : (
+                            <Send size={15} />
+                          )}
+                          <span>{isTestingNotif ? 'Đang gửi thử...' : 'Gửi thông báo thử nghiệm'}</span>
+                        </button>
+                      </div>
+
+                      {testNotifSuccess && (
+                        <div className="test-notif-feedback success">
+                          <CheckCircle2 size={16} />
+                          <span>{testNotifSuccess}</span>
+                        </div>
+                      )}
+
+                      {testNotifError && (
+                        <div className="test-notif-feedback error">
+                          <AlertCircle size={16} />
+                          <span>{testNotifError}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 

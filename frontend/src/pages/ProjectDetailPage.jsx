@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import ProjectModal from '../components/project/ProjectModal';
+import ExportModal from '../components/project/ExportModal';
 import RequirementAnalyzer from '../components/ai/RequirementAnalyzer';
 import JiraWebhookSyncBoard from '../components/jira/JiraWebhookSyncBoard';
 import { projectApi } from '../api/projectApi';
@@ -17,6 +18,7 @@ import {
   FileText,
   Sparkles,
   Layers,
+  Download,
 } from 'lucide-react';
 
 export const ProjectDetailPage = () => {
@@ -31,6 +33,8 @@ export const ProjectDetailPage = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [activeDraft, setActiveDraft] = useState(null);
 
   const fetchProjectDetail = async () => {
     try {
@@ -142,6 +146,16 @@ export const ProjectDetailPage = () => {
 
                 <div className="detail-action-buttons">
                   <button
+                    onClick={() => setIsExportModalOpen(true)}
+                    className="btn btn-primary"
+                    id="export-project-btn"
+                    title="Xuất tài liệu PDF hoặc Markdown"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
+                  >
+                    <Download size={16} />
+                    <span>Xuất tài liệu</span>
+                  </button>
+                  <button
                     onClick={() => setIsModalOpen(true)}
                     className="btn btn-outline"
                     id="edit-project-detail-btn"
@@ -206,7 +220,7 @@ export const ProjectDetailPage = () => {
               </div>
 
               {/* Flow 5 AI Requirement Analyzer & Flow 7 Jira Integration */}
-              <RequirementAnalyzer project={project} />
+              <RequirementAnalyzer project={project} onDraftChange={setActiveDraft} />
 
               {/* Flow 9 Jira Webhook Sync Board */}
               <JiraWebhookSyncBoard project={project} />
@@ -222,6 +236,14 @@ export const ProjectDetailPage = () => {
         onSubmit={handleUpdate}
         initialData={project}
         isSubmitting={isSubmitting}
+      />
+
+      {/* Flow 12 Modal Xuất tài liệu */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        project={project}
+        draftData={activeDraft}
       />
     </div>
   );

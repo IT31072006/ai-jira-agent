@@ -16,6 +16,16 @@ export const configApi = {
     const response = await apiClient.delete(url);
     return response.data;
   },
+
+  testNotification: async (channel = null) => {
+    const response = await apiClient.post('/config/test-notification', { channel });
+    return response.data;
+  },
+
+  getNotificationHistory: async (limit = 20) => {
+    const response = await apiClient.get(`/config/notifications/history?limit=${limit}`);
+    return response.data;
+  },
 };
 
 export default configApi;

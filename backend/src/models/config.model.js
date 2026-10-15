@@ -3,7 +3,9 @@ const db = require('../config/db');
 class ConfigModel {
   static async findByUserId(userId) {
     const query = `
-      SELECT id, user_id, jira_domain, jira_email, jira_api_token_encrypted, gemini_api_key_encrypted, created_at, updated_at
+      SELECT id, user_id, jira_domain, jira_email, jira_api_token_encrypted, gemini_api_key_encrypted,
+             notification_enabled, notification_channel, discord_webhook_url, slack_webhook_url, notification_email,
+             created_at, updated_at
       FROM configurations
       WHERE user_id = $1
       LIMIT 1;
@@ -12,7 +14,17 @@ class ConfigModel {
     return rows[0] || null;
   }
 
-  static async upsert(userId, { jiraDomain, jiraEmail, jiraApiTokenEncrypted, geminiApiKeyEncrypted }) {
+  static async upsert(userId, {
+    jiraDomain,
+    jiraEmail,
+    jiraApiTokenEncrypted,
+    geminiApiKeyEncrypted,
+    notificationEnabled = true,
+    notificationChannel = 'discord',
+    discordWebhookUrl = null,
+    slackWebhookUrl = null,
+    notificationEmail = null,
+  }) {
     const query = `
       INSERT INTO configurations (
         user_id,
@@ -20,16 +32,26 @@ class ConfigModel {
         jira_email,
         jira_api_token_encrypted,
         gemini_api_key_encrypted,
+        notification_enabled,
+        notification_channel,
+        discord_webhook_url,
+        slack_webhook_url,
+        notification_email,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
       ON CONFLICT (user_id) DO UPDATE SET
         jira_domain = EXCLUDED.jira_domain,
         jira_email = EXCLUDED.jira_email,
         jira_api_token_encrypted = EXCLUDED.jira_api_token_encrypted,
         gemini_api_key_encrypted = EXCLUDED.gemini_api_key_encrypted,
+        notification_enabled = EXCLUDED.notification_enabled,
+        notification_channel = EXCLUDED.notification_channel,
+        discord_webhook_url = EXCLUDED.discord_webhook_url,
+        slack_webhook_url = EXCLUDED.slack_webhook_url,
+        notification_email = EXCLUDED.notification_email,
         updated_at = CURRENT_TIMESTAMP
-      RETURNING id, user_id, jira_domain, jira_email, jira_api_token_encrypted, gemini_api_key_encrypted, created_at, updated_at;
+      RETURNING *;
     `;
     const { rows } = await db.query(query, [
       userId,
@@ -37,6 +59,11 @@ class ConfigModel {
       jiraEmail,
       jiraApiTokenEncrypted,
       geminiApiKeyEncrypted,
+      notificationEnabled,
+      notificationChannel,
+      discordWebhookUrl,
+      slackWebhookUrl,
+      notificationEmail,
     ]);
     return rows[0];
   }

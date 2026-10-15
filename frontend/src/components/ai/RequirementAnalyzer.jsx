@@ -21,7 +21,9 @@ import {
   UserCheck,
   RefreshCw,
   User,
+  Download,
 } from 'lucide-react';
+import ExportModal from '../project/ExportModal';
 
 // ─── Helper: chuẩn hóa dữ liệu từ API thành cấu trúc phẳng để edit ───────────
 const normalizeEpics = (result) => {
@@ -65,13 +67,23 @@ const normalizeEpics = (result) => {
 };
 
 // ─── Component chính ──────────────────────────────────────────────────────────
-export const RequirementAnalyzer = ({ project }) => {
+export const RequirementAnalyzer = ({ project, onDraftChange }) => {
   const [requirement, setRequirement] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // editableEpics: mảng làm việc có thể sửa đổi
   const [editableEpics, setEditableEpics] = useState(null);
+
+  // Đồng bộ dữ liệu nháp lên component cha khi có thay đổi (Luồng 12)
+  useEffect(() => {
+    if (typeof onDraftChange === 'function') {
+      onDraftChange(editableEpics);
+    }
+  }, [editableEpics, onDraftChange]);
+
+  // Modal xuất bản nháp (Luồng 12)
+  const [showExportDraftModal, setShowExportDraftModal] = useState(false);
 
   // confirmed: true = đã xác nhận, khoá chỉnh sửa
   const [confirmed, setConfirmed] = useState(false);
@@ -90,9 +102,37 @@ export const RequirementAnalyzer = ({ project }) => {
   };
 
   const [jiraProjectKey, setJiraProjectKey] = useState(getDefaultProjectKey());
+  const [availableJiraProjects, setAvailableJiraProjects] = useState([]);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushError, setPushError] = useState('');
   const [jiraResult, setJiraResult] = useState(null);
+
+  // Tự động tải danh sách dự án thực tế trên Jira Cloud của user
+  useEffect(() => {
+    let isMounted = true;
+    jiraApi
+      .getProjects()
+      .then((res) => {
+        if (!isMounted) return;
+        const projs = res?.projects || [];
+        setAvailableJiraProjects(projs);
+        if (projs.length > 0) {
+          setJiraProjectKey((prev) => {
+            // Nếu chưa có hoặc đang mang mã đoán trước đó, tự động đổi sang mã thật trên Jira
+            if (!prev || prev === getDefaultProjectKey() || prev === 'WBHIM') {
+              return projs[0].key;
+            }
+            return prev;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Không thể tải danh sách dự án Jira:', err.message);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [project]);
 
   // ── Flow 8: Lấy danh sách thành viên Jira & Giao việc ────────────────────
   const [members, setMembers] = useState([]);
@@ -808,25 +848,69 @@ export const RequirementAnalyzer = ({ project }) => {
                         </span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-fetch-members"
-                      onClick={() => handleFetchMembers()}
-                      disabled={loadingMembers || !jiraProjectKey.trim()}
-                      id="btn-fetch-jira-members"
-                    >
-                      {loadingMembers ? (
-                        <>
-                          <span className="btn-spinner" style={{ width: 14, height: 14 }}></span>
-                          <span>Đang tải thành viên...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw size={14} />
-                          <span>{members.length > 0 ? 'Tải lại thành viên' : 'Lấy danh sách thành viên'}</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="jira-members-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Mã Jira:</span>
+                        {availableJiraProjects.length > 0 ? (
+                          <select
+                            className="form-control jira-key-input"
+                            style={{
+                              padding: '0.35rem 0.65rem',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                              height: '34px',
+                            }}
+                            value={jiraProjectKey}
+                            onChange={(e) => setJiraProjectKey(e.target.value.toUpperCase())}
+                            id="jira-members-key-input"
+                          >
+                            {availableJiraProjects.map((p) => (
+                              <option key={p.key} value={p.key}>
+                                {p.key} ({p.name})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            className="form-control jira-key-input"
+                            style={{
+                              width: '110px',
+                              padding: '0.35rem 0.65rem',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                              letterSpacing: '0.5px',
+                              textTransform: 'uppercase',
+                              height: '34px',
+                            }}
+                            placeholder="VD: SCRUM"
+                            value={jiraProjectKey}
+                            onChange={(e) => setJiraProjectKey(e.target.value.toUpperCase())}
+                            title="Nhập Jira Project Key (ví dụ: SCRUM, KAN, PROJ) để lấy thành viên"
+                            id="jira-members-key-input"
+                          />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-fetch-members"
+                        onClick={() => handleFetchMembers()}
+                        disabled={loadingMembers || !jiraProjectKey.trim()}
+                        id="btn-fetch-jira-members"
+                      >
+                        {loadingMembers ? (
+                          <>
+                            <span className="btn-spinner" style={{ width: 14, height: 14 }}></span>
+                            <span>Đang tải thành viên...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw size={14} />
+                            <span>{members.length > 0 ? 'Tải lại thành viên' : 'Lấy danh sách thành viên'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {memberError && (
@@ -881,17 +965,55 @@ export const RequirementAnalyzer = ({ project }) => {
                   <div className="jira-input-row">
                     <div className="jira-key-group">
                       <label htmlFor="jira-project-key">Jira Project Key (Mã dự án Jira)</label>
-                      <input
-                        id="jira-project-key"
-                        type="text"
-                        className="form-control jira-key-input"
-                        placeholder="VD: KAN, PROJ..."
-                        value={jiraProjectKey}
-                        onChange={(e) => setJiraProjectKey(e.target.value.toUpperCase())}
-                        disabled={pushLoading}
-                        required
-                      />
+                      {availableJiraProjects.length > 0 ? (
+                        <select
+                          id="jira-project-key"
+                          className="form-control jira-key-input"
+                          value={jiraProjectKey}
+                          onChange={(e) => setJiraProjectKey(e.target.value.toUpperCase())}
+                          disabled={pushLoading}
+                          required
+                        >
+                          {availableJiraProjects.map((p) => (
+                            <option key={p.key} value={p.key}>
+                              {p.key} - {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          id="jira-project-key"
+                          type="text"
+                          className="form-control jira-key-input"
+                          placeholder="VD: SCRUM, KAN..."
+                          value={jiraProjectKey}
+                          onChange={(e) => setJiraProjectKey(e.target.value.toUpperCase())}
+                          disabled={pushLoading}
+                          required
+                        />
+                      )}
                     </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => setShowExportDraftModal(true)}
+                      id="btn-export-draft"
+                      title="Xuất bản nháp yêu cầu thành PDF hoặc Markdown"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        padding: '0.65rem 1.15rem',
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        borderColor: '#8b5cf6',
+                        color: '#8b5cf6',
+                      }}
+                    >
+                      <Download size={18} />
+                      <span>Xuất bản nháp</span>
+                    </button>
 
                     <button
                       type="submit"
@@ -999,6 +1121,14 @@ export const RequirementAnalyzer = ({ project }) => {
           </div>
         )}
       </div>
+
+      {/* Modal Xuất bản nháp AI (Luồng 12) */}
+      <ExportModal
+        isOpen={showExportDraftModal}
+        onClose={() => setShowExportDraftModal(false)}
+        project={project}
+        draftData={editableEpics}
+      />
     </div>
   );
 };
