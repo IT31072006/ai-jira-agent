@@ -23,6 +23,9 @@ async function runTests() {
     }
   }
 
+  let user = null;
+  let originalConfig = null;
+
   try {
     // 1. Lấy user kiểm thử
     const userRes = await db.query('SELECT id, name, email FROM users LIMIT 1');
@@ -30,8 +33,10 @@ async function runTests() {
       console.log('⚠️ Không tìm thấy người dùng trong DB để test.');
       process.exit(1);
     }
-    const user = userRes.rows[0];
+    user = userRes.rows[0];
     console.log(`👤 Sử dụng test user: ${user.name} (${user.email}, ID: ${user.id})`);
+
+    originalConfig = await ConfigModel.findByUserId(user.id);
 
     // 2. Test Idempotency & Database recording
     console.log('\n--- Test 1: Ghi nhận sự kiện & Idempotency trong CSDL ---');
@@ -156,10 +161,24 @@ async function runTests() {
   } catch (err) {
     console.error('❌ Lỗi trong quá trình kiểm thử:', err);
   } finally {
+    if (originalConfig && user) {
+      await ConfigModel.upsert(user.id, {
+        jiraDomain: originalConfig.jira_domain,
+        jiraEmail: originalConfig.jira_email,
+        jiraApiTokenEncrypted: originalConfig.jira_api_token_encrypted,
+        geminiApiKeyEncrypted: originalConfig.gemini_api_key_encrypted,
+        notificationEnabled: originalConfig.notification_enabled,
+        notificationChannel: originalConfig.notification_channel,
+        discordWebhookUrl: originalConfig.discord_webhook_url,
+        slackWebhookUrl: originalConfig.slack_webhook_url,
+        notificationEmail: originalConfig.notification_email,
+      });
+    }
     if (db.pool && db.pool.end) {
       await db.pool.end();
     }
   }
+
 }
 
 runTests();
