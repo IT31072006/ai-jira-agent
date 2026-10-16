@@ -8,10 +8,11 @@ export const jiraApi = {
    * @param {Array} data.epics - Danh sách cấu trúc Epic -> Story -> Task
    * @returns {Promise<any>}
    */
-  pushToJira: async ({ projectKey, epics }) => {
+  pushToJira: async ({ projectKey, epics, projectId }) => {
     const response = await apiClient.post('/jira/push', {
       projectKey,
       epics,
+      projectId,
     });
     return response.data;
   },
@@ -39,11 +40,12 @@ export const jiraApi = {
 
   /**
    * Lấy danh sách các issue Jira đã đồng bộ từ database (Luồng 9: Webhook Sync)
-   * @param {string} [projectKey] - Mã dự án Jira
+   * @param {string|Object} [params] - Mã dự án Jira (string) hoặc object { projectKey, projectId }
    */
-  getSyncedIssues: async (projectKey) => {
+  getSyncedIssues: async (params) => {
+    const queryParams = typeof params === 'string' ? { projectKey: params } : (params || {});
     const response = await apiClient.get('/jira/synced-issues', {
-      params: { projectKey },
+      params: queryParams,
     });
     return response.data;
   },

@@ -67,10 +67,14 @@ class ExportService {
       }
     });
 
-    // 2. Phân nhóm cấp 2: Story
+    // 2. Phân nhóm cấp 2: Story (hoặc Task trực tiếp thuộc Epic)
     issues.forEach((iss) => {
       const type = (iss.issue_type || '').trim().toLowerCase();
-      if (type === 'story') {
+      const isEpic = type === 'epic';
+      const hasEpicParent = iss.parent_key && epicsMap.has(iss.parent_key);
+      const isExplicitStory = type === 'story';
+
+      if (!isEpic && (isExplicitStory || hasEpicParent)) {
         const storyObj = {
           key: iss.issue_key,
           title: iss.summary,
@@ -85,7 +89,7 @@ class ExportService {
         };
         storiesMap.set(iss.issue_key, storyObj);
 
-        if (iss.parent_key && epicsMap.has(iss.parent_key)) {
+        if (hasEpicParent) {
           epicsMap.get(iss.parent_key).stories.push(storyObj);
         } else {
           orphanStories.push(storyObj);
@@ -93,10 +97,13 @@ class ExportService {
       }
     });
 
-    // 3. Phân nhóm cấp 3: Task / Subtask
+    // 3. Phân nhóm cấp 3: Task / Subtask (các issue không phải Epic và chưa thuộc cấp 2)
     issues.forEach((iss) => {
       const type = (iss.issue_type || '').trim().toLowerCase();
-      if (type !== 'epic' && type !== 'story') {
+      const isEpic = type === 'epic';
+      const isStory = storiesMap.has(iss.issue_key);
+
+      if (!isEpic && !isStory) {
         const taskObj = {
           key: iss.issue_key,
           title: iss.summary,

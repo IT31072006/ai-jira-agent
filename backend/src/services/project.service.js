@@ -72,7 +72,7 @@ class ProjectService {
     });
   }
 
-  static async updateProject(id, userId, { name, description }) {
+  static async updateProject(id, userId, { name, description, projectKey }) {
     if (!this.isValidUUID(id)) {
       const error = new Error('Dự án không tồn tại hoặc bạn không có quyền truy cập.');
       error.statusCode = 404;
@@ -84,6 +84,7 @@ class ProjectService {
     const updated = await ProjectModel.update(id, userId, {
       name: validated.name,
       description: validated.description,
+      projectKey: projectKey ? projectKey.trim().toUpperCase() : undefined,
     });
 
     if (!updated) {

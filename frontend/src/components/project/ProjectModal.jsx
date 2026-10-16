@@ -1,23 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, FolderPlus, Edit3, AlertCircle } from 'lucide-react';
 
 export const ProjectModal = ({ isOpen, onClose, onSubmit, initialData = null, isSubmitting = false }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [projectKey, setProjectKey] = useState('');
   const [error, setError] = useState('');
+  const [prevProps, setPrevProps] = useState({ isOpen: false, initialData: null });
+  const isEdit = Boolean(initialData);
 
-  const isEdit = !!initialData;
-
-  useEffect(() => {
+  if (prevProps.isOpen !== isOpen || prevProps.initialData !== initialData) {
+    setPrevProps({ isOpen, initialData });
     if (initialData) {
       setName(initialData.name || '');
       setDescription(initialData.description || '');
+      setProjectKey(initialData.project_key || '');
     } else {
       setName('');
       setDescription('');
+      setProjectKey('');
     }
     setError('');
-  }, [initialData, isOpen]);
+  }
 
   if (!isOpen) return null;
 
@@ -40,6 +44,7 @@ export const ProjectModal = ({ isOpen, onClose, onSubmit, initialData = null, is
       await onSubmit({
         name: trimmedName,
         description: description.trim() || '',
+        projectKey: projectKey.trim().toUpperCase() || undefined,
       });
       onClose();
     } catch (err) {
@@ -87,6 +92,23 @@ export const ProjectModal = ({ isOpen, onClose, onSubmit, initialData = null, is
               required
             />
             <span className="form-hint">Tối đa 150 ký tự</span>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="project-key">
+              Mã dự án Jira (Project Key)
+            </label>
+            <input
+              id="project-key"
+              type="text"
+              className="form-control"
+              value={projectKey}
+              onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
+              placeholder="ví dụ: SCRUM, KAN, PROJ..."
+              disabled={isSubmitting}
+              maxLength={10}
+            />
+            <span className="form-hint">Mã dự án tương ứng trên Jira Cloud (tùy chọn)</span>
           </div>
 
           <div className="form-group">

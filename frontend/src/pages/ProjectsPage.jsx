@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import ProjectModal from '../components/project/ProjectModal';
@@ -44,7 +44,28 @@ export const ProjectsPage = () => {
   };
 
   useEffect(() => {
-    fetchProjects();
+    let isMounted = true;
+    projectApi
+      .getProjects()
+      .then((data) => {
+        if (isMounted) {
+          setProjects(data.projects || []);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err?.response?.data?.message || 'Không thể tải danh sách dự án.');
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleOpenCreateModal = () => {

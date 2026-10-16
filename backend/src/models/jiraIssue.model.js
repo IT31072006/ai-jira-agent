@@ -115,6 +115,67 @@ class JiraIssueModel {
   }
 
   /**
+   * Lấy danh sách issue theo projectId hoặc projectKey linh hoạt
+   * - Khi có projectId: Lọc TUYỆT ĐỐI theo project_id của Workspace nội bộ (không trộn issues từ Workspace khác).
+   * - Khi chỉ có projectKey: Lọc theo project_key (truy vấn ngoài Workspace hoặc bản ghi chưa ánh xạ).
+   */
+  static async findByProject({ projectId, projectKey, userId }) {
+    const cleanId = projectId && typeof projectId === 'string' && projectId.trim()
+      ? projectId.trim()
+      : null;
+    const cleanKey = projectKey && typeof projectKey === 'string' && projectKey.trim()
+      ? projectKey.trim().toUpperCase()
+      : null;
+
+    // TRƯỜNG HỢP 1: Có projectId rõ ràng -> Lọc CHÍNH XÁC theo Workspace nội bộ
+    if (cleanId) {
+      let query = `
+        SELECT * FROM jira_issues
+        WHERE project_id = $1::uuid
+      `;
+      const values = [cleanId];
+
+      if (userId) {
+        query += ` AND (user_id = $2 OR user_id IS NULL)`;
+        values.push(userId);
+      }
+
+      query += ` ORDER BY last_synced_at DESC;`;
+      const { rows } = await db.query(query, values);
+      return rows;
+    }
+
+    // TRƯỜNG HỢP 2: Không có projectId nhưng có projectKey
+    if (cleanKey) {
+      let query = `
+        SELECT * FROM jira_issues
+        WHERE UPPER(project_key) = UPPER($1)
+      `;
+      const values = [cleanKey];
+
+      if (userId) {
+        query += ` AND (user_id = $2 OR user_id IS NULL)`;
+        values.push(userId);
+      }
+
+      query += ` ORDER BY last_synced_at DESC;`;
+      const { rows } = await db.query(query, values);
+      return rows;
+    }
+
+    // TRƯỜNG HỢP 3: Không có cả projectId và projectKey
+    if (userId) {
+      const { rows } = await db.query(
+        'SELECT * FROM jira_issues WHERE user_id = $1 OR user_id IS NULL ORDER BY last_synced_at DESC LIMIT 100',
+        [userId]
+      );
+      return rows;
+    }
+
+    return await this.findAll();
+  }
+
+  /**
    * Lấy tất cả issue đồng bộ
    */
   static async findAll(limit = 100) {
@@ -139,19 +200,46 @@ class JiraIssueModel {
     const { rows } = await db.query(query, [issueKey.trim().toUpperCase()]);
     return rows[0] || null;
   }
+
   /**
    * Lấy danh sách issue phục vụ xuất tài liệu phân cấp (Luồng 12)
    */
   static async findByProjectForExport({ projectId, projectKey, userId }) {
-    const query = `
+    const cleanId = projectId && typeof projectId === 'string' && projectId.trim()
+      ? projectId.trim()
+      : null;
+    const cleanKey = projectKey && typeof projectKey === 'string' && projectKey.trim()
+      ? projectKey.trim().toUpperCase()
+      : null;
+
+    let query = `
       SELECT id, issue_key, issue_id, project_key, summary, description,
              issue_type, status, status_category, assignee, jira_url,
              parent_key, last_synced_at, created_at, updated_at
       FROM jira_issues
-      WHERE (
-        project_id = $1
-        OR (project_key = $2 AND (user_id = $3 OR user_id IS NULL))
-      )
+    `;
+    const values = [];
+
+    if (cleanId) {
+      query += ` WHERE project_id = $1::uuid`;
+      values.push(cleanId);
+      if (userId) {
+        query += ` AND (user_id = $2 OR user_id IS NULL)`;
+        values.push(userId);
+      }
+    } else if (cleanKey) {
+      query += ` WHERE UPPER(project_key) = UPPER($1)`;
+      values.push(cleanKey);
+      if (userId) {
+        query += ` AND (user_id = $2 OR user_id IS NULL)`;
+        values.push(userId);
+      }
+    } else if (userId) {
+      query += ` WHERE user_id = $1 OR user_id IS NULL`;
+      values.push(userId);
+    }
+
+    query += `
       ORDER BY 
         CASE 
           WHEN LOWER(issue_type) = 'epic' THEN 1
@@ -161,11 +249,8 @@ class JiraIssueModel {
         created_at ASC,
         issue_key ASC;
     `;
-    const { rows } = await db.query(query, [
-      projectId || null,
-      projectKey ? projectKey.trim().toUpperCase() : null,
-      userId || null,
-    ]);
+
+    const { rows } = await db.query(query, values);
     return rows;
   }
 }

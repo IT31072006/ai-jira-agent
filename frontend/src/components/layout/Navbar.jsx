@@ -1,6 +1,5 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/auth-context';
 import { Sparkles, LayoutDashboard, FolderGit2, Settings, LogOut } from 'lucide-react';
 
 export const Navbar = () => {

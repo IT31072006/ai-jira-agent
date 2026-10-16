@@ -7,6 +7,7 @@ const aiRoutes = require('./ai.routes');
 const jiraRoutes = require('./jira.routes');
 const dashboardRoutes = require('./dashboard.routes');
 const JiraController = require('../controllers/jira.controller');
+const NotificationController = require('../controllers/notification.controller');
 
 const router = express.Router();
 
@@ -24,4 +25,8 @@ router.use('/dashboard', dashboardRoutes);
 // Alias cho webhook đồng bộ Jira theo chuẩn spec tài liệu
 router.post('/webhooks/jira-sync', JiraController.handleWebhook);
 
+// Internal route: n8n Workflow 11 dispatch email qua SMTP
+router.post('/notifications/dispatch-email', NotificationController.dispatchEmail);
+
 module.exports = router;
+

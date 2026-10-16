@@ -77,6 +77,19 @@ const analyzeRequirement = async (requirement) => {
     }
   }
 
+  if (
+    lastErr &&
+    (lastErr.code === 'ECONNREFUSED' ||
+      lastErr.message?.includes('ECONNREFUSED') ||
+      lastErr.message?.includes('5678'))
+  ) {
+    const customErr = new Error(
+      'Không thể kết nối đến máy chủ tự động hóa n8n (cổng 5678 đang ngoại tuyến). Vui lòng khởi động n8n daemon/container để tiếp tục.'
+    );
+    customErr.statusCode = 503;
+    throw customErr;
+  }
+
   throw lastErr;
 };
 

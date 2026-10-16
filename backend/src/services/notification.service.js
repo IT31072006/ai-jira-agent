@@ -4,6 +4,7 @@ const db = require('../config/db');
 const ConfigModel = require('../models/config.model');
 const ProjectModel = require('../models/project.model');
 const UserModel = require('../models/user.model');
+const EmailService = require('./email.service');
 
 const N8N_NOTIFICATION_WEBHOOK_URL =
   process.env.N8N_NOTIFICATION_WEBHOOK_URL ||
@@ -243,7 +244,53 @@ class NotificationService {
         'X-Webhook-Secret': NOTIFICATION_WEBHOOK_SECRET,
       }, 15000);
 
-      // 7. Ghi nhận thành công
+      const n8nData = response.data;
+      const isFailed = !n8nData || n8nData.success === false || (n8nData.statusCode && n8nData.statusCode >= 400);
+
+      if (isFailed) {
+        const errorMsg = n8nData?.error || n8nData?.message || 'n8n workflow xử lý thông báo thất bại';
+        await this.markEventFailed(eventId, errorMsg);
+        console.error(`[NotificationService] Thông báo thất bại cho Epic ${epic.key}: ${errorMsg}`);
+        return {
+          success: false,
+          error: errorMsg,
+          data: n8nData,
+        };
+      }
+
+      // 7. Nếu là kênh email, thực hiện gửi email thực tế qua EmailService (SMTP)
+      if (channel === 'email') {
+        const formatted = n8nData.formattedPayload || {};
+        const emailResult = await EmailService.sendEmail({
+          to: targetEmail,
+          subject: formatted.subject || `[AI Jira Agent] 🎉 New Epic Created: ${epic.key} - ${epic.title || epic.summary}`,
+          html: formatted.html || `<p>Epic <b>${epic.key}</b> đã được tạo thành công trên Jira.</p>`,
+        });
+
+        if (!emailResult.success) {
+          await this.markEventFailed(eventId, emailResult.error);
+          console.error(`[NotificationService] Gửi email qua SMTP thất bại cho Epic ${epic.key}:`, emailResult.error);
+          return {
+            success: false,
+            error: emailResult.error,
+            statusCode: emailResult.statusCode || 502,
+            data: n8nData,
+          };
+        }
+
+        await this.markEventSent(eventId, { ...n8nData, emailDelivery: emailResult });
+        console.log(`[NotificationService] Gửi email SMTP [${eventId}] cho Epic ${epic.key} thành công!`);
+
+        return {
+          success: true,
+          eventId,
+          epicKey: epic.key,
+          channel,
+          data: { ...n8nData, emailDelivery: emailResult },
+        };
+      }
+
+      // Ghi nhận thành công cho các kênh webhook ngoài (discord, slack)
       await this.markEventSent(eventId, response.data);
       console.log(`[NotificationService] Gửi thông báo [${eventId}] cho Epic ${epic.key} thành công!`);
 
@@ -362,20 +409,58 @@ class NotificationService {
         'X-Webhook-Secret': NOTIFICATION_WEBHOOK_SECRET,
       }, 15000);
 
+      const n8nData = response.data;
+      const isFailed = !n8nData || n8nData.success === false || (n8nData.statusCode && n8nData.statusCode >= 400);
+
+      if (isFailed) {
+        const errorMsg = n8nData?.error || n8nData?.message || 'n8n workflow xử lý thông báo thất bại';
+        await this.markEventFailed(eventId, errorMsg);
+        const err = new Error(errorMsg);
+        err.statusCode = n8nData?.statusCode || 502;
+        throw err;
+      }
+
+      // Nếu là kênh email, thực hiện gửi email thử nghiệm thực tế qua EmailService (SMTP)
+      if (channel === 'email') {
+        const formatted = n8nData.formattedPayload || {};
+        const emailResult = await EmailService.sendEmail({
+          to: targetEmail,
+          subject: formatted.subject || `[AI Jira Agent] 🎉 Thông báo thử nghiệm (Flow 11)`,
+          html: formatted.html || `<p>Đây là thông báo thử nghiệm từ AI Jira Agent gửi qua máy chủ SMTP.</p>`,
+        });
+
+        if (!emailResult.success) {
+          await this.markEventFailed(eventId, emailResult.error);
+          const err = new Error(emailResult.error);
+          err.statusCode = emailResult.statusCode || 502;
+          throw err;
+        }
+
+        await this.markEventSent(eventId, { ...n8nData, emailDelivery: emailResult });
+
+        return {
+          success: true,
+          eventId,
+          channel,
+          message: `✓ Đã gửi email thử nghiệm thành công tới ${targetEmail} qua máy chủ SMTP!`,
+          data: { ...n8nData, emailDelivery: emailResult },
+        };
+      }
+
       await this.markEventSent(eventId, response.data);
 
       return {
         success: true,
         eventId,
         channel,
-        message: `Đã gửi thông báo thử nghiệm thành công qua kênh ${channel.toUpperCase()}!`,
+        message: response.data?.message || `Đã gửi thông báo thử nghiệm thành công qua kênh ${channel.toUpperCase()}!`,
         data: response.data,
       };
     } catch (error) {
       await this.markEventFailed(eventId, error.message);
-      const msg = error.response?.data?.message || error.message || 'Lỗi khi gọi sang n8n webhook thông báo.';
-      const err = new Error(`Không thể gửi thông báo thử nghiệm qua n8n: ${msg}`);
-      err.statusCode = error.response?.status || 502;
+      const msg = error.response?.data?.error || error.response?.data?.message || error.message || 'Lỗi khi gọi sang n8n webhook thông báo.';
+      const err = new Error(msg);
+      err.statusCode = error.statusCode || error.response?.status || 502;
       throw err;
     }
   }

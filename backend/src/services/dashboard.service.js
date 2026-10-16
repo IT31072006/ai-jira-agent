@@ -21,12 +21,10 @@ class DashboardService {
       }
 
       const pKey = (project.project_key || ProjectModel.generateDefaultKey(project.name)).trim().toUpperCase();
-      params.push(projectId, pKey);
+      params.push(projectId);
       whereClause = `
         WHERE (
-          j.project_id = $2
-          OR (j.user_id = $1 AND UPPER(j.project_key) = $3)
-          OR UPPER(j.project_key) = $3
+          j.project_id = $2 AND (j.user_id = $1 OR j.user_id IS NULL)
         )
       `;
     } else {
@@ -34,11 +32,6 @@ class DashboardService {
         WHERE (
           j.user_id = $1
           OR j.project_id IN (SELECT id FROM projects WHERE user_id = $1)
-          OR UPPER(j.project_key) IN (
-            SELECT DISTINCT UPPER(COALESCE(project_key, '')) FROM projects WHERE user_id = $1 AND project_key IS NOT NULL AND project_key != ''
-            UNION
-            SELECT DISTINCT UPPER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]', '', 'g')) FROM projects WHERE user_id = $1
-          )
         )
       `;
     }

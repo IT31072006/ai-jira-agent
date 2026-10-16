@@ -58,14 +58,23 @@ class ProjectModel {
     return rows[0];
   }
 
-  static async update(id, userId, { name, description }) {
+  static async update(id, userId, { name, description, projectKey }) {
     const query = `
       UPDATE projects
-      SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3 AND user_id = $4
-      RETURNING id, user_id, name, description, created_at, updated_at;
+      SET name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          project_key = COALESCE($3, project_key),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4 AND user_id = $5
+      RETURNING id, user_id, name, description, project_key, created_at, updated_at;
     `;
-    const { rows } = await db.query(query, [name, description || null, id, userId]);
+    const { rows } = await db.query(query, [
+      name || null,
+      description !== undefined ? description : null,
+      projectKey ? projectKey.trim().toUpperCase() : null,
+      id,
+      userId,
+    ]);
     return rows[0] || null;
   }
 
