@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const axios = require('axios');
 const ConfigModel = require('../models/config.model');
 const JiraIssueModel = require('../models/jiraIssue.model');
@@ -36,8 +37,9 @@ class JiraService {
    * @param {string} params.userId - UUID của người dùng hiện tại
    * @param {string} params.projectKey - Jira Project Key (vd: KAN, PROJ)
    * @param {Array} params.epics - Danh sách Epic -> Story -> Task cần tạo
+   * @param {string} [params.projectId] - UUID của project nội bộ nếu có
    */
-  static async pushToJira({ userId, projectKey, epics }) {
+  static async pushToJira({ userId, projectKey, epics, projectId }) {
     if (!projectKey || typeof projectKey !== 'string' || !projectKey.trim()) {
       const err = new Error('Vui lòng cung cấp Jira Project Key (ví dụ: KAN, PROJ).');
       err.statusCode = 400;
@@ -123,13 +125,21 @@ class JiraService {
         });
       }
 
-    // Tìm project liên kết với projectKey và user nếu có
+    // Xác định chính xác Workspace liên kết nếu được cung cấp
     let linkedProjectId = null;
-    try {
-      const foundProject = await ProjectModel.findByProjectKeyAndUserId(projectKey, userId);
-      if (foundProject) linkedProjectId = foundProject.id;
-    } catch (pErr) {
-      // Non-blocking
+    if (projectId && typeof projectId === 'string' && projectId.trim()) {
+      try {
+        const foundProject = await ProjectModel.findByIdAndUserId(projectId.trim(), userId);
+        if (foundProject) {
+          linkedProjectId = foundProject.id;
+          // Tự động đồng bộ project_key cho project nội bộ nếu chưa khớp
+          await ProjectModel.update(linkedProjectId, userId, {
+            projectKey: projectKey.trim().toUpperCase(),
+          });
+        }
+      } catch (pErr) {
+        console.warn('[JiraService] Lỗi đồng bộ project_key:', pErr.message);
+      }
     }
 
       // Lưu lại các issue vừa tạo vào cơ sở dữ liệu để theo dõi & đồng bộ ngược (Luồng 9)
@@ -539,23 +549,92 @@ class JiraService {
   }
 
   /**
+   * Xác minh chữ ký số HMAC-SHA256 của Atlassian Jira Cloud (nếu có cấu hình secret)
+   * Theo chuẩn Atlassian Jira Webhook:
+   * Header: X-Hub-Signature: sha256=<hex_hmac>
+   * @param {Object} req - Express Request object
+   */
+  static verifyWebhookSignature(req) {
+    const configuredSecret = process.env.JIRA_WEBHOOK_SECRET;
+    // Nếu môi trường không cấu hình secret, cho phép nhận webhook bình thường (phù hợp với Jira Cloud: "Leave blank for no secret")
+    if (!configuredSecret || !configuredSecret.trim()) {
+      return { valid: true };
+    }
+
+    const signatureHeader =
+      req.headers['x-hub-signature'] ||
+      req.headers['x-hub-signature-256'] ||
+      req.headers['x-atlassian-webhook-signature'];
+
+    if (!signatureHeader) {
+      return {
+        valid: false,
+        reason: 'Thiếu header chữ ký X-Hub-Signature từ Jira Cloud.',
+      };
+    }
+
+    // Format header thường là "sha256=<hex>" hoặc hex thuần
+    const parts = signatureHeader.split('=');
+    const providedHex = (parts.length === 2 ? parts[1] : parts[0]).trim();
+
+    try {
+      const rawPayload =
+        req.rawBody ||
+        (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+
+      const expectedHex = crypto
+        .createHmac('sha256', configuredSecret.trim())
+        .update(rawPayload)
+        .digest('hex');
+
+      const bufProvided = Buffer.from(providedHex, 'hex');
+      const bufExpected = Buffer.from(expectedHex, 'hex');
+
+      if (
+        bufProvided.length !== bufExpected.length ||
+        !crypto.timingSafeEqual(bufProvided, bufExpected)
+      ) {
+        return {
+          valid: false,
+          reason: 'Chữ ký Webhook HMAC-SHA256 không hợp lệ (không khớp secret).',
+        };
+      }
+
+      return { valid: true };
+    } catch (err) {
+      return {
+        valid: false,
+        reason: 'Lỗi trong quá trình xác minh chữ ký Webhook HMAC.',
+      };
+    }
+  }
+
+  /**
    * Xử lý Webhook gửi từ Jira Cloud (Luồng 9: Đồng bộ trạng thái ngược)
    * @param {Object} payload - Payload gửi từ Jira Webhook
    */
   static async handleJiraWebhook(payload) {
     if (!payload || typeof payload !== 'object') {
-      const err = new Error('Payload webhook không hợp lệ.');
+      const err = new Error('Payload webhook không hợp lệ (yêu cầu JSON object).');
       err.statusCode = 400;
       throw err;
     }
 
     const webhookEvent = payload.webhookEvent || 'jira:issue_updated';
     const issueObj = payload.issue || {};
-    const issueKey = issueObj.key || payload.issueKey;
+    const rawIssueKey = issueObj.key || payload.issueKey;
 
-    if (!issueKey) {
-      console.warn('[JiraService] Webhook không chứa issue key, bỏ qua.');
+    if (!rawIssueKey || typeof rawIssueKey !== 'string') {
+      console.warn('[JiraService] Webhook không chứa issue key hợp lệ, bỏ qua.');
       return { action: 'ignored', message: 'Không tìm thấy issue key trong payload.' };
+    }
+
+    const issueKey = rawIssueKey.trim().toUpperCase();
+
+    // Kiểm tra định dạng chuẩn của Jira Issue Key (ví dụ: KAN-12, PROJ-1)
+    if (!/^[A-Z0-9]+-[0-9]+$/.test(issueKey)) {
+      console.warn(`[JiraService] Định dạng issue key "${issueKey}" không hợp lệ, bỏ qua.`);
+      return { action: 'ignored', message: `Mã issue "${issueKey}" không đúng định dạng chuẩn của Jira.` };
     }
 
     // Nếu là sự kiện xóa issue trên Jira
@@ -621,14 +700,93 @@ class JiraService {
   }
 
   /**
-   * Lấy danh sách các issue Jira đã đồng bộ từ database
-   * @param {string} [projectKey] - Mã dự án Jira
+   * Đồng bộ đối soát trạng thái mới nhất trực tiếp từ Jira Cloud REST API
+   * Phục vụ trường hợp Webhook bị trễ hoặc Cloudflare tunnel bị ngắt kết nối
+   * @param {Object} params
+   * @param {string} params.userId
+   * @param {string} [params.projectId]
+   * @param {string} [params.projectKey]
    */
-  static async getSyncedIssues(projectKey) {
-    if (projectKey && projectKey.trim()) {
-      return await JiraIssueModel.findByProjectKey(projectKey.trim().toUpperCase());
+  static async syncIssuesFromJiraCloud({ userId, projectId, projectKey }) {
+    try {
+      const config = await ConfigModel.findByUserId(userId);
+      if (
+        !config ||
+        !config.jira_domain ||
+        !config.jira_email ||
+        !config.jira_api_token_encrypted
+      ) {
+        return;
+      }
+
+      let jiraApiToken;
+      try {
+        jiraApiToken = CryptoService.decrypt(config.jira_api_token_encrypted);
+      } catch (e) {
+        return;
+      }
+
+      const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+      const authHeader =
+        'Basic ' +
+        Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
+
+      const dbIssues = await JiraIssueModel.findByProject({ projectId, projectKey, userId });
+      if (!Array.isArray(dbIssues) || dbIssues.length === 0) return;
+
+      await Promise.allSettled(
+        dbIssues.map(async (issue) => {
+          try {
+            const res = await axios.get(`${cleanDomain}/rest/api/2/issue/${issue.issue_key}`, {
+              headers: {
+                Authorization: authHeader,
+                Accept: 'application/json',
+              },
+              timeout: 6000,
+            });
+
+            const fields = res.data?.fields || {};
+            const statusObj = fields.status || {};
+            const jiraStatus = statusObj.name;
+            const statusCategory = statusObj.statusCategory?.name || jiraStatus;
+            const assignee = fields.assignee?.displayName || null;
+
+            if (
+              jiraStatus &&
+              (jiraStatus !== issue.status || (assignee && assignee !== issue.assignee))
+            ) {
+              await JiraIssueModel.updateStatus({
+                issueKey: issue.issue_key,
+                status: jiraStatus,
+                statusCategory,
+                assignee,
+              });
+            }
+          } catch (itemErr) {
+            // Bỏ qua issue không tìm thấy trên Jira hoặc lỗi mạng
+          }
+        })
+      );
+    } catch (err) {
+      console.warn('[JiraService] Lỗi khi đồng bộ từ Jira Cloud:', err.message);
     }
-    return await JiraIssueModel.findAll();
+  }
+
+  /**
+   * Lấy danh sách các issue Jira đã đồng bộ từ database
+   * @param {string|Object} [params] - Mã dự án Jira (string) hoặc object { projectKey, projectId, userId }
+   */
+  static async getSyncedIssues(params) {
+    if (typeof params === 'string') {
+      const projectKey = params;
+      if (projectKey && projectKey.trim()) {
+        return await JiraIssueModel.findByProjectKey(projectKey.trim().toUpperCase());
+      }
+      return await JiraIssueModel.findAll();
+    }
+
+    const { projectKey, projectId, userId } = params || {};
+    return await JiraIssueModel.findByProject({ projectKey, projectId, userId });
   }
 
   /**

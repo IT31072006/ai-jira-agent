@@ -1,4 +1,5 @@
 const JiraService = require('../services/jira.service');
+const ProjectModel = require('../models/project.model');
 
 class JiraController {
   /**
@@ -8,12 +9,22 @@ class JiraController {
   static async push(req, res, next) {
     try {
       const userId = req.user.id;
-      const { projectKey, epics } = req.body;
+      const { projectKey, epics, projectId } = req.body;
+
+      if (projectId && typeof projectId === 'string' && projectId.trim()) {
+        const project = await ProjectModel.findByIdAndUserId(projectId.trim(), userId);
+        if (!project) {
+          const err = new Error('Dự án / Workspace không tồn tại hoặc bạn không có quyền truy cập.');
+          err.statusCode = 404;
+          throw err;
+        }
+      }
 
       const result = await JiraService.pushToJira({
         userId,
         projectKey,
         epics,
+        projectId,
       });
 
       return res.status(200).json({
@@ -75,7 +86,26 @@ class JiraController {
    */
   static async handleWebhook(req, res, next) {
     try {
+      // 1. Kiểm tra chữ ký HMAC nếu có cấu hình JIRA_WEBHOOK_SECRET
+      const sigCheck = JiraService.verifyWebhookSignature(req);
+      if (!sigCheck.valid) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized',
+          message: sigCheck.reason,
+        });
+      }
+
+      // 2. Kiểm tra tính hợp lệ của Payload
       const payload = req.body;
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Bad Request',
+          message: 'Payload webhook không hợp lệ (yêu cầu JSON object).',
+        });
+      }
+
       const result = await JiraService.handleJiraWebhook(payload);
 
       return res.status(200).json({
@@ -93,13 +123,43 @@ class JiraController {
    */
   static async getSyncedIssues(req, res, next) {
     try {
-      const { projectKey } = req.query;
-      const issues = await JiraService.getSyncedIssues(projectKey);
+      const userId = req.user?.id;
+      const { projectKey, projectId } = req.query;
+
+      // 1. Kiểm tra tính hợp lệ và quyền sở hữu Workspace nếu có projectId
+      if (projectId && typeof projectId === 'string' && projectId.trim()) {
+        const cleanProjectId = projectId.trim();
+        const project = await ProjectModel.findByIdAndUserId(cleanProjectId, userId);
+        if (!project) {
+          const err = new Error('Dự án / Workspace không tồn tại hoặc bạn không có quyền truy cập.');
+          err.statusCode = 404;
+          throw err;
+        }
+      }
+
+      // Tự động đối soát và kéo trạng thái mới nhất từ Jira Cloud REST API nếu có cờ sync=true
+      if ((req.query.sync === 'true' || req.query.reconcile === 'true') && userId) {
+        await JiraService.syncIssuesFromJiraCloud({ userId, projectId, projectKey });
+      }
+
+      const issues = await JiraService.getSyncedIssues({ projectKey, projectId, userId });
+
+      const publicBaseUrl = process.env.PUBLIC_WEBHOOK_BASE_URL
+        ? process.env.PUBLIC_WEBHOOK_BASE_URL.trim().replace(/\/+$/, '')
+        : '';
+      const publicWebhookUrl = publicBaseUrl
+        ? `${publicBaseUrl}/api/jira/webhook-sync`
+        : '';
 
       return res.status(200).json({
         success: true,
         count: issues.length,
         issues,
+        publicWebhookBaseUrl: publicBaseUrl || null,
+        publicWebhookUrl: publicWebhookUrl || null,
+        isWebhookSecretConfigured: Boolean(
+          process.env.JIRA_WEBHOOK_SECRET && process.env.JIRA_WEBHOOK_SECRET.trim()
+        ),
       });
     } catch (error) {
       next(error);

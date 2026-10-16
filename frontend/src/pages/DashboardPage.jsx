@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/layout/Navbar';
 import { projectApi } from '../api/projectApi';
 import { dashboardApi } from '../api/dashboardApi';
@@ -8,7 +7,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -27,24 +25,19 @@ import {
   BookOpen,
   CheckSquare,
   Calendar,
-  TrendingUp,
-  PieChart as PieIcon,
   BarChart3,
   RefreshCw,
   ChevronDown,
   AlertCircle,
   ArrowRight,
-  PlusCircle,
   CheckCircle2,
   Database,
-  Layers,
   Sparkles,
-  ShieldCheck,
   Activity,
 } from 'lucide-react';
 
-// Custom Tooltip cho Recharts tương thích dark mode
-const CustomChartTooltip = ({ active, payload, label }) => {
+// Custom Tooltip cho Recharts tương thích dark mode, memoized để tránh re-render thừa
+const CustomChartTooltip = memo(({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div className="recharts-custom-tooltip">
@@ -65,11 +58,11 @@ const CustomChartTooltip = ({ active, payload, label }) => {
     );
   }
   return null;
-};
+});
+
+CustomChartTooltip.displayName = 'CustomChartTooltip';
 
 export const DashboardPage = () => {
-  const { user } = useAuth();
-
   // State quản lý dự án & bộ lọc
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -86,33 +79,79 @@ export const DashboardPage = () => {
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  // 1. Tải danh sách dự án của người dùng để populate vào dropdown lọc
-  const fetchUserProjects = useCallback(async () => {
-    try {
-      const res = await projectApi.getProjects();
-      setProjects(res.projects || []);
-    } catch (err) {
-      console.error('Không thể tải danh sách dự án:', err);
-    }
+  // 1. Tải danh sách dự án (1 lần duy nhất khi mount)
+  useEffect(() => {
+    let isMounted = true;
+    projectApi
+      .getProjects()
+      .then((res) => {
+        if (isMounted) {
+          setProjects(res.projects || []);
+        }
+      })
+      .catch((err) => {
+        console.error('Không thể tải danh sách dự án:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // 2. Tải toàn bộ dữ liệu thống kê từ Backend
-  const fetchDashboardData = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError('');
+  // 2. Tải toàn bộ dữ liệu thống kê từ Backend khi selectedProjectId thay đổi
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      dashboardApi.getSummary(selectedProjectId || undefined),
+      dashboardApi.getIssueBreakdown(selectedProjectId || undefined),
+      dashboardApi.getStatusDistribution(selectedProjectId || undefined),
+      dashboardApi.getCreationTrend(selectedProjectId || undefined),
+    ])
+      .then(([summaryRes, breakdownRes, statusRes, trendRes]) => {
+        if (isMounted) {
+          setSummary(summaryRes.data || null);
+          setBreakdown(breakdownRes.data || null);
+          setStatusDist(statusRes.data || null);
+          setTrend(trendRes.data || null);
+          setLastUpdated(new Date());
+          setError('');
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.error('Lỗi khi tải dữ liệu Dashboard:', err);
+          setError(
+            err?.response?.data?.message || 'Không thể tải dữ liệu thống kê. Vui lòng thử lại.'
+          );
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      });
 
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProjectId]);
+
+  // Làm mới hoặc thử lại số liệu chủ động theo hành động của người dùng
+  const fetchDashboardData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError('');
+
+    try {
       const [summaryRes, breakdownRes, statusRes, trendRes] = await Promise.all([
         dashboardApi.getSummary(selectedProjectId || undefined),
         dashboardApi.getIssueBreakdown(selectedProjectId || undefined),
         dashboardApi.getStatusDistribution(selectedProjectId || undefined),
         dashboardApi.getCreationTrend(selectedProjectId || undefined),
       ]);
-
       setSummary(summaryRes.data || null);
       setBreakdown(breakdownRes.data || null);
       setStatusDist(statusRes.data || null);
@@ -129,14 +168,6 @@ export const DashboardPage = () => {
     }
   }, [selectedProjectId]);
 
-  useEffect(() => {
-    fetchUserProjects();
-  }, [fetchUserProjects]);
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
   const handleRefresh = () => {
     fetchDashboardData(true);
   };
@@ -145,18 +176,26 @@ export const DashboardPage = () => {
     setSelectedProjectId(e.target.value);
   };
 
-  // Chuẩn bị dữ liệu cho biểu đồ cột so sánh
-  const breakdownChartData = breakdown?.breakdown?.map((item) => ({
-    name: item.name,
-    'Tháng này': item.thisMonth,
-    'Toàn thời gian': item.allTime,
-  })) || [];
+  // Memoize dữ liệu cho biểu đồ cột so sánh
+  const breakdownChartData = useMemo(() => {
+    return (
+      breakdown?.breakdown?.map((item) => ({
+        name: item.name,
+        'Tháng này': item.thisMonth,
+        'Toàn thời gian': item.allTime,
+      })) || []
+    );
+  }, [breakdown]);
 
-  // Chuẩn bị dữ liệu cho biểu đồ tròn trạng thái
-  const statusPieData = statusDist?.distribution?.filter((d) => d.count > 0) || [];
+  // Memoize dữ liệu cho biểu đồ tròn trạng thái
+  const statusPieData = useMemo(() => {
+    return statusDist?.distribution?.filter((d) => d.count > 0) || [];
+  }, [statusDist]);
 
-  // Chuẩn bị dữ liệu cho biểu đồ đường xu hướng
-  const trendChartData = trend?.trend || [];
+  // Memoize dữ liệu cho biểu đồ đường xu hướng
+  const trendChartData = useMemo(() => {
+    return trend?.trend || [];
+  }, [trend]);
 
   // Định dạng ngày hiển thị
   const formatTime = (date) => {
@@ -415,7 +454,7 @@ export const DashboardPage = () => {
                       </div>
 
                       <div className="chart-wrapper">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" debounce={50}>
                           <BarChart
                             data={breakdownChartData}
                             margin={{ top: 10, right: 20, left: -10, bottom: 0 }}
@@ -477,7 +516,7 @@ export const DashboardPage = () => {
                             Chưa có dữ liệu trạng thái
                           </div>
                         ) : (
-                          <ResponsiveContainer width="100%" height="100%">
+                          <ResponsiveContainer width="100%" height="100%" debounce={50}>
                             <PieChart>
                               <Pie
                                 data={statusPieData}
@@ -538,7 +577,7 @@ export const DashboardPage = () => {
                     </div>
 
                     <div className="chart-wrapper" style={{ height: '300px' }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" debounce={50}>
                         <AreaChart
                           data={trendChartData}
                           margin={{ top: 10, right: 20, left: -10, bottom: 0 }}

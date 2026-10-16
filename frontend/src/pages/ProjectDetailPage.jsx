@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import ProjectModal from '../components/project/ProjectModal';
@@ -9,15 +9,12 @@ import { projectApi } from '../api/projectApi';
 import {
   ArrowLeft,
   FolderGit2,
-  Calendar,
   Clock,
   Edit,
   Trash2,
   AlertCircle,
   CheckCircle2,
   FileText,
-  Sparkles,
-  Layers,
   Download,
 } from 'lucide-react';
 
@@ -36,23 +33,38 @@ export const ProjectDetailPage = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [activeDraft, setActiveDraft] = useState(null);
 
-  const fetchProjectDetail = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const data = await projectApi.getProjectById(id);
-      setProject(data.project);
-    } catch (err) {
-      setError(
-        err?.response?.data?.message || 'Không tìm thấy dự án hoặc bạn không có quyền truy cập.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleDraftChange = useCallback((draft) => {
+    setActiveDraft((prev) => {
+      if (prev === draft) return prev;
+      return draft;
+    });
+  }, []);
 
   useEffect(() => {
-    fetchProjectDetail();
+    let isMounted = true;
+    projectApi
+      .getProjectById(id)
+      .then((data) => {
+        if (isMounted) {
+          setProject(data.project);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(
+            err?.response?.data?.message || 'Không tìm thấy dự án hoặc bạn không có quyền truy cập.'
+          );
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const handleUpdate = async (formData) => {
@@ -140,6 +152,11 @@ export const ProjectDetailPage = () => {
                     <h1 className="project-title-large">{project.name}</h1>
                     <p className="project-id-text">
                       Project ID: <code>{project.id}</code>
+                      {project.project_key && (
+                        <span style={{ marginLeft: '0.75rem' }}>
+                          Jira Key: <code style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>{project.project_key}</code>
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -220,10 +237,10 @@ export const ProjectDetailPage = () => {
               </div>
 
               {/* Flow 5 AI Requirement Analyzer & Flow 7 Jira Integration */}
-              <RequirementAnalyzer project={project} onDraftChange={setActiveDraft} />
+              <RequirementAnalyzer key={`analyzer-${project?.id}`} project={project} onDraftChange={handleDraftChange} />
 
               {/* Flow 9 Jira Webhook Sync Board */}
-              <JiraWebhookSyncBoard project={project} />
+              <JiraWebhookSyncBoard key={`sync-board-${project?.id}`} project={project} />
             </>
           )}
         </div>

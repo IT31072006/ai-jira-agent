@@ -11,18 +11,20 @@ export const projectApi = {
     return response.data;
   },
 
-  createProject: async ({ name, description }) => {
+  createProject: async ({ name, description, projectKey }) => {
     const response = await apiClient.post('/projects', {
       name,
       description,
+      projectKey,
     });
     return response.data;
   },
 
-  updateProject: async (id, { name, description }) => {
+  updateProject: async (id, { name, description, projectKey }) => {
     const response = await apiClient.put(`/projects/${id}`, {
       name,
       description,
+      projectKey,
     });
     return response.data;
   },

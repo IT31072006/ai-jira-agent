@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { configApi } from '../api/configApi';
 import {
@@ -68,7 +68,33 @@ export const SettingsPage = () => {
   };
 
   useEffect(() => {
-    loadConfig();
+    let isMounted = true;
+    configApi
+      .getConfig()
+      .then((res) => {
+        if (isMounted && res && res.data) {
+          setConfig(res.data);
+          setJiraDomain(res.data.jira_domain || '');
+          setJiraEmail(res.data.jira_email || '');
+          setNotificationEnabled(res.data.notification_enabled !== false);
+          setNotificationChannel(res.data.notification_channel || 'discord');
+          setNotificationEmail(res.data.notification_email || '');
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setErrorMsg(err?.response?.data?.message || 'Không thể tải cấu hình tích hợp.');
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleSave = async (e) => {

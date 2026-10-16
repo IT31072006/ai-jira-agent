@@ -46,9 +46,13 @@ class ProjectController {
     try {
       const userId = req.user.id;
       const { id } = req.params;
-      const { name, description } = req.body;
+      const { name, description, projectKey, project_key } = req.body;
 
-      const project = await ProjectService.updateProject(id, userId, { name, description });
+      const project = await ProjectService.updateProject(id, userId, {
+        name,
+        description,
+        projectKey: projectKey || project_key,
+      });
       return res.status(200).json({
         message: 'Cập nhật dự án thành công.',
         project,

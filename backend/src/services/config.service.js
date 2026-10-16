@@ -9,11 +9,12 @@ class ConfigService {
 
     // Cho phép https://company.atlassian.net hoặc company.atlassian.net hoặc http/https URLs
     try {
-      const urlToTest = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+      let urlToTest = trimmed.startsWith('http://') || trimmed.startsWith('https://')
         ? trimmed
         : `https://${trimmed}`;
+      urlToTest = urlToTest.replace(/\/+$/, '');
       const parsed = new URL(urlToTest);
-      if (!parsed.hostname || parsed.hostname.length < 3) {
+      if (!parsed.hostname || parsed.hostname.length < 3 || !parsed.hostname.includes('.')) {
         throw new Error('Invalid');
       }
       return urlToTest;
@@ -39,6 +40,16 @@ class ConfigService {
   }
 
   static formatMaskedResponse(config) {
+    const publicBaseUrl = process.env.PUBLIC_WEBHOOK_BASE_URL
+      ? process.env.PUBLIC_WEBHOOK_BASE_URL.trim().replace(/\/+$/, '')
+      : '';
+    const publicJiraWebhookUrl = publicBaseUrl
+      ? `${publicBaseUrl}/api/jira/webhook-sync`
+      : '';
+    const isJiraWebhookSecretConfigured = Boolean(
+      process.env.JIRA_WEBHOOK_SECRET && process.env.JIRA_WEBHOOK_SECRET.trim()
+    );
+
     if (!config) {
       return {
         jira_domain: '',
@@ -54,6 +65,9 @@ class ConfigService {
         slack_webhook_configured: false,
         slack_webhook_masked: null,
         notification_email: '',
+        public_webhook_base_url: publicBaseUrl,
+        public_jira_webhook_url: publicJiraWebhookUrl,
+        jira_webhook_secret_configured: isJiraWebhookSecretConfigured,
         updated_at: null,
       };
     }
@@ -113,6 +127,9 @@ class ConfigService {
       slack_webhook_masked: maskedSlack,
       slack_webhook_url_masked: maskedSlack,
       notification_email: config.notification_email || '',
+      public_webhook_base_url: publicBaseUrl,
+      public_jira_webhook_url: publicJiraWebhookUrl,
+      jira_webhook_secret_configured: isJiraWebhookSecretConfigured,
       updated_at: config.updated_at,
     };
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { exportApi, downloadBlob } from '../../api/exportApi';
 import {
   Download,
@@ -58,7 +58,7 @@ export const ExportModal = ({
           const json = JSON.parse(text);
           setError(json.message || 'Không thể xuất tài liệu.');
           return;
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
