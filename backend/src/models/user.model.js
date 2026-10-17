@@ -32,6 +32,17 @@ class UserModel {
     const { rows } = await db.query(query, [name.trim(), email.trim().toLowerCase(), passwordHash]);
     return rows[0];
   }
+
+  static async updatePassword(email, passwordHash) {
+    const query = `
+      UPDATE users
+      SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE LOWER(email) = LOWER($2)
+      RETURNING id, name, email, updated_at;
+    `;
+    const { rows } = await db.query(query, [passwordHash, email.trim()]);
+    return rows[0] || null;
+  }
 }
 
 module.exports = UserModel;

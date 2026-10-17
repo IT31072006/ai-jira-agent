@@ -146,6 +146,11 @@ export const LoginPage = () => {
 
         <div className="auth-footer">
           <p>
+            <Link to="/forgot-password" className="auth-link">
+              Quên mật khẩu?
+            </Link>
+          </p>
+          <p style={{ marginTop: '0.75rem' }}>
             Chưa có tài khoản?{' '}
             <Link to="/register" className="auth-link">
               Đăng ký tài khoản mới
