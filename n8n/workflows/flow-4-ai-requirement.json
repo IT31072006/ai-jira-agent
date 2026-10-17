@@ -23,7 +23,7 @@
         "modelId": {
           "__rl": true,
           "mode": "list",
-          "value": "models/gemini-3.5-flash"
+          "value": "models/gemini-flash-lite-latest"
         },
         "messages": {
           "values": [
