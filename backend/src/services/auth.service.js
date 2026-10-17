@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const UserModel = require('../models/user.model');
+const { AuthNotificationService } = require('./auth-notification.service');
 
 class AuthService {
   static validateRegistrationInput({ name, email, password }) {
@@ -74,13 +75,31 @@ class AuthService {
       passwordHash,
     });
 
+    // Kích hoạt webhook gửi email xác nhận sau khi đã lưu người dùng vào PostgreSQL thành công
+    let emailConfirmation = {
+      sent: false,
+      reason: 'Chưa cấu hình dịch vụ n8n webhook',
+    };
+
+    try {
+      emailConfirmation = await AuthNotificationService.sendRegistrationConfirmation(newUser);
+    } catch (notifyErr) {
+      console.warn('[AuthService] Lỗi ngoài dự kiến khi gửi thông báo xác nhận:', notifyErr.message);
+      emailConfirmation = {
+        sent: false,
+        reason: notifyErr.message,
+      };
+    }
+
     return {
       message: 'Registration successful',
       user: {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
+        created_at: newUser.created_at,
       },
+      emailConfirmation,
     };
   }
 

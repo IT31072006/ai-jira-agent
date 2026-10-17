@@ -7,6 +7,8 @@ class AuthController {
       const result = await AuthService.register({ name, email, password });
       return res.status(201).json({
         message: result.message,
+        user: result.user,
+        emailConfirmation: result.emailConfirmation,
       });
     } catch (error) {
       next(error);

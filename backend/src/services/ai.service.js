@@ -38,7 +38,9 @@ const analyzeRequirement = async (requirement) => {
 
       const rawData = response.data;
       if (!rawData) {
-        throw new Error('n8n không trả về dữ liệu');
+        throw new Error(
+          'n8n không trả về dữ liệu bóc tách yêu cầu. Nguyên nhân: Khóa Google Gemini API Key trong n8n đã hết hạn mức miễn phí (Quota 429: 20 lượt/ngày) hoặc gặp lỗi kết nối AI. Vui lòng cập nhật API Key mới tại n8n Credentials.'
+        );
       }
 
       // Trường hợp n8n trả về trực tiếp object đã có epics

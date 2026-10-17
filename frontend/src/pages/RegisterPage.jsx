@@ -61,16 +61,22 @@ export const RegisterPage = () => {
 
     setIsSubmitting(true);
     try {
-      await register({
+      const response = await register({
         name: trimmedName,
         email: trimmedEmail,
         password,
       });
 
-      // Navigate to login with success message
+      // Chỉ hiển thị thông báo kiểm tra email khi hệ thống xác nhận đã gửi email thành công
+      const isEmailSent = response?.emailConfirmation?.sent === true;
+      const successMessage = isEmailSent
+        ? 'Đăng ký tài khoản thành công. Vui lòng kiểm tra email để xem thông tin xác nhận.'
+        : 'Đăng ký tài khoản thành công! Vui lòng đăng nhập với thông tin vừa tạo.';
+
+      // Chuyển hướng tới trang đăng nhập với thông báo tương ứng
       navigate('/login', {
         state: {
-          message: 'Đăng ký tài khoản thành công! Vui lòng đăng nhập với thông tin vừa tạo.',
+          message: successMessage,
         },
       });
     } catch (err) {
