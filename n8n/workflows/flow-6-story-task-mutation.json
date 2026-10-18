@@ -1,0 +1,615 @@
+{
+  "id": "Flow6StoryTaskMutation",
+  "versionId": "f6000000-0000-4000-8000-000000000006",
+  "name": "AI Jira Agent - Flow 6 Story & Task Mutation & Refinement Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "story-task-mutation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f6-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger (Story Task Mutation)",
+      "webhookId": "flow-6-story-task-mutation-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-action",
+              "name": "action",
+              "value": "={{ String($json.body?.action || $json.action || \"\").trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-target-type",
+              "name": "targetType",
+              "value": "={{ String($json.body?.targetType || $json.targetType || \"\").trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-epics",
+              "name": "epics",
+              "value": "={{ $json.body?.epics || $json.epics || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-epic-id",
+              "name": "epicId",
+              "value": "={{ String($json.body?.epicId || $json.epicId || \"\").trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-story-id",
+              "name": "storyId",
+              "value": "={{ String($json.body?.storyId || $json.storyId || \"\").trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-task-id",
+              "name": "taskId",
+              "value": "={{ String($json.body?.taskId || $json.taskId || \"\").trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-data",
+              "name": "data",
+              "value": "={{ $json.body?.data || $json.data || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ String($json.body?.userId || $json.userId || \"system-user\") }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || (\"req-mut-\" + $now.toMillis()) }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "f6-node-2-normalize",
+      "name": "Node 2 - Normalize Inbound Mutation Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-action-valid",
+              "leftValue": "={{ [\"ADD\", \"UPDATE\", \"DELETE\"].includes($json.action) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-target-type-valid",
+              "leftValue": "={{ [\"STORY\", \"TASK\"].includes($json.targetType) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-epics-is-array",
+              "leftValue": "={{ Array.isArray($json.epics) && $json.epics.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "f6-node-3-validate-schema",
+      "name": "Node 3 - Validate Request Schema (If)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst { action, targetType, epics, epicId, storyId, taskId } = item;\n\nlet isValidTarget = true;\nlet preCheckError = '';\nlet targetMeta = {};\n\n// Kiểm tra sự tồn tại của target ID tương ứng\nif (action === 'ADD') {\n  if (targetType === 'STORY') {\n    let epicFound = null;\n    if (epicId) {\n      epicFound = epics.find(e => e.id === epicId);\n    } else {\n      epicFound = epics[0];\n    }\n    if (!epicFound) {\n      isValidTarget = false;\n      preCheckError = \"Khong tim thay Epic cha voi ID '\" + epicId + \"' de them Story\";\n    } else {\n      targetMeta = { targetEpicId: epicFound.id, epicTitle: epicFound.title };\n    }\n  } else if (targetType === 'TASK') {\n    let storyFound = null;\n    let parentEpicFound = null;\n    for (const ep of epics) {\n      const stories = ep.stories || ep.user_stories || [];\n      const s = stories.find(st => st.id === storyId);\n      if (s) {\n        storyFound = s;\n        parentEpicFound = ep;\n        break;\n      }\n    }\n    if (!storyFound) {\n      isValidTarget = false;\n      preCheckError = \"Khong tim thay User Story voi ID '\" + storyId + \"' de them Task\";\n    } else {\n      targetMeta = { targetStoryId: storyFound.id, targetEpicId: parentEpicFound.id, storyTitle: storyFound.title };\n    }\n  }\n} else if (action === 'UPDATE' || action === 'DELETE') {\n  if (targetType === 'STORY') {\n    let storyFound = null;\n    for (const ep of epics) {\n      const stories = ep.stories || ep.user_stories || [];\n      const s = stories.find(st => st.id === storyId);\n      if (s) { storyFound = s; break; }\n    }\n    if (!storyFound) {\n      isValidTarget = false;\n      preCheckError = \"Khong tim thay User Story voi ID '\" + storyId + \"' trong cay yeu cau\";\n    }\n  } else if (targetType === 'TASK') {\n    let taskFound = null;\n    for (const ep of epics) {\n      const stories = ep.stories || ep.user_stories || [];\n      for (const st of stories) {\n        const tasks = st.tasks || st.subtasks || [];\n        const t = tasks.find(tk => tk.id === taskId);\n        if (t) { taskFound = t; break; }\n      }\n      if (taskFound) break;\n    }\n    if (!taskFound) {\n      isValidTarget = false;\n      preCheckError = \"Khong tim thay Task voi ID '\" + taskId + \"' trong cay yeu cau\";\n    }\n  }\n}\n\nreturn [{\n  json: {\n    ...item,\n    isValidTarget,\n    preCheckError,\n    targetMeta\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "f6-node-4-pre-guard",
+      "name": "Node 4 - Target Existence & Pre-Mutation Guard (Code)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-target-is-valid",
+              "leftValue": "={{ $json.isValidTarget }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -20,
+        0
+      ],
+      "id": "f6-node-5-check-target",
+      "name": "Node 5 - Check Pre-condition Integrity (If)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst { action, targetType, epicId, storyId, taskId, data } = item;\nconst rawEpics = item.epics || [];\n\n// Tạo bản sao sâu (deep clone) để đảm bảo tính bất biến (immutable)\nconst newEpics = JSON.parse(JSON.stringify(rawEpics));\nlet message = '';\nlet affectedNodeId = null;\n\nif (action === 'ADD') {\n  if (targetType === 'STORY') {\n    const targetEpic = epicId ? newEpics.find(e => e.id === epicId) : newEpics[0];\n    const epicIdx = newEpics.indexOf(targetEpic);\n    const newStoryId = 'epic-' + (epicIdx >= 0 ? epicIdx : 0) + '-story-' + Date.now();\n    const newStory = {\n      id: newStoryId,\n      parentId: targetEpic.id,\n      level: 2,\n      type: 'Story',\n      title: (data && data.title && data.title.trim()) ? data.title.trim() : 'User Story mới',\n      description: (data && data.description) ? data.description.trim() : '',\n      assigneeId: (data && data.assigneeId) || null,\n      assigneeName: (data && data.assigneeName) || '',\n      assigneeAvatar: (data && data.assigneeAvatar) || '',\n      tasks: []\n    };\n    if (!targetEpic.stories) targetEpic.stories = [];\n    targetEpic.stories.push(newStory);\n    affectedNodeId = newStoryId;\n    message = \"Đã thêm User Story mới vào Epic '\" + targetEpic.title + \"' thành công\";\n  } else if (targetType === 'TASK') {\n    let targetStory = null;\n    for (const ep of newEpics) {\n      const stories = ep.stories || [];\n      const s = stories.find(st => st.id === storyId);\n      if (s) { targetStory = s; break; }\n    }\n    const newTaskId = 'task-' + Date.now();\n    const newTask = {\n      id: newTaskId,\n      parentId: targetStory.id,\n      level: 3,\n      type: 'Task',\n      title: (data && data.title && data.title.trim()) ? data.title.trim() : 'Task mới',\n      description: (data && data.description) ? data.description.trim() : '',\n      assigneeId: (data && data.assigneeId) || null,\n      assigneeName: (data && data.assigneeName) || '',\n      assigneeAvatar: (data && data.assigneeAvatar) || ''\n    };\n    if (!targetStory.tasks) targetStory.tasks = [];\n    targetStory.tasks.push(newTask);\n    affectedNodeId = newTaskId;\n    message = \"Đã thêm Task mới vào Story '\" + targetStory.title + \"' thành công\";\n  }\n} else if (action === 'UPDATE') {\n  if (targetType === 'STORY') {\n    for (const ep of newEpics) {\n      const stories = ep.stories || [];\n      const s = stories.find(st => st.id === storyId);\n      if (s) {\n        if (data.title !== undefined) s.title = String(data.title).trim();\n        if (data.description !== undefined) s.description = String(data.description).trim();\n        if (data.assigneeId !== undefined) s.assigneeId = data.assigneeId;\n        if (data.assigneeName !== undefined) s.assigneeName = String(data.assigneeName).trim();\n        if (data.assigneeAvatar !== undefined) s.assigneeAvatar = String(data.assigneeAvatar).trim();\n        // BẢO TOÀN 100% mảng tasks con hiện có\n        affectedNodeId = s.id;\n        message = \"Đã cập nhật User Story '\" + s.title + \"' thành công\";\n        break;\n      }\n    }\n  } else if (targetType === 'TASK') {\n    for (const ep of newEpics) {\n      const stories = ep.stories || [];\n      for (const st of stories) {\n        const tasks = st.tasks || [];\n        const t = tasks.find(tk => tk.id === taskId);\n        if (t) {\n          if (data.title !== undefined) t.title = String(data.title).trim();\n          if (data.description !== undefined) t.description = String(data.description).trim();\n          if (data.assigneeId !== undefined) t.assigneeId = data.assigneeId;\n          if (data.assigneeName !== undefined) t.assigneeName = String(data.assigneeName).trim();\n          if (data.assigneeAvatar !== undefined) t.assigneeAvatar = String(data.assigneeAvatar).trim();\n          affectedNodeId = t.id;\n          message = \"Đã cập nhật Task '\" + t.title + \"' thành công\";\n          break;\n        }\n      }\n      if (affectedNodeId) break;\n    }\n  }\n} else if (action === 'DELETE') {\n  if (targetType === 'STORY') {\n    for (const ep of newEpics) {\n      if (ep.stories) {\n        const initialCount = ep.stories.length;\n        ep.stories = ep.stories.filter(st => st.id !== storyId);\n        if (ep.stories.length < initialCount) {\n          affectedNodeId = storyId;\n          message = \"Đã xóa User Story và toàn bộ task con liên quan thành công\";\n          break;\n        }\n      }\n    }\n  } else if (targetType === 'TASK') {\n    for (const ep of newEpics) {\n      const stories = ep.stories || [];\n      for (const st of stories) {\n        if (st.tasks) {\n          const initialCount = st.tasks.length;\n          st.tasks = st.tasks.filter(tk => tk.id !== taskId);\n          if (st.tasks.length < initialCount) {\n            affectedNodeId = taskId;\n            message = \"Đã xóa Task thành công\";\n            break;\n          }\n        }\n      }\n      if (affectedNodeId) break;\n    }\n  }\n}\n\nreturn [{\n  json: {\n    ...item,\n    epics: newEpics,\n    treeData: newEpics,\n    affectedNodeId,\n    mutationSuccess: true,\n    message\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "f6-node-6-mutation-dispatcher",
+      "name": "Node 6 - Core Mutation Dispatcher (Code)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst epics = item.treeData || item.epics || [];\n\nlet warnings = [];\nlet totalStoriesWithoutTasks = 0;\n\nfor (const ep of epics) {\n  const stories = ep.stories || [];\n  for (const st of stories) {\n    const tasks = st.tasks || [];\n    if (tasks.length === 0) {\n      totalStoriesWithoutTasks++;\n      warnings.push(\"Story '\" + st.title + \"' chưa có công việc kỹ thuật (Task) con.\");\n    }\n  }\n}\n\nconst healthScore = totalStoriesWithoutTasks === 0 ? 100 : Math.max(70, 100 - (totalStoriesWithoutTasks * 5));\n\nreturn [{\n  json: {\n    ...item,\n    healthAudit: {\n      healthScore,\n      warnings,\n      totalWarnings: warnings.length\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        0
+      ],
+      "id": "f6-node-7-sanity-invest",
+      "name": "Node 7 - Tree Structural Sanity & INVEST Auditor (Code)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst epics = item.treeData || item.epics || [];\n\nlet totalStories = 0;\nlet totalTasks = 0;\n\nfor (const epic of epics) {\n  const stories = epic.stories || [];\n  totalStories += stories.length;\n  for (const story of stories) {\n    const tasks = story.tasks || [];\n    totalTasks += tasks.length;\n  }\n}\n\nconst totalEpics = epics.length;\nconst totalNodes = totalEpics + totalStories + totalTasks;\nconst treeDepth = totalEpics > 0 ? (totalStories > 0 ? (totalTasks > 0 ? 3 : 2) : 1) : 0;\nconst avgTasksPerStory = totalStories > 0 ? parseFloat((totalTasks / totalStories).toFixed(1)) : 0;\n\nreturn [{\n  json: {\n    ...item,\n    kpiMetrics: {\n      totalEpics,\n      totalStories,\n      totalTasks,\n      totalNodes,\n      treeDepth,\n      avgTasksPerStory\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "f6-node-8-recalc-kpis",
+      "name": "Node 8 - Recalculate Agile KPI Metrics (Code)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst epics = item.treeData || item.epics || [];\nconst expandedNodesMap = {};\n\nfor (const epic of epics) {\n  expandedNodesMap[epic.id] = true;\n  const stories = epic.stories || [];\n  for (const story of stories) {\n    expandedNodesMap[story.id] = true;\n  }\n}\n\n// Nếu có node bị tác động (thêm mới), tự động mở rộng node đó\nif (item.affectedNodeId) {\n  expandedNodesMap[item.affectedNodeId] = true;\n}\n\nreturn [{\n  json: {\n    ...item,\n    uiConfig: {\n      expandedNodesMap,\n      viewportTargetId: item.affectedNodeId || null\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ],
+      "id": "f6-node-9-expansion-map",
+      "name": "Node 9 - Generate UI Expansion Map & Viewport (Code)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-res-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-res-action",
+              "name": "action",
+              "value": "={{ $json.action }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-target-type",
+              "name": "targetType",
+              "value": "={{ $json.targetType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-epics",
+              "name": "epics",
+              "value": "={{ $json.epics }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-res-tree",
+              "name": "treeData",
+              "value": "={{ $json.treeData }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-res-metrics",
+              "name": "kpiMetrics",
+              "value": "={{ $json.kpiMetrics }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-health",
+              "name": "healthAudit",
+              "value": "={{ $json.healthAudit }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-ui",
+              "name": "uiConfig",
+              "value": "={{ $json.uiConfig }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-msg",
+              "name": "message",
+              "value": "={{ $json.message }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-meta",
+              "name": "metadata",
+              "value": "={{ { requestId: $json.requestId, userId: $json.userId, processedAt: $now.toISO(), flowVersion: \"6.0.0\" } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        0
+      ],
+      "id": "f6-node-10-assemble-success",
+      "name": "Node 10 - Assemble Final Success DTO (Set)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1300,
+        0
+      ],
+      "id": "f6-node-11-respond-200",
+      "name": "Node 11 - Respond Success (200 OK)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-status",
+              "name": "statusCode",
+              "value": 400,
+              "type": "number"
+            },
+            {
+              "id": "err-msg",
+              "name": "error",
+              "value": "Payload yêu cầu không hợp lệ. Action phải là ADD, UPDATE, DELETE và targetType phải là STORY, TASK kèm mảng epics.",
+              "type": "string"
+            },
+            {
+              "id": "err-action",
+              "name": "action",
+              "value": "={{ $json.action }}",
+              "type": "string"
+            },
+            {
+              "id": "err-target",
+              "name": "targetType",
+              "value": "={{ $json.targetType }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        240
+      ],
+      "id": "f6-node-12-err-validation",
+      "name": "Node 12 - Handle Validation Error (Set)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-not-found-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-not-found-status",
+              "name": "statusCode",
+              "value": 400,
+              "type": "number"
+            },
+            {
+              "id": "err-not-found-msg",
+              "name": "error",
+              "value": "={{ $json.preCheckError || \"Không tìm thấy ID mục tiêu trong cây yêu cầu.\" }}",
+              "type": "string"
+            },
+            {
+              "id": "err-not-found-action",
+              "name": "action",
+              "value": "={{ $json.action }}",
+              "type": "string"
+            },
+            {
+              "id": "err-not-found-target",
+              "name": "targetType",
+              "value": "={{ $json.targetType }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        240
+      ],
+      "id": "f6-node-13-err-not-found",
+      "name": "Node 13 - Handle Target Not Found Error (Set)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        500,
+        240
+      ],
+      "id": "f6-node-14-respond-400",
+      "name": "Node 14 - Respond Error (400 Bad Request)"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger (Story Task Mutation)": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize Inbound Mutation Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize Inbound Mutation Request": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Request Schema (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Request Schema (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Target Existence & Pre-Mutation Guard (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 12 - Handle Validation Error (Set)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Target Existence & Pre-Mutation Guard (Code)": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Check Pre-condition Integrity (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Check Pre-condition Integrity (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Core Mutation Dispatcher (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 13 - Handle Target Not Found Error (Set)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Core Mutation Dispatcher (Code)": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Tree Structural Sanity & INVEST Auditor (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Tree Structural Sanity & INVEST Auditor (Code)": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Recalculate Agile KPI Metrics (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Recalculate Agile KPI Metrics (Code)": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Generate UI Expansion Map & Viewport (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 9 - Generate UI Expansion Map & Viewport (Code)": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Assemble Final Success DTO (Set)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 10 - Assemble Final Success DTO (Set)": {
+      "main": [
+        [
+          {
+            "node": "Node 11 - Respond Success (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 12 - Handle Validation Error (Set)": {
+      "main": [
+        [
+          {
+            "node": "Node 14 - Respond Error (400 Bad Request)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 13 - Handle Target Not Found Error (Set)": {
+      "main": [
+        [
+          {
+            "node": "Node 14 - Respond Error (400 Bad Request)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}
