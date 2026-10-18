@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { analyzeRequirement } from '../../api/aiApi';
+import { analyzeRequirement, mutateStoryTaskApi } from '../../api/aiApi';
 import { jiraApi } from '../../api/jiraApi';
 import {
   Sparkles,
@@ -241,6 +241,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
 
   // editableEpics: mảng làm việc có thể sửa đổi
   const [editableEpics, setEditableEpics] = useState(() => initialDraft?.editableEpics || null);
+  const [isMutating, setIsMutating] = useState(false);
 
   // Đồng bộ dữ liệu nháp lên component cha khi có thay đổi (Luồng 12)
   useEffect(() => {
@@ -677,25 +678,57 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
     );
   };
 
-  const addStory = (epicIdx) => {
+  const addStory = async (epicIdx) => {
+    if (isMutating || confirmed) return;
+    const currentEpics = editableEpics;
+    const targetEpic = currentEpics?.[epicIdx];
+    if (!targetEpic) return;
+
+    // Cập nhật optimistic tại client để giao diện phản hồi 0ms
+    const newStoryId = `epic-${epicIdx}-story-${Date.now()}`;
+    const newStory = {
+      id: newStoryId,
+      parentId: targetEpic.id,
+      level: 2,
+      type: 'Story',
+      title: 'User Story mới',
+      description: '',
+      assigneeId: null,
+      assigneeName: '',
+      assigneeAvatar: '',
+      tasks: [],
+    };
     setEditableEpics((prev) =>
-      prev.map((epic, ei) => {
-        if (ei !== epicIdx) return epic;
-        const newStory = {
-          id: `epic-${epicIdx}-story-${Date.now()}`,
-          title: 'User Story mới',
-          description: '',
-          assigneeId: null,
-          assigneeName: '',
-          assigneeAvatar: '',
-          tasks: [],
-        };
-        return { ...epic, stories: [...epic.stories, newStory] };
-      })
+      prev.map((epic, ei) => (ei === epicIdx ? { ...epic, stories: [...(epic.stories || []), newStory] } : epic))
     );
+
+    // Kích hoạt đồng bộ sang n8n Flow 6
+    try {
+      setIsMutating(true);
+      const res = await mutateStoryTaskApi({
+        action: 'ADD',
+        targetType: 'STORY',
+        epicId: targetEpic.id,
+        epics: currentEpics,
+      });
+      if (res && (res.epics || res.treeData)) {
+        setEditableEpics(normalizeEpics(res.epics || res.treeData));
+      }
+    } catch (err) {
+      console.warn('[RequirementAnalyzer] Flow 6 ADD story chạy qua local state an toàn:', err.message);
+    } finally {
+      setIsMutating(false);
+    }
   };
 
-  const deleteStory = (epicIdx, storyIdx) => {
+  const deleteStory = async (epicIdx, storyIdx) => {
+    if (isMutating || confirmed) return;
+    const currentEpics = editableEpics;
+    const targetEpic = currentEpics?.[epicIdx];
+    const targetStory = targetEpic?.stories?.[storyIdx];
+    if (!targetEpic || !targetStory) return;
+
+    // Cập nhật optimistic
     setEditableEpics((prev) =>
       prev.map((epic, ei) => {
         if (ei !== epicIdx) return epic;
@@ -705,9 +738,46 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
         };
       })
     );
+
+    try {
+      setIsMutating(true);
+      const res = await mutateStoryTaskApi({
+        action: 'DELETE',
+        targetType: 'STORY',
+        epicId: targetEpic.id,
+        storyId: targetStory.id,
+        epics: currentEpics,
+      });
+      if (res && (res.epics || res.treeData)) {
+        setEditableEpics(normalizeEpics(res.epics || res.treeData));
+      }
+    } catch (err) {
+      console.warn('[RequirementAnalyzer] Flow 6 DELETE story chạy qua local state an toàn:', err.message);
+    } finally {
+      setIsMutating(false);
+    }
   };
 
-  const addTask = (epicIdx, storyIdx) => {
+  const addTask = async (epicIdx, storyIdx) => {
+    if (isMutating || confirmed) return;
+    const currentEpics = editableEpics;
+    const targetEpic = currentEpics?.[epicIdx];
+    const targetStory = targetEpic?.stories?.[storyIdx];
+    if (!targetEpic || !targetStory) return;
+
+    // Cập nhật optimistic
+    const newTaskId = `task-${Date.now()}`;
+    const newTask = {
+      id: newTaskId,
+      parentId: targetStory.id,
+      level: 3,
+      type: 'Task',
+      title: 'Task mới',
+      description: '',
+      assigneeId: null,
+      assigneeName: '',
+      assigneeAvatar: '',
+    };
     setEditableEpics((prev) =>
       prev.map((epic, ei) => {
         if (ei !== epicIdx) return epic;
@@ -715,22 +785,40 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
           ...epic,
           stories: epic.stories.map((story, si) => {
             if (si !== storyIdx) return story;
-            const newTask = {
-              id: `task-${Date.now()}`,
-              title: 'Task mới',
-              description: '',
-              assigneeId: null,
-              assigneeName: '',
-              assigneeAvatar: '',
-            };
-            return { ...story, tasks: [...story.tasks, newTask] };
+            return { ...story, tasks: [...(story.tasks || []), newTask] };
           }),
         };
       })
     );
+
+    try {
+      setIsMutating(true);
+      const res = await mutateStoryTaskApi({
+        action: 'ADD',
+        targetType: 'TASK',
+        epicId: targetEpic.id,
+        storyId: targetStory.id,
+        epics: currentEpics,
+      });
+      if (res && (res.epics || res.treeData)) {
+        setEditableEpics(normalizeEpics(res.epics || res.treeData));
+      }
+    } catch (err) {
+      console.warn('[RequirementAnalyzer] Flow 6 ADD task chạy qua local state an toàn:', err.message);
+    } finally {
+      setIsMutating(false);
+    }
   };
 
-  const deleteTask = (epicIdx, storyIdx, taskIdx) => {
+  const deleteTask = async (epicIdx, storyIdx, taskIdx) => {
+    if (isMutating || confirmed) return;
+    const currentEpics = editableEpics;
+    const targetEpic = currentEpics?.[epicIdx];
+    const targetStory = targetEpic?.stories?.[storyIdx];
+    const targetTask = targetStory?.tasks?.[taskIdx];
+    if (!targetEpic || !targetStory || !targetTask) return;
+
+    // Cập nhật optimistic
     setEditableEpics((prev) =>
       prev.map((epic, ei) => {
         if (ei !== epicIdx) return epic;
@@ -743,6 +831,59 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
         };
       })
     );
+
+    try {
+      setIsMutating(true);
+      const res = await mutateStoryTaskApi({
+        action: 'DELETE',
+        targetType: 'TASK',
+        epicId: targetEpic.id,
+        storyId: targetStory.id,
+        taskId: targetTask.id,
+        epics: currentEpics,
+      });
+      if (res && (res.epics || res.treeData)) {
+        setEditableEpics(normalizeEpics(res.epics || res.treeData));
+      }
+    } catch (err) {
+      console.warn('[RequirementAnalyzer] Flow 6 DELETE task chạy qua local state an toàn:', err.message);
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleSyncStoryField = async (epicIdx, storyIdx, field, value) => {
+    if (confirmed) return;
+    const targetStory = editableEpics?.[epicIdx]?.stories?.[storyIdx];
+    if (!targetStory || !targetStory.id) return;
+    try {
+      await mutateStoryTaskApi({
+        action: 'UPDATE',
+        targetType: 'STORY',
+        storyId: targetStory.id,
+        epics: editableEpics,
+        data: { [field]: value },
+      });
+    } catch (err) {
+      console.warn('[RequirementAnalyzer] Flow 6 UPDATE story chạy qua local state an toàn:', err.message);
+    }
+  };
+
+  const handleSyncTaskField = async (epicIdx, storyIdx, taskIdx, field, value) => {
+    if (confirmed) return;
+    const targetTask = editableEpics?.[epicIdx]?.stories?.[storyIdx]?.tasks?.[taskIdx];
+    if (!targetTask || !targetTask.id) return;
+    try {
+      await mutateStoryTaskApi({
+        action: 'UPDATE',
+        targetType: 'TASK',
+        taskId: targetTask.id,
+        epics: editableEpics,
+        data: { [field]: value },
+      });
+    } catch (err) {
+      console.warn('[RequirementAnalyzer] Flow 6 UPDATE task chạy qua local state an toàn:', err.message);
+    }
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -1076,6 +1217,9 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     onChange={(e) =>
                                       updateStoryField(epicIdx, storyIdx, 'title', e.target.value)
                                     }
+                                    onBlur={(e) =>
+                                      handleSyncStoryField(epicIdx, storyIdx, 'title', e.target.value)
+                                    }
                                     placeholder="Tên User Story"
                                   />
                                   <textarea
@@ -1083,6 +1227,14 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     value={story.description}
                                     onChange={(e) =>
                                       updateStoryField(
+                                        epicIdx,
+                                        storyIdx,
+                                        'description',
+                                        e.target.value
+                                      )
+                                    }
+                                    onBlur={(e) =>
+                                      handleSyncStoryField(
                                         epicIdx,
                                         storyIdx,
                                         'description',
@@ -1135,6 +1287,15 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                                 e.target.value
                                               )
                                             }
+                                            onBlur={(e) =>
+                                              handleSyncTaskField(
+                                                epicIdx,
+                                                storyIdx,
+                                                taskIdx,
+                                                'title',
+                                                e.target.value
+                                              )
+                                            }
                                             placeholder="Tên Task"
                                           />
                                           <input
@@ -1143,6 +1304,15 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                             value={task.description}
                                             onChange={(e) =>
                                               updateTaskField(
+                                                epicIdx,
+                                                storyIdx,
+                                                taskIdx,
+                                                'description',
+                                                e.target.value
+                                              )
+                                            }
+                                            onBlur={(e) =>
+                                              handleSyncTaskField(
                                                 epicIdx,
                                                 storyIdx,
                                                 taskIdx,

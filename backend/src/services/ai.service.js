@@ -8,6 +8,10 @@ const N8N_HIERARCHY_TREE_WEBHOOK_URL =
   process.env.N8N_HIERARCHY_TREE_WEBHOOK_URL ||
   'http://localhost:5678/webhook-test/hierarchy-tree';
 
+const N8N_STORY_TASK_WEBHOOK_URL =
+  process.env.N8N_STORY_TASK_WEBHOOK_URL ||
+  'http://localhost:5678/webhook-test/story-task-mutation';
+
 async function postToN8n(url, payload, options = {}) {
   const mergedOptions = {
     timeout: 7000,
@@ -480,8 +484,298 @@ const analyzeRequirement = async (requirement, context = {}) => {
   };
 };
 
+/**
+ * Fallback Engine nội bộ cho Flow 6 (Story & Task Mutation)
+ * Xử lý thêm, sửa, xóa Story/Task theo nguyên tắc bất biến (immutable)
+ * khi n8n Flow 6 offline hoặc gặp sự cố mạng.
+ */
+function getLocalMutationFallback(action, targetType, rawEpics = [], params = {}, context = {}) {
+  const normAction = String(action || '').trim().toUpperCase();
+  const normTarget = String(targetType || '').trim().toUpperCase();
+  const { epicId, storyId, taskId, data = {} } = params;
+
+  if (!['ADD', 'UPDATE', 'DELETE'].includes(normAction)) {
+    throw new Error(`Hành động '${normAction}' không hợp lệ (hỗ trợ: ADD, UPDATE, DELETE)`);
+  }
+  if (!['STORY', 'TASK'].includes(normTarget)) {
+    throw new Error(`Đối tượng '${normTarget}' không hợp lệ (hỗ trợ: STORY, TASK)`);
+  }
+  if (!Array.isArray(rawEpics) || rawEpics.length === 0) {
+    throw new Error('Danh sách epics không được để trống');
+  }
+
+  const epics = JSON.parse(JSON.stringify(rawEpics));
+  let message = '';
+  let affectedNodeId = null;
+
+  if (normAction === 'ADD') {
+    if (normTarget === 'STORY') {
+      const targetEpic = epicId ? epics.find((e) => e.id === epicId) : epics[0];
+      if (!targetEpic) {
+        throw new Error(`Không tìm thấy Epic cha với ID '${epicId}' để thêm Story`);
+      }
+      const epicIdx = epics.indexOf(targetEpic);
+      const newStoryId = `epic-${epicIdx >= 0 ? epicIdx : 0}-story-${Date.now()}`;
+      const newStory = {
+        id: newStoryId,
+        parentId: targetEpic.id,
+        level: 2,
+        type: 'Story',
+        title: (data && data.title && data.title.trim()) ? data.title.trim() : 'User Story mới',
+        description: (data && data.description) ? data.description.trim() : '',
+        assigneeId: (data && data.assigneeId) || null,
+        assigneeName: (data && data.assigneeName) || '',
+        assigneeAvatar: (data && data.assigneeAvatar) || '',
+        tasks: [],
+      };
+      if (!targetEpic.stories) targetEpic.stories = [];
+      targetEpic.stories.push(newStory);
+      affectedNodeId = newStoryId;
+      message = `Đã thêm User Story mới vào Epic '${targetEpic.title}' thành công (Fallback Engine)`;
+    } else if (normTarget === 'TASK') {
+      let targetStory = null;
+      for (const ep of epics) {
+        const stories = ep.stories || ep.user_stories || [];
+        const s = stories.find((st) => st.id === storyId);
+        if (s) {
+          targetStory = s;
+          break;
+        }
+      }
+      if (!targetStory) {
+        throw new Error(`Không tìm thấy User Story với ID '${storyId}' để thêm Task`);
+      }
+      const newTaskId = `task-${Date.now()}`;
+      const newTask = {
+        id: newTaskId,
+        parentId: targetStory.id,
+        level: 3,
+        type: 'Task',
+        title: (data && data.title && data.title.trim()) ? data.title.trim() : 'Task mới',
+        description: (data && data.description) ? data.description.trim() : '',
+        assigneeId: (data && data.assigneeId) || null,
+        assigneeName: (data && data.assigneeName) || '',
+        assigneeAvatar: (data && data.assigneeAvatar) || '',
+      };
+      if (!targetStory.tasks) targetStory.tasks = [];
+      targetStory.tasks.push(newTask);
+      affectedNodeId = newTaskId;
+      message = `Đã thêm Task mới vào Story '${targetStory.title}' thành công (Fallback Engine)`;
+    }
+  } else if (normAction === 'UPDATE') {
+    let found = false;
+    if (normTarget === 'STORY') {
+      for (const ep of epics) {
+        const stories = ep.stories || ep.user_stories || [];
+        const s = stories.find((st) => st.id === storyId);
+        if (s) {
+          if (data.title !== undefined) s.title = String(data.title).trim();
+          if (data.description !== undefined) s.description = String(data.description).trim();
+          if (data.assigneeId !== undefined) s.assigneeId = data.assigneeId;
+          if (data.assigneeName !== undefined) s.assigneeName = String(data.assigneeName).trim();
+          if (data.assigneeAvatar !== undefined) s.assigneeAvatar = String(data.assigneeAvatar).trim();
+          affectedNodeId = s.id;
+          message = `Đã cập nhật User Story '${s.title}' thành công (Fallback Engine)`;
+          found = true;
+          break;
+        }
+      }
+    } else if (normTarget === 'TASK') {
+      for (const ep of epics) {
+        const stories = ep.stories || ep.user_stories || [];
+        for (const st of stories) {
+          const tasks = st.tasks || st.subtasks || [];
+          const t = tasks.find((tk) => tk.id === taskId);
+          if (t) {
+            if (data.title !== undefined) t.title = String(data.title).trim();
+            if (data.description !== undefined) t.description = String(data.description).trim();
+            if (data.assigneeId !== undefined) t.assigneeId = data.assigneeId;
+            if (data.assigneeName !== undefined) t.assigneeName = String(data.assigneeName).trim();
+            if (data.assigneeAvatar !== undefined) t.assigneeAvatar = String(data.assigneeAvatar).trim();
+            affectedNodeId = t.id;
+            message = `Đã cập nhật Task '${t.title}' thành công (Fallback Engine)`;
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+    }
+    if (!found) {
+      throw new Error(`Không tìm thấy ${normTarget === 'STORY' ? 'User Story' : 'Task'} với ID '${normTarget === 'STORY' ? storyId : taskId}' trong cây yêu cầu`);
+    }
+  } else if (normAction === 'DELETE') {
+    let deleted = false;
+    if (normTarget === 'STORY') {
+      for (const ep of epics) {
+        if (ep.stories) {
+          const initialCount = ep.stories.length;
+          ep.stories = ep.stories.filter((st) => st.id !== storyId);
+          if (ep.stories.length < initialCount) {
+            deleted = true;
+            affectedNodeId = storyId;
+            message = `Đã xóa User Story thành công (Fallback Engine)`;
+            break;
+          }
+        }
+      }
+    } else if (normTarget === 'TASK') {
+      for (const ep of epics) {
+        const stories = ep.stories || ep.user_stories || [];
+        for (const st of stories) {
+          if (st.tasks) {
+            const initialCount = st.tasks.length;
+            st.tasks = st.tasks.filter((tk) => tk.id !== taskId);
+            if (st.tasks.length < initialCount) {
+              deleted = true;
+              affectedNodeId = taskId;
+              message = `Đã xóa Task thành công (Fallback Engine)`;
+              break;
+            }
+          }
+        }
+        if (deleted) break;
+      }
+    }
+    if (!deleted) {
+      throw new Error(`Không tìm thấy ${normTarget === 'STORY' ? 'User Story' : 'Task'} với ID '${normTarget === 'STORY' ? storyId : taskId}' để xóa`);
+    }
+  }
+
+  // Tái tính toán KPIs
+  let totalStories = 0;
+  let totalTasks = 0;
+  let warnings = [];
+  const expandedNodesMap = {};
+
+  for (const ep of epics) {
+    expandedNodesMap[ep.id] = true;
+    const stories = ep.stories || [];
+    totalStories += stories.length;
+    for (const st of stories) {
+      expandedNodesMap[st.id] = true;
+      const tasks = st.tasks || [];
+      totalTasks += tasks.length;
+      if (tasks.length === 0) {
+        warnings.push(`Story '${st.title}' chưa có công việc kỹ thuật (Task) con.`);
+      }
+    }
+  }
+
+  if (affectedNodeId) {
+    expandedNodesMap[affectedNodeId] = true;
+  }
+
+  const totalEpics = epics.length;
+  const totalNodes = totalEpics + totalStories + totalTasks;
+  const treeDepth = totalEpics > 0 ? (totalStories > 0 ? (totalTasks > 0 ? 3 : 2) : 1) : 0;
+  const avgTasksPerStory = totalStories > 0 ? parseFloat((totalTasks / totalStories).toFixed(1)) : 0;
+  const healthScore = warnings.length === 0 ? 100 : Math.max(70, 100 - (warnings.length * 5));
+
+  return {
+    success: true,
+    action: normAction,
+    targetType: normTarget,
+    epics,
+    treeData: epics,
+    kpiMetrics: {
+      totalEpics,
+      totalStories,
+      totalTasks,
+      totalNodes,
+      treeDepth,
+      avgTasksPerStory,
+    },
+    healthAudit: {
+      healthScore,
+      warnings,
+      totalWarnings: warnings.length,
+    },
+    uiConfig: {
+      expandedNodesMap,
+      viewportTargetId: affectedNodeId,
+    },
+    message,
+    metadata: {
+      requestId: context.requestId || `req-mut-fallback-${Date.now()}`,
+      userId: context.userId || 'system-user',
+      processedAt: new Date().toISOString(),
+      flow6Fallback: true,
+    },
+  };
+}
+
+/**
+ * Gửi yêu cầu đột biến Story/Task sang n8n Flow 6 (Story & Task Mutation Engine)
+ */
+async function mutateStoryTask(action, targetType, epics, params = {}, context = {}) {
+  const normAction = String(action || '').trim().toUpperCase();
+  const normTarget = String(targetType || '').trim().toUpperCase();
+
+  // Kiểm tra tính hợp lệ cơ bản trước khi gọi
+  if (!['ADD', 'UPDATE', 'DELETE'].includes(normAction)) {
+    const err = new Error(`Hành động '${normAction}' không hợp lệ (hỗ trợ: ADD, UPDATE, DELETE)`);
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!['STORY', 'TASK'].includes(normTarget)) {
+    const err = new Error(`Đối tượng '${normTarget}' không hợp lệ (hỗ trợ: STORY, TASK)`);
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!Array.isArray(epics) || epics.length === 0) {
+    const err = new Error('Danh sách epics không được để trống');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  try {
+    const response = await postToN8n(N8N_STORY_TASK_WEBHOOK_URL, {
+      action: normAction,
+      targetType: normTarget,
+      epics,
+      epicId: params.epicId,
+      storyId: params.storyId,
+      taskId: params.taskId,
+      data: params.data || {},
+      userId: context.userId || 'system-user',
+      requestId: context.requestId || `req-mut-${Date.now()}`,
+    });
+
+    const flow6Data = response.data;
+    if (flow6Data && flow6Data.success !== false && (flow6Data.epics || flow6Data.treeData)) {
+      return {
+        ...flow6Data,
+        flow6Success: true,
+      };
+    }
+    throw new Error(flow6Data?.error || 'n8n Flow 6 không trả về cấu trúc epics hợp lệ');
+  } catch (err) {
+    // Nếu n8n trả về HTTP 400 có chủ đích (Validation error hoặc Target not found)
+    if (err.response?.status === 400) {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message;
+      const clientErr = new Error(errorMsg);
+      clientErr.statusCode = 400;
+      throw clientErr;
+    }
+
+    console.warn(
+      `[AIService] Flow 6 (story-task-mutation) gặp sự cố (${err.message}). Kích hoạt Local Mutation Fallback Engine...`
+    );
+    const fallbackResult = getLocalMutationFallback(normAction, normTarget, epics, params, context);
+    return {
+      ...fallbackResult,
+      flow6Success: false,
+      flow6Fallback: true,
+      flow6Error: err.message,
+    };
+  }
+}
+
 module.exports = {
   analyzeRequirement,
   transformHierarchyTree,
   getLocalHierarchyFallback,
+  mutateStoryTask,
+  getLocalMutationFallback,
 };

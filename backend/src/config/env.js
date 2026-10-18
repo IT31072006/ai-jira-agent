@@ -42,6 +42,11 @@ const env = {
   N8N_HIERARCHY_TREE_WEBHOOK_URL:
     process.env.N8N_HIERARCHY_TREE_WEBHOOK_URL ||
     'http://localhost:5678/webhook-test/hierarchy-tree',
+
+  // Luồng 6: Story & Task Mutation Webhook
+  N8N_STORY_TASK_WEBHOOK_URL:
+    process.env.N8N_STORY_TASK_WEBHOOK_URL ||
+    'http://localhost:5678/webhook-test/story-task-mutation',
 };
 
 module.exports = env;
