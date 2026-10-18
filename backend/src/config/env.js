@@ -31,6 +31,9 @@ const env = {
   N8N_JIRA_WEBHOOK_URL: process.env.N8N_JIRA_WEBHOOK_URL || 'http://localhost:5678/webhook-test/push-to-jira',
   N8N_NOTIFICATION_WEBHOOK_URL: process.env.N8N_NOTIFICATION_WEBHOOK_URL || 'http://localhost:5678/webhook-test/epic-created-notification',
   NOTIFICATION_WEBHOOK_SECRET: process.env.NOTIFICATION_WEBHOOK_SECRET || '',
+
+  // Luồng 2: Workspace Management Webhook
+  N8N_WORKSPACE_WEBHOOK_URL: process.env.N8N_WORKSPACE_WEBHOOK_URL || 'http://localhost:5678/webhook/workspace-management',
 };
 
 module.exports = env;

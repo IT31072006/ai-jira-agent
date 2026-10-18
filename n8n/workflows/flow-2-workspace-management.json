@@ -1,0 +1,781 @@
+{
+  "id": "Flow2WorkspaceManagement",
+  "versionId": "f2000000-0000-4000-8000-000000000002",
+  "name": "AI Jira Agent - Flow 2 Workspace Management",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "workspace-management",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        0
+      ],
+      "id": "f2-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger",
+      "webhookId": "flow-2-workspace-management-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-event-type",
+              "name": "eventType",
+              "value": "={{ $json.body?.eventType || $json.eventType || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ $json.body?.userId || $json.userId || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-workspace-id",
+              "name": "workspaceId",
+              "value": "={{ $json.body?.workspaceId || $json.workspaceId || $json.body?.projectId || $json.projectId || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-workspace-name",
+              "name": "workspaceName",
+              "value": "={{ $json.body?.workspaceName || $json.workspaceName || $json.body?.name || $json.name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-description",
+              "name": "description",
+              "value": "={{ $json.body?.description || $json.description || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.body?.timestamp || $json.timestamp || $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || ('req-ws-' + $now.toMillis()) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -420,
+        0
+      ],
+      "id": "f2-node-2-normalize-input",
+      "name": "Node 2 - Normalize Event Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid-event-type",
+              "leftValue": "={{ $json.eventType }}",
+              "rightValue": "^(WORKSPACE_CREATED|WORKSPACE_UPDATED|WORKSPACE_DELETED|WORKSPACE_VIEWED)$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "cond-user-id-not-empty",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "f2-node-3-validate-event-type",
+      "name": "Node 3 - Validate Event Type"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "Mutations",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-mutation-rule",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "^(WORKSPACE_CREATED|WORKSPACE_UPDATED)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "Views",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-view-rule",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "WORKSPACE_VIEWED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "Deletions",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-delete-rule",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "WORKSPACE_DELETED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        20,
+        0
+      ],
+      "id": "f2-node-4-route-by-type",
+      "name": "Node 4 - Route by Event Type"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-workspace-name-not-empty",
+              "leftValue": "={{ $json.workspaceName }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-mutation-user-id",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        -180
+      ],
+      "id": "f2-node-5-validate-mutation-fields",
+      "name": "Node 5 - Validate Mutation Fields"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-mut-category",
+              "name": "category",
+              "value": "WORKSPACE_MUTATION",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-status",
+              "name": "status",
+              "value": "PROCESSED",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-audit",
+              "name": "auditSummary",
+              "value": "={{ 'Workspace ' + ($json.eventType === 'WORKSPACE_CREATED' ? 'được tạo mới thành công: ' : 'được cập nhật thành công: ') + $json.workspaceName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-workspace-id",
+              "name": "workspaceId",
+              "value": "={{ $json.workspaceId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-workspace-name",
+              "name": "workspaceName",
+              "value": "={{ $json.workspaceName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-desc",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-mut-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        -180
+      ],
+      "id": "f2-node-6-process-mutation",
+      "name": "Node 6 - Process Mutation Event"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-view-category",
+              "name": "category",
+              "value": "WORKSPACE_QUERY",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-status",
+              "name": "status",
+              "value": "PROCESSED",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-audit",
+              "name": "auditSummary",
+              "value": "={{ 'Người dùng truy vấn xem ' + ($json.workspaceId ? ('Workspace ID: ' + $json.workspaceId) : 'Danh sách Workspaces') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-workspace-id",
+              "name": "workspaceId",
+              "value": "={{ $json.workspaceId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-workspace-name",
+              "name": "workspaceName",
+              "value": "={{ $json.workspaceName || 'All Workspaces' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-desc",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-view-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        0
+      ],
+      "id": "f2-node-7-process-view",
+      "name": "Node 7 - Process View Event"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-del-category",
+              "name": "category",
+              "value": "WORKSPACE_DELETION",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-status",
+              "name": "status",
+              "value": "PROCESSED",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-audit",
+              "name": "auditSummary",
+              "value": "={{ 'Workspace đã được xóa an toàn khỏi hệ thống: ' + ($json.workspaceName ? $json.workspaceName : ('ID ' + $json.workspaceId)) }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-workspace-id",
+              "name": "workspaceId",
+              "value": "={{ $json.workspaceId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-workspace-name",
+              "name": "workspaceName",
+              "value": "={{ $json.workspaceName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-desc",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        180
+      ],
+      "id": "f2-node-8-process-delete",
+      "name": "Node 8 - Process Delete Event"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        700,
+        0
+      ],
+      "id": "f2-node-9-combine-events",
+      "name": "Node 9 - Merge Event Streams"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-processed-status",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "PROCESSED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-final-user-id",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        920,
+        0
+      ],
+      "id": "f2-node-10-validate-processed",
+      "name": "Node 10 - Check Normalized Data"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-resp-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-resp-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-category",
+              "name": "category",
+              "value": "={{ $json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-workspace-id",
+              "name": "workspaceId",
+              "value": "={{ $json.workspaceId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-workspace-name",
+              "name": "workspaceName",
+              "value": "={{ $json.workspaceName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-audit-summary",
+              "name": "auditSummary",
+              "value": "={{ $json.auditSummary }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-status",
+              "name": "workflowStatus",
+              "value": "COMPLETED",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-message",
+              "name": "message",
+              "value": "={{ 'Xử lý sự kiện ' + $json.eventType + ' thành công trong Flow 2 Workspace Management.' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-processed-at",
+              "name": "processedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1140,
+        0
+      ],
+      "id": "f2-node-11-generate-response",
+      "name": "Node 11 - Generate Response Payload"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1360,
+        0
+      ],
+      "id": "f2-node-12-respond-webhook",
+      "name": "Node 12 - Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize Event Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize Event Input": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Event Type": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Route by Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Route by Event Type": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Validate Mutation Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 7 - Process View Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 8 - Process Delete Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Validate Mutation Fields": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Process Mutation Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Process Mutation Event": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Merge Event Streams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Process View Event": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Merge Event Streams",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Node 8 - Process Delete Event": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Merge Event Streams",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Node 9 - Merge Event Streams": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Check Normalized Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 10 - Check Normalized Data": {
+      "main": [
+        [
+          {
+            "node": "Node 11 - Generate Response Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Generate Response Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
