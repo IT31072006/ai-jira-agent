@@ -1,0 +1,76 @@
+{
+  "id": "Flow3ErrorHandler",
+  "name": "AI Jira Agent - Flow 3 Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ],
+      "id": "err-trigger-flow3",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-err-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-err-code",
+              "name": "statusCode",
+              "value": 400,
+              "type": "number"
+            },
+            {
+              "id": "assign-err-msg",
+              "name": "message",
+              "value": "={{ $json.execution?.error?.message || 'Yêu cầu không hợp lệ hoặc dữ liệu cấu hình thiếu trường bắt buộc.' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-time",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        100
+      ],
+      "id": "err-normalize-response",
+      "name": "Format Error Response"
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

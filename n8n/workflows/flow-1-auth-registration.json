@@ -1,0 +1,625 @@
+{
+  "id": "Flow1AuthRegistration",
+  "versionId": "f1000000-0000-4000-8000-000000000001",
+  "name": "Flow 1 - User Registration Confirmation Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auth-registration",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "f1-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger",
+      "webhookId": "flow-1-auth-registration-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-event-type",
+              "name": "eventType",
+              "value": "={{ $json.body?.eventType || $json.eventType || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ $json.body?.userId || $json.userId || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-email",
+              "name": "email",
+              "value": "={{ ($json.body?.email || $json.email || '').trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-display-name",
+              "name": "displayName",
+              "value": "={{ $json.body?.displayName || $json.displayName || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-registered-at",
+              "name": "registeredAt",
+              "value": "={{ $json.body?.registeredAt || $json.registeredAt || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-reg-details",
+              "name": "registrationDetails",
+              "value": "={{ $json.body?.registrationDetails || $json.registrationDetails || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-email-template",
+              "name": "emailTemplate",
+              "value": "={{ $json.body?.emailTemplate || $json.emailTemplate || {} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "f1-node-2-normalize",
+      "name": "Node 2 - Normalize Event Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-event-type",
+              "leftValue": "={{ $json.eventType }}",
+              "rightValue": "REGISTER_SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-user-id-not-empty",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-email-not-empty",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "f1-node-3-check-event",
+      "name": "Node 3 - Check Event Type & Required Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-email-regex",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "cond-registered-at-not-empty",
+              "leftValue": "={{ $json.registeredAt }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        60,
+        -80
+      ],
+      "id": "f1-node-4-check-email-date",
+      "name": "Node 4 - Check Email & Timestamp Format"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "email-to",
+              "name": "emailTo",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "email-from",
+              "name": "fromEmail",
+              "value": "={{ $json.emailTemplate?.from || '\"AI Jira Agent\" <lephubao19@gmail.com>' }}",
+              "type": "string"
+            },
+            {
+              "id": "email-subject",
+              "name": "emailSubject",
+              "value": "={{ $json.emailTemplate?.subject || 'Xác nhận đăng ký tài khoản AI Jira Agent thành công' }}",
+              "type": "string"
+            },
+            {
+              "id": "email-display-name",
+              "name": "displayName",
+              "value": "={{ $json.displayName || 'Quý khách' }}",
+              "type": "string"
+            },
+            {
+              "id": "email-reg-date",
+              "name": "registeredDate",
+              "value": "={{ $json.registrationDetails?.registeredDate || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "email-reg-time",
+              "name": "registeredTime",
+              "value": "={{ $json.registrationDetails?.registeredTime || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "email-reg-formatted",
+              "name": "formattedDateTime",
+              "value": "={{ $json.registrationDetails?.formattedDateTime || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "email-html",
+              "name": "emailHtml",
+              "value": "={{ $json.emailTemplate?.html || ('<p>Xin chào ' + ($json.displayName || 'Quý khách') + ', bạn đã đăng ký tài khoản thành công.</p>') }}",
+              "type": "string"
+            },
+            {
+              "id": "email-text",
+              "name": "emailText",
+              "value": "={{ $json.emailTemplate?.text || ('Xin chào ' + ($json.displayName || 'Quý khách') + ', bạn đã đăng ký tài khoản thành công.') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        280,
+        -140
+      ],
+      "id": "f1-node-5-prepare-email",
+      "name": "Node 5 - Prepare Email Content"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.emailTo }}",
+        "subject": "={{ $json.emailSubject }}",
+        "emailFormat": "both",
+        "html": "={{ $json.emailHtml }}",
+        "text": "={{ $json.emailText }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        -140
+      ],
+      "id": "f1-node-6-send-email",
+      "name": "Node 6 - Send Email via SMTP",
+      "credentials": {
+        "smtp": {
+          "id": "YKFm0MoNFmKLkY4W",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success-flag",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "success-status",
+              "name": "statusCode",
+              "value": 200,
+              "type": "number"
+            },
+            {
+              "id": "success-message",
+              "name": "message",
+              "value": "Xác nhận đăng ký tài khoản AI Jira Agent thành công",
+              "type": "string"
+            },
+            {
+              "id": "success-email-sent",
+              "name": "emailSent",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "success-event-type",
+              "name": "eventType",
+              "value": "REGISTER_SUCCESS",
+              "type": "string"
+            },
+            {
+              "id": "success-user-id",
+              "name": "userId",
+              "value": "={{ $('Node 2 - Normalize Event Data').item.json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "success-email",
+              "name": "email",
+              "value": "={{ $('Node 2 - Normalize Event Data').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "success-processed-at",
+              "name": "processedAt",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        -140
+      ],
+      "id": "f1-node-7-prepare-success",
+      "name": "Node 7 - Prepare Success Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        940,
+        -140
+      ],
+      "id": "f1-node-8-respond-success",
+      "name": "Node 8 - Respond Success 200"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error-flag",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "error-status",
+              "name": "statusCode",
+              "value": 400,
+              "type": "number"
+            },
+            {
+              "id": "error-message",
+              "name": "error",
+              "value": "Dữ liệu đăng ký không hợp lệ: eventType phải là REGISTER_SUCCESS, email đúng định dạng và có đầy đủ userId, registeredAt.",
+              "type": "string"
+            },
+            {
+              "id": "error-email-sent",
+              "name": "emailSent",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "error-timestamp",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        280,
+        140
+      ],
+      "id": "f1-node-9-prepare-invalid",
+      "name": "Node 9 - Prepare Invalid Input Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        500,
+        140
+      ],
+      "id": "f1-node-10-respond-invalid",
+      "name": "Node 10 - Respond Invalid Input 400"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        340
+      ],
+      "id": "f1-node-11-error-trigger",
+      "name": "Node 11 - Error Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-flag",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-status",
+              "name": "statusCode",
+              "value": 500,
+              "type": "number"
+            },
+            {
+              "id": "err-email-sent",
+              "name": "emailSent",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-message",
+              "name": "error",
+              "value": "={{ $json.execution?.error?.message || $json.error?.message || $json.message || 'Lỗi xử lý gửi email xác nhận trong n8n' }}",
+              "type": "string"
+            },
+            {
+              "id": "err-workflow-id",
+              "name": "workflowId",
+              "value": "Flow1AuthRegistration",
+              "type": "string"
+            },
+            {
+              "id": "err-failed-at",
+              "name": "failedAt",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "err-sanitized",
+              "name": "sanitized",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "err-safe-note",
+              "name": "safeNote",
+              "value": "Tuyệt đối không lưu mật khẩu, password hash, JWT token hoặc API secret trong log lỗi.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -380,
+        340
+      ],
+      "id": "f1-node-12-sanitize-error",
+      "name": "Node 12 - Sanitize & Format Error Log"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize Event Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize Event Data": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Check Event Type & Required Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Check Event Type & Required Fields": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Check Email & Timestamp Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 9 - Prepare Invalid Input Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Check Email & Timestamp Format": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Prepare Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 9 - Prepare Invalid Input Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Prepare Email Content": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Send Email via SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Send Email via SMTP": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Prepare Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Prepare Success Response": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Respond Success 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 9 - Prepare Invalid Input Error": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Respond Invalid Input 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Sanitize & Format Error Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "tags": []
+}

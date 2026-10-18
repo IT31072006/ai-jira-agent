@@ -1,0 +1,741 @@
+{
+  "id": "Flow3JiraAiConfig",
+  "versionId": "f3000000-0000-4000-8000-000000000003",
+  "name": "AI Jira Agent - Flow 3 Jira and AI Config Vault",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-ai-config",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "f3-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger",
+      "webhookId": "flow-3-jira-ai-config-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-event-type",
+              "name": "eventType",
+              "value": "={{ $json.body?.eventType || $json.eventType || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ String($json.body?.userId || $json.userId || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-config-id",
+              "name": "configId",
+              "value": "={{ String($json.body?.configId || $json.configId || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-provider",
+              "name": "provider",
+              "value": "={{ String($json.body?.provider || $json.provider || '').toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-status",
+              "name": "status",
+              "value": "={{ String($json.body?.status || $json.status || 'PENDING').toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.body?.timestamp || $json.timestamp || $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || ('req-cfg-' + $now.toMillis()) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "f3-node-2-normalize-input",
+      "name": "Node 2 - Normalize Config Event"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid-event-type",
+              "leftValue": "={{ $json.eventType }}",
+              "rightValue": "^(CONFIG_SAVED|CONNECTION_TEST_REQUESTED|CONFIG_DELETED)$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "cond-user-id-not-empty",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-request-id-not-empty",
+              "leftValue": "={{ $json.requestId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "f3-node-3-validate-required-fields",
+      "name": "Node 3 - Validate Required Fields"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "Config Saved",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-saved-rule",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "CONFIG_SAVED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "Connection Test",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-test-rule",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "CONNECTION_TEST_REQUESTED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "Config Deleted",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-deleted-rule",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "CONFIG_DELETED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -20,
+        0
+      ],
+      "id": "f3-node-4-route-by-type",
+      "name": "Node 4 - Route by Event Type"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-saved-provider-not-empty",
+              "leftValue": "={{ $json.provider }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-saved-status-valid",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "^(SAVED|UPDATED|SUCCESS)$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -180
+      ],
+      "id": "f3-node-5-validate-config-saved",
+      "name": "Node 5 - Validate Config Saved"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-save-category",
+              "name": "category",
+              "value": "INTEGRATION_VAULT_SAVE",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-status",
+              "name": "status",
+              "value": "PROCESSED",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-audit",
+              "name": "auditSummary",
+              "value": "={{ 'Khóa bảo mật nhà cung cấp ' + $json.provider + ' đã được mã hóa AES-256-GCM và lưu an toàn vào PostgreSQL (Config ID: ' + $json.configId + ')' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-config-id",
+              "name": "configId",
+              "value": "={{ $json.configId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-provider",
+              "name": "provider",
+              "value": "={{ $json.provider }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-save-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        420,
+        -180
+      ],
+      "id": "f3-node-6-process-config-saved",
+      "name": "Node 6 - Process Config Saved Event"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-test-provider-valid",
+              "leftValue": "={{ $json.provider }}",
+              "rightValue": "^(JIRA|GEMINI)$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "cond-test-user-id",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "f3-node-7-validate-connection-test",
+      "name": "Node 7 - Validate Connection Test"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-test-category",
+              "name": "category",
+              "value": "INTEGRATION_TEST_EVENT",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-status",
+              "name": "status",
+              "value": "PROCESSED",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-audit",
+              "name": "auditSummary",
+              "value": "={{ 'Tiếp nhận sự kiện kiểm tra kết nối dịch vụ ' + $json.provider + ' từ người dùng ' + $json.userId + '. (Kết quả kết nối thực tế do Backend thực thi an toàn)' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-config-id",
+              "name": "configId",
+              "value": "={{ $json.configId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-provider",
+              "name": "provider",
+              "value": "={{ $json.provider }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-test-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        420,
+        0
+      ],
+      "id": "f3-node-8-process-connection-test",
+      "name": "Node 8 - Process Connection Test Event"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-del-user-id-not-empty",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-del-event-type-valid",
+              "leftValue": "={{ $json.eventType }}",
+              "rightValue": "CONFIG_DELETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        200,
+        180
+      ],
+      "id": "f3-node-9-validate-config-deleted",
+      "name": "Node 9 - Validate Config Deleted"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        680,
+        0
+      ],
+      "id": "f3-node-10-merge-events",
+      "name": "Node 10 - Merge Event Streams"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-resp-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-resp-event-type",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-category",
+              "name": "category",
+              "value": "={{ $json.category || 'INTEGRATION_VAULT_DELETE' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-config-id",
+              "name": "configId",
+              "value": "={{ $json.configId || null }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-provider",
+              "name": "provider",
+              "value": "={{ $json.provider || 'UNKNOWN' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-user-id",
+              "name": "userId",
+              "value": "={{ $json.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-audit-summary",
+              "name": "auditSummary",
+              "value": "={{ $json.auditSummary || ('Cấu hình dịch vụ ' + ($json.provider || 'Vault') + ' đã được xóa an toàn khỏi CSDL PostgreSQL') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-status",
+              "name": "workflowStatus",
+              "value": "COMPLETED",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-message",
+              "name": "message",
+              "value": "={{ 'Xử lý sự kiện ' + $json.eventType + ' thành công trong Flow 3 Jira & AI Config Vault.' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-resp-processed-at",
+              "name": "processedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        900,
+        0
+      ],
+      "id": "f3-node-11-generate-response",
+      "name": "Node 11 - Generate Response Payload"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "f3-node-12-respond-webhook",
+      "name": "Node 12 - Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize Config Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize Config Event": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Required Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Required Fields": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Route by Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Route by Event Type": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Validate Config Saved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 7 - Validate Connection Test",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 9 - Validate Config Deleted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Validate Config Saved": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Process Config Saved Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Process Config Saved Event": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Merge Event Streams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Validate Connection Test": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Process Connection Test Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Process Connection Test Event": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Merge Event Streams",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Node 9 - Validate Config Deleted": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Merge Event Streams",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Node 10 - Merge Event Streams": {
+      "main": [
+        [
+          {
+            "node": "Node 11 - Generate Response Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Generate Response Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

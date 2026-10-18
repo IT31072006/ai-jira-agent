@@ -17,7 +17,7 @@ class ConfigService {
       if (!parsed.hostname || parsed.hostname.length < 3 || !parsed.hostname.includes('.')) {
         throw new Error('Invalid');
       }
-      return urlToTest;
+      return `${parsed.protocol}//${parsed.host}`;
     } catch (e) {
       const error = new Error('Định dạng Jira domain không hợp lệ (ví dụ: https://your-domain.atlassian.net).');
       error.statusCode = 400;

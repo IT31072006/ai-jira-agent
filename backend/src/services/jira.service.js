@@ -30,6 +30,20 @@ async function postToN8n(url, payload, options = {}) {
   }
 }
 
+function sanitizeJiraDomain(domain) {
+  if (!domain || typeof domain !== 'string') return '';
+  let trimmed = domain.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    trimmed = `https://${trimmed}`;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (e) {
+    return trimmed.split('?')[0].replace(/\/+$/, '');
+  }
+}
+
 class JiraService {
   /**
    * Đẩy dữ liệu cấu trúc Epic -> Story -> Task lên Jira thông qua n8n automation engine
@@ -78,7 +92,7 @@ class JiraService {
     }
 
     // 3. Chuẩn bị payload gửi sang n8n Webhook
-    const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+    const cleanDomain = sanitizeJiraDomain(config.jira_domain);
     const authHeader =
       'Basic ' +
       Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
@@ -254,7 +268,7 @@ class JiraService {
       throw err;
     }
 
-    const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+    const cleanDomain = sanitizeJiraDomain(config.jira_domain);
     const authHeader =
       'Basic ' +
       Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
@@ -330,7 +344,7 @@ class JiraService {
       return [];
     }
 
-    const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+    const cleanDomain = sanitizeJiraDomain(config.jira_domain);
     const authHeader =
       'Basic ' +
       Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
@@ -726,7 +740,7 @@ class JiraService {
         return;
       }
 
-      const cleanDomain = config.jira_domain.trim().split('?')[0].replace(/\/+$/, '');
+      const cleanDomain = sanitizeJiraDomain(config.jira_domain);
       const authHeader =
         'Basic ' +
         Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
