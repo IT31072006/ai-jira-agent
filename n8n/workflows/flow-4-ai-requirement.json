@@ -1,5 +1,7 @@
 {
-  "name": "FLow 4",
+  "id": "Flow4AiRequirement",
+  "versionId": "f4000000-0000-4000-8000-000000000004",
+  "name": "AI Jira Agent - Flow 4 AI Requirement Analysis & Decomposition",
   "nodes": [
     {
       "parameters": {
@@ -9,14 +11,114 @@
         "options": {}
       },
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [
-        -368,
-        -16
+        -880,
+        0
       ],
-      "id": "e4273d3d-78fe-454d-87c3-1f32aac755f6",
-      "name": "Webhook",
-      "webhookId": "df90969a-561c-4974-904e-62c06756fae6"
+      "id": "f4-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger (AI Requirement)",
+      "webhookId": "flow-4-ai-requirement-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-requirement",
+              "name": "requirement",
+              "value": "={{ String($json.body?.requirement || $json.requirement || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-project-id",
+              "name": "projectId",
+              "value": "={{ String($json.body?.projectId || $json.projectId || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ String($json.body?.userId || $json.userId || 'system-user') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || ('req-ai-' + $now.toMillis()) }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-char-count",
+              "name": "charCount",
+              "value": "={{ String($json.body?.requirement || $json.requirement || '').trim().length }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -660,
+        0
+      ],
+      "id": "f4-node-2-normalize",
+      "name": "Node 2 - Normalize Inbound Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-requirement-length",
+              "leftValue": "={{ $json.charCount }}",
+              "rightValue": 19,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        0
+      ],
+      "id": "f4-node-3-validate-input",
+      "name": "Node 3 - Validate Input Data (If)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst reqText = item.requirement || '';\n\nconst prompt = `Bạn là Chuyên gia Kiến trúc Phần mềm và AI Phân tích Yêu cầu Agile (Senior Product Owner / Business Analyst).\n\nNhiệm vụ: Phân tích sâu sắc văn bản đặc tả yêu cầu phần mềm dưới đây và bóc tách thành Cây phân cấp Agile chuẩn mực 3 tầng:\n1. Epic: Phân hệ / Tính năng lớn cấp cao (High-level Module/Feature).\n2. User Story: Câu chuyện người dùng theo mẫu \"Là [Người dùng], tôi muốn [Hành động] để [Mục đích / Giá trị]\" hoặc tiêu đề súc tích, kèm mô tả đặc tả chức năng chi tiết.\n3. Task: Các đầu việc kỹ thuật cụ thể (Frontend, Backend, Database, Test, DevOps) để hoàn thành Story đó.\n\nYÊU CẦU BẮT BUỘC:\n1. Chỉ trả về một đối tượng JSON DUY NHẤT, không có bất kỳ chữ nào khác ngoài JSON.\n2. Tuyệt đối KHÔNG bọc JSON trong khối mã markdown (KHÔNG dùng \\`\\`\\`json hoặc \\`\\`\\`).\n3. Cấu trúc JSON chuẩn mực phải khớp chính xác 100%:\n{\n  \"epics\": [\n    {\n      \"title\": \"Tên Epic\",\n      \"description\": \"Mô tả mục tiêu của Epic\",\n      \"stories\": [\n        {\n          \"title\": \"Tên Story\",\n          \"description\": \"Mô tả chi tiết Story kèm tiêu chí nghiệm thu\",\n          \"tasks\": [\n            {\n              \"title\": \"Tên Task kỹ thuật\",\n              \"description\": \"Mô tả công việc kỹ thuật cần triển khai\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nVĂN BẢN ĐẶC TẢ YÊU CẦU:\n\"${reqText}\"`;\n\nreturn {\n  json: {\n    ...item,\n    prompt: prompt\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "id": "f4-node-4-prompt-builder",
+      "name": "Node 4 - Build Structured Agile AI Prompt"
     },
     {
       "parameters": {
@@ -28,7 +130,7 @@
         "messages": {
           "values": [
             {
-              "content": "=Bạn là AI phân tích yêu cầu phần mềm.\n\nHãy phân tích yêu cầu người dùng và chuyển thành cấu trúc:\n- Epic\n- Story\n- Task\n\nYêu cầu:\n1. Chỉ trả về JSON hợp lệ.\n2. Không thêm giải thích bên ngoài JSON.\n3. Mỗi Story phải thuộc một Epic.\n4. Mỗi Task phải thuộc một Story.\n5. Nội dung phải cụ thể, phù hợp với yêu cầu.\n6. Nếu yêu cầu chưa đủ rõ, hãy tự đưa ra giả định hợp lý.\n\nĐịnh dạng JSON:\n{\n  \"epics\": [\n    {\n      \"title\": \"Tên Epic\",\n      \"description\": \"Mô tả Epic\",\n      \"stories\": [\n        {\n          \"title\": \"Tên Story\",\n          \"description\": \"Mô tả Story\",\n          \"tasks\": [\n            {\n              \"title\": \"Tên Task\",\n              \"description\": \"Mô tả Task\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nYêu cầu người dùng:\n{{ $json.body.requirement }}"
+              "content": "={{ $json.prompt }}"
             }
           ]
         },
@@ -39,14 +141,15 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
+      "continueOnFail": true,
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
       "typeVersion": 1.1,
       "position": [
-        -144,
-        -16
+        0,
+        0
       ],
-      "id": "55966ea8-aed2-4548-9f7f-fb3448def968",
-      "name": "Message a model",
+      "id": "f4-node-5-gemini",
+      "name": "Node 5 - AI Generation Engine (Google Gemini)",
       "credentials": {
         "googlePalmApi": {
           "id": "JSBKgpWH4oIbMUSJ",
@@ -56,38 +159,445 @@
     },
     {
       "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.content }}",
-        "options": {}
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-ai-output-presence",
+              "leftValue": "={{ String($json.content || $json.text || ($json.parts && $json.parts[0]?.text) || ($json.message?.content) || '').trim() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "f4-node-6-check-ai-output",
+      "name": "Node 6 - Check AI Output Presence (If)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst raw = item.content || item.text || item.response || (item.parts && item.parts[0]?.text) || (item.message?.content) || '';\nlet str = typeof raw === 'string' ? raw : JSON.stringify(raw);\n\n// Làm sạch markdown code fences nếu LLM trả về ```json\nstr = str.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();\n\nlet parsed = null;\nlet isValidSchema = false;\nlet schemaErrorDetails = '';\n\ntry {\n  parsed = JSON.parse(str);\n} catch (err) {\n  const firstBrace = str.indexOf('{');\n  const lastBrace = str.lastIndexOf('}');\n  if (firstBrace !== -1 && lastBrace > firstBrace) {\n    try {\n      parsed = JSON.parse(str.substring(firstBrace, lastBrace + 1));\n    } catch (innerErr) {\n      schemaErrorDetails = 'Không thể parse JSON từ kết quả của AI: ' + err.message;\n    }\n  } else {\n    schemaErrorDetails = 'Không tìm thấy cấu trúc JSON hợp lệ trong phản hồi của AI: ' + err.message;\n  }\n}\n\nlet sanitizedEpics = [];\nlet totalStories = 0;\nlet totalTasks = 0;\n\nif (parsed) {\n  const epics = parsed.epics || (Array.isArray(parsed) ? parsed : (parsed.data?.epics || null));\n  if (Array.isArray(epics) && epics.length > 0) {\n    sanitizedEpics = epics.map((epic, ei) => {\n      const title = String(epic.title || epic.name || epic.epic_name || `Epic #${ei + 1}`).trim();\n      const description = String(epic.description || epic.details || epic.desc || '').trim();\n      const rawStories = epic.stories || epic.user_stories || epic.userStories || [];\n\n      const sanitizedStories = (Array.isArray(rawStories) ? rawStories : []).map((story, si) => {\n        const sTitle = String(story.title || story.name || story.user_story || `User Story #${si + 1}`).trim();\n        const sDesc = String(story.description || story.desc || '').trim();\n        const rawTasks = story.tasks || story.subtasks || [];\n\n        const sanitizedTasks = (Array.isArray(rawTasks) ? rawTasks : []).map((task, ti) => {\n          if (typeof task === 'string') {\n            return {\n              title: task.trim(),\n              description: ''\n            };\n          }\n          return {\n            title: String(task.title || task.name || `Task #${ti + 1}`).trim(),\n            description: String(task.description || task.desc || '').trim()\n          };\n        });\n\n        totalTasks += sanitizedTasks.length;\n        return {\n          title: sTitle,\n          description: sDesc,\n          tasks: sanitizedTasks\n        };\n      });\n\n      totalStories += sanitizedStories.length;\n      return {\n        title: title,\n        description: description,\n        stories: sanitizedStories\n      };\n    });\n\n    isValidSchema = true;\n  } else {\n    schemaErrorDetails = 'Cấu trúc phản hồi thiếu mảng epics hoặc mảng epics rỗng.';\n  }\n}\n\nif (isValidSchema) {\n  const startMs = item.timestamp ? new Date(item.timestamp).getTime() : Date.now();\n  const durationMs = Math.max(Date.now() - startMs, 10);\n\n  return {\n    json: {\n      success: true,\n      epics: sanitizedEpics,\n      metadata: {\n        requestId: item.requestId,\n        projectId: item.projectId || null,\n        userId: item.userId || 'system-user',\n        model: 'models/gemini-1.5-flash',\n        totalEpics: sanitizedEpics.length,\n        totalStories: totalStories,\n        totalTasks: totalTasks,\n        processedAt: new Date().toISOString(),\n        durationMs: durationMs\n      },\n      isValidSchema: true\n    }\n  };\n} else {\n  return {\n    json: {\n      isValidSchema: false,\n      schemaErrorDetails: schemaErrorDetails,\n      rawOutput: str ? str.slice(0, 300) : '',\n      requestId: item.requestId,\n      timestamp: item.timestamp,\n      projectId: item.projectId,\n      userId: item.userId\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "f4-node-7-clean-parse-json",
+      "name": "Node 7 - Clean & Parse JSON Output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-schema-valid",
+              "leftValue": "={{ $json.isValidSchema }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "f4-node-8-validate-schema",
+      "name": "Node 8 - Validate Epic Story Task Schema (If)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        224,
-        -16
+        880,
+        0
       ],
-      "id": "a0fb9fb3-a7c5-4047-8403-24a0a64eb4f5",
-      "name": "Respond to Webhook"
+      "id": "f4-node-9-respond-success",
+      "name": "Node 9 - Respond Success (200 OK)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-val-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-val-code",
+              "name": "error",
+              "value": "INVALID_REQUIREMENT_INPUT",
+              "type": "string"
+            },
+            {
+              "id": "err-val-message",
+              "name": "message",
+              "value": "Nội dung yêu cầu (requirement) không hợp lệ hoặc quá ngắn. Yêu cầu tối thiểu 20 ký tự.",
+              "type": "string"
+            },
+            {
+              "id": "err-val-length",
+              "name": "receivedLength",
+              "value": "={{ $json.charCount || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "err-val-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "err-val-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -440,
+        220
+      ],
+      "id": "f4-node-10-handle-val-err",
+      "name": "Node 10 - Handle Input Validation Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -220,
+        220
+      ],
+      "id": "f4-node-11-respond-val-err",
+      "name": "Node 11 - Respond Validation Error (400)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-ai-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-ai-code",
+              "name": "error",
+              "value": "AI_GENERATION_FAILED",
+              "type": "string"
+            },
+            {
+              "id": "err-ai-message",
+              "name": "message",
+              "value": "Mô hình Google Gemini không phản hồi hoặc đã vượt quá giới hạn yêu cầu (Quota 429).",
+              "type": "string"
+            },
+            {
+              "id": "err-ai-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "err-ai-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        220
+      ],
+      "id": "f4-node-12-handle-ai-err",
+      "name": "Node 12 - Handle AI Generation Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        220
+      ],
+      "id": "f4-node-13-respond-ai-err",
+      "name": "Node 13 - Respond AI Error (502)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-schema-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-schema-code",
+              "name": "error",
+              "value": "INVALID_JSON_OR_SCHEMA",
+              "type": "string"
+            },
+            {
+              "id": "err-schema-message",
+              "name": "message",
+              "value": "={{ $json.schemaErrorDetails || 'Phản hồi từ AI không đúng cấu trúc JSON hoặc thiếu phân cấp Epic -> Story -> Task.' }}",
+              "type": "string"
+            },
+            {
+              "id": "err-schema-raw",
+              "name": "rawOutput",
+              "value": "={{ $json.rawOutput || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "err-schema-request-id",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "err-schema-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        220
+      ],
+      "id": "f4-node-14-handle-schema-err",
+      "name": "Node 14 - Handle JSON & Schema Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        880,
+        220
+      ],
+      "id": "f4-node-15-respond-schema-err",
+      "name": "Node 15 - Respond Schema Error (422)"
     }
   ],
-  "pinData": {},
   "connections": {
-    "Webhook": {
+    "Node 1 - Webhook Trigger (AI Requirement)": {
       "main": [
         [
           {
-            "node": "Message a model",
+            "node": "Node 2 - Normalize Inbound Payload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Message a model": {
+    "Node 2 - Normalize Inbound Payload": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Node 3 - Validate Input Data (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Input Data (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Build Structured Agile AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 10 - Handle Input Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Build Structured Agile AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - AI Generation Engine (Google Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - AI Generation Engine (Google Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Check AI Output Presence (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Check AI Output Presence (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Clean & Parse JSON Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 12 - Handle AI Generation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Clean & Parse JSON Output": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Validate Epic Story Task Schema (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Validate Epic Story Task Schema (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Respond Success (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 14 - Handle JSON & Schema Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 10 - Handle Input Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Node 11 - Respond Validation Error (400)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 12 - Handle AI Generation Error": {
+      "main": [
+        [
+          {
+            "node": "Node 13 - Respond AI Error (502)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 14 - Handle JSON & Schema Error": {
+      "main": [
+        [
+          {
+            "node": "Node 15 - Respond Schema Error (422)",
             "type": "main",
             "index": 0
           }
@@ -101,12 +611,11 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "d2bf23ce-7887-4942-86e7-62d435f5b4c7",
+  "versionId": "f4000000-0000-4000-8000-000000000004",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "86c6032dcc0fd627266bfea215eff0a1a059f7b10e676fe6c342e72298caae9e"
   },
   "nodeGroups": [],
-  "id": "7rfbxjYvhqIZXuQ8",
   "tags": []
 }
