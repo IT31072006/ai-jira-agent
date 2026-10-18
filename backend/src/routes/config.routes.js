@@ -10,6 +10,7 @@ router.use(authMiddleware);
 router.get('/', ConfigController.get);
 router.put('/', ConfigController.update);
 router.delete('/', ConfigController.delete);
+router.post('/test-connection', ConfigController.testConnection);
 router.post('/test-notification', ConfigController.testNotification);
 router.get('/notifications/history', ConfigController.getNotificationHistory);
 

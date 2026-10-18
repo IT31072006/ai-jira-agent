@@ -34,6 +34,9 @@ const env = {
 
   // Luồng 2: Workspace Management Webhook
   N8N_WORKSPACE_WEBHOOK_URL: process.env.N8N_WORKSPACE_WEBHOOK_URL || 'http://localhost:5678/webhook/workspace-management',
+
+  // Luồng 3: Jira & AI Configuration Webhook
+  N8N_CONFIG_WEBHOOK_URL: process.env.N8N_CONFIG_WEBHOOK_URL || 'http://localhost:5678/webhook/jira-ai-config',
 };
 
 module.exports = env;

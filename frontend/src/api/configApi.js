@@ -17,6 +17,11 @@ export const configApi = {
     return response.data;
   },
 
+  testConnection: async (provider = 'JIRA') => {
+    const response = await apiClient.post('/config/test-connection', { provider });
+    return response.data;
+  },
+
   testNotification: async (channel = null) => {
     const response = await apiClient.post('/config/test-notification', { channel });
     return response.data;
