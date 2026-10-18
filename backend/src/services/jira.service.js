@@ -14,6 +14,10 @@ const N8N_JIRA_MEMBERS_WEBHOOK_URL =
   process.env.N8N_JIRA_MEMBERS_WEBHOOK_URL ||
   'http://localhost:5678/webhook-test/jira-members';
 
+const N8N_JIRA_SYNC_WEBHOOK_URL =
+  process.env.N8N_JIRA_SYNC_WEBHOOK_URL ||
+  'http://localhost:5678/webhook-test/jira-webhook-sync';
+
 async function postToN8n(url, payload, options = {}) {
   try {
     return await axios.post(url, payload, options);
@@ -731,6 +735,13 @@ class JiraService {
       assignee,
       jiraUrl,
       parentKey,
+    });
+
+    // Kích hoạt đồng thời n8n Workflow Luồng 9 (Flow 9 - Webhook Sync & Real-time Alert)
+    postToN8n(N8N_JIRA_SYNC_WEBHOOK_URL, payload, { timeout: 10000 }).catch((n8nErr) => {
+      console.warn(
+        `[JiraService] n8n sync webhook không phản hồi (${n8nErr.message}), tiến trình CSDL nội bộ vẫn hoàn tất.`
+      );
     });
 
     return {

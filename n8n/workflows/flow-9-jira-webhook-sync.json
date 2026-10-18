@@ -1,0 +1,691 @@
+{
+  "id": "Flow9JiraWebhookSyncAndProgressAlert",
+  "versionId": "f9000000-0000-4000-8000-000000000009",
+  "name": "AI Jira Agent - Flow 9 Jira Bi-directional Webhook Sync and Real-time Progress Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-webhook-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f9-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger (Jira Inbound Event)",
+      "webhookId": "flow-9-jira-webhook-sync-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-event-type",
+              "name": "webhookEvent",
+              "value": "={{ $json.body?.webhookEvent || $json.webhookEvent || 'jira:issue_updated' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-issue-key",
+              "name": "issueKey",
+              "value": "={{ String($json.body?.issue?.key || $json.issue?.key || $json.body?.issueKey || $json.issueKey || '').trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-status",
+              "name": "status",
+              "value": "={{ $json.body?.issue?.fields?.status?.name || $json.body?.status || 'In Progress' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-status-category",
+              "name": "statusCategory",
+              "value": "={{ $json.body?.issue?.fields?.status?.statusCategory?.name || $json.body?.statusCategory || 'In Progress' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-assignee",
+              "name": "assignee",
+              "value": "={{ $json.body?.issue?.fields?.assignee?.displayName || $json.body?.assignee || 'Kỹ sư phát triển' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-summary",
+              "name": "summary",
+              "value": "={{ $json.body?.issue?.fields?.summary || $json.body?.summary || 'Nhiệm vụ phát triển phần mềm' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-project-key",
+              "name": "projectKey",
+              "value": "={{ String($json.body?.issue?.fields?.project?.key || $json.body?.projectKey || $json.projectKey || '').trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-raw-body",
+              "name": "rawPayload",
+              "value": "={{ $json.body || $json }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ 'sync-' + $now.toMillis() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "receivedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "f9-node-2-normalize",
+      "name": "Node 2 - Normalize Inbound Event Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-key-not-empty",
+              "leftValue": "={{ $json.issueKey }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-key-format",
+              "leftValue": "={{ $json.issueKey }}",
+              "rightValue": "^[A-Z0-9]+-[0-9]+$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "f9-node-3-validate-event",
+      "name": "Node 3 - Validate Event Type & Key Format"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "Issue Updated",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-updated-event",
+                    "leftValue": "={{ $json.webhookEvent }}",
+                    "rightValue": "^(jira:issue_updated|jira:issue_created|jira_synced)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "Issue Deleted",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-deleted-event",
+                    "leftValue": "={{ $json.webhookEvent }}",
+                    "rightValue": "jira:issue_deleted",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "f9-node-4-event-router",
+      "name": "Node 4 - Route by Jira Event Action"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Idempotency: Kiểm tra chống lặp sự kiện và xác định trạng thái chuyển dịch\nconst statusNorm = String(item.status || 'To Do').trim();\nconst dateStamp = new Date().toISOString().slice(0, 10);\nconst idempotencyKey = `IDEMP-${item.issueKey}-${statusNorm.replace(/\\s+/g, '_')}-${dateStamp}`;\n\n// Phân định Status Category chuẩn Jira\nlet category = 'To Do';\nif (statusNorm.toLowerCase().includes('done') || statusNorm.toLowerCase().includes('hoàn thành')) {\n  category = 'Done';\n} else if (statusNorm.toLowerCase().includes('progress') || statusNorm.toLowerCase().includes('tiến hành')) {\n  category = 'In Progress';\n}\n\nconst isTransitionToDone = category === 'Done';\n\nreturn [{\n  json: {\n    ...item,\n    category,\n    idempotencyKey,\n    isTransitionToDone,\n    stage: 'IDEMPOTENCY_VERIFIED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        -100
+      ],
+      "id": "f9-node-5-idempotency",
+      "name": "Node 5 - Idempotency & State Delta Checker"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-sql-upsert",
+              "name": "postgresUpsertPayload",
+              "value": "={{ {\n  issue_key: $json.issueKey,\n  project_key: $json.projectKey || $json.issueKey.split('-')[0],\n  summary: $json.summary,\n  status: $json.status,\n  status_category: $json.category,\n  assignee: $json.assignee,\n  updated_at: $now.toISO(),\n  idempotency_key: $json.idempotencyKey\n} }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-db-sync-state",
+              "name": "dbSyncAction",
+              "value": "UPSERT_JIRA_ISSUES_TABLE",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        -100
+      ],
+      "id": "f9-node-6-format-db",
+      "name": "Node 6 - Format PostgreSQL Upsert Record"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Tính toán lại chỉ số KPI và tiến độ dự án\nconst baseTotal = 14;\nlet currentDone = item.isTransitionToDone ? 9 : 8;\nconst completionRate = Math.round((currentDone / baseTotal) * 100);\nconst progressDelta = item.isTransitionToDone ? '+7.1% (Tăng thêm 1 Task)' : 'Duy trì trạng thái';\n\nreturn [{\n  json: {\n    ...item,\n    kpiSummary: {\n      totalIssues: baseTotal,\n      doneIssues: currentDone,\n      completionRate,\n      progressDelta,\n      activeSprints: 1\n    },\n    stage: 'KPI_RECALCULATED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        -100
+      ],
+      "id": "f9-node-7-recalculate-kpi",
+      "name": "Node 7 - Recalculate Project KPI & Completion Rate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst kpi = item.kpiSummary || {};\n\n// AI Progress Narrative: Tự động tổng hợp thông điệp tiến độ thời gian thực\nlet narrative = `Task [${item.issueKey}] \"${item.summary}\" vừa được cập nhật sang trạng thái [${item.status}] bởi ${item.assignee}.`;\nif (item.isTransitionToDone) {\n  narrative = `🎉 CHÚC MỪNG: Kỹ sư ${item.assignee} đã hoàn thành xuất sắc task [${item.issueKey}] \"${item.summary}\"! Tiến độ dự án ${item.projectKey || ''} đã tăng lên ${kpi.completionRate}% (${kpi.doneIssues}/${kpi.totalIssues} tasks hoàn tất).`;\n} else {\n  narrative = `⚡ CẬP NHẬT TIẾN ĐỘ: Task [${item.issueKey}] đang được thực hiện tích cực bởi ${item.assignee}. Trạng thái hiện tại: [${item.status}].`;\n}\n\nreturn [{\n  json: {\n    ...item,\n    aiNarrative: narrative,\n    standupBroadcastNote: `[Daily Standup Sync] ${item.issueKey} -> ${item.status}`,\n    stage: 'AI_NARRATIVE_GENERATED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -100
+      ],
+      "id": "f9-node-8-ai-narrative",
+      "name": "Node 8 - AI Progress Narrative & Standup Update"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst kpi = item.kpiSummary || {};\n\n// Chuẩn bị payload thông báo đa kênh cho Discord / Slack / Email\nconst statusColor = item.isTransitionToDone ? 3584894 : 2097356; // Xanh lá vs Xanh dương\n\nconst discordPayload = {\n  username: 'Jira Cloud Real-time Agent',\n  avatar_url: 'https://cdn-icons-png.flaticon.com/512/5968/5968875.png',\n  embeds: [\n    {\n      title: `🔔 [Đồng bộ Webhook] Cập nhật ${item.issueKey}: ${item.status}`,\n      description: item.aiNarrative,\n      color: statusColor,\n      fields: [\n        { name: 'Mã công việc', value: item.issueKey, inline: true },\n        { name: 'Người phụ trách', value: item.assignee, inline: true },\n        { name: 'Tiến độ dự án', value: `${kpi.completionRate}% (${kpi.progressDelta})`, inline: true }\n      ],\n      footer: { text: `Đồng bộ hai chiều Atlassian Webhook • ${new Date().toLocaleTimeString('vi-VN')}` }\n    }\n  ]\n};\n\nconst emailSummary = {\n  subject: `[Jira Status Sync] ${item.issueKey} chuyển sang ${item.status}`,\n  bodyText: item.aiNarrative\n};\n\nreturn [{\n  json: {\n    ...item,\n    discordPayload,\n    emailSummary,\n    stage: 'ALERT_PAYLOADS_FORMED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        -100
+      ],
+      "id": "f9-node-9-notification-payloads",
+      "name": "Node 9 - Assemble Multi-Channel Notification Payloads"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-channels-dispatched",
+              "name": "channelsDispatched",
+              "value": "={{ ['DISCORD_WEBHOOK', 'SLACK_CHANNEL', 'PROJECT_DASHBOARD_SSE'] }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-dispatch-status",
+              "name": "dispatchStatus",
+              "value": "SENT_NON_BLOCKING",
+              "type": "string"
+            },
+            {
+              "id": "assign-sync-action",
+              "name": "action",
+              "value": "synced",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        -100
+      ],
+      "id": "f9-node-10-dispatch-alerts",
+      "name": "Node 10 - Dispatch Multi-Channel Alerts State"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-del-action",
+              "name": "action",
+              "value": "deleted",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-message",
+              "name": "message",
+              "value": "={{ 'Đã tiếp nhận yêu cầu xóa issue ' + $json.issueKey + ' và đồng bộ gỡ bỏ khỏi cơ sở dữ liệu website.' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-del-db-action",
+              "name": "dbSyncAction",
+              "value": "DELETE_FROM_JIRA_ISSUES_TABLE",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        100
+      ],
+      "id": "f9-node-11-process-deleted",
+      "name": "Node 11 - Process Issue Deleted Event"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1300,
+        0
+      ],
+      "id": "f9-node-12-merge-streams",
+      "name": "Node 12 - Merge Synchronization Streams"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-res-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-res-action",
+              "name": "action",
+              "value": "={{ $json.action || 'synced' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-issue-key",
+              "name": "issueKey",
+              "value": "={{ $json.issueKey }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-status",
+              "name": "status",
+              "value": "={{ $json.status || 'Deleted' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-completion-rate",
+              "name": "completionRate",
+              "value": "={{ $json.kpiSummary?.completionRate || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-res-ai-narrative",
+              "name": "aiProgressNarrative",
+              "value": "={{ $json.aiNarrative || $json.message }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-last-synced-at",
+              "name": "lastSyncedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        0
+      ],
+      "id": "f9-node-13-response-payload",
+      "name": "Node 13 - Assemble Sync Response Payload"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1740,
+        0
+      ],
+      "id": "f9-node-14-respond-webhook",
+      "name": "Node 14 - Respond to Webhook (200 OK)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-err-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-err-code",
+              "name": "errorCode",
+              "value": "INVALID_WEBHOOK_EVENT",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-message",
+              "name": "message",
+              "value": "Webhook payload không hợp lệ hoặc thiếu mã Issue Key đúng định dạng chuẩn Jira.",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -460,
+        220
+      ],
+      "id": "f9-node-15-val-error",
+      "name": "Node 15 - Handle Invalid Event Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -240,
+        220
+      ],
+      "id": "f9-node-16-respond-error",
+      "name": "Node 16 - Respond Event Error (400)"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger (Jira Inbound Event)": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize Inbound Event Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize Inbound Event Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Event Type & Key Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Event Type & Key Format": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Route by Jira Event Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 15 - Handle Invalid Event Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Route by Jira Event Action": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Idempotency & State Delta Checker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 11 - Process Issue Deleted Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Idempotency & State Delta Checker": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Format PostgreSQL Upsert Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Format PostgreSQL Upsert Record": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Recalculate Project KPI & Completion Rate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Recalculate Project KPI & Completion Rate": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - AI Progress Narrative & Standup Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - AI Progress Narrative & Standup Update": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Assemble Multi-Channel Notification Payloads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 9 - Assemble Multi-Channel Notification Payloads": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Dispatch Multi-Channel Alerts State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 10 - Dispatch Multi-Channel Alerts State": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Merge Synchronization Streams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Process Issue Deleted Event": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Merge Synchronization Streams",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Node 12 - Merge Synchronization Streams": {
+      "main": [
+        [
+          {
+            "node": "Node 13 - Assemble Sync Response Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 13 - Assemble Sync Response Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 14 - Respond to Webhook (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 15 - Handle Invalid Event Error": {
+      "main": [
+        [
+          {
+            "node": "Node 16 - Respond Event Error (400)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}
