@@ -779,7 +779,24 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
         {/* ── Form nhập requirement ─────────────────────────────────────────── */}
         <form onSubmit={handleSubmit} className="analyzer-form">
           <div className="form-group">
-            <label htmlFor="requirement-input">Nội dung Yêu cầu (Requirement)</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label htmlFor="requirement-input" style={{ margin: 0 }}>Nội dung Yêu cầu (Requirement)</label>
+              {!confirmed && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem', cursor: 'pointer' }}
+                  onClick={() =>
+                    setRequirement(
+                      'Xây dựng hệ thống cho phép khách hàng đặt xe qua ứng dụng di động, tự động định vị GPS và tìm tài xế gần nhất trong bán kính 3km, tính toán cước phí chuyến đi theo quãng đường và thời gian thực, hỗ trợ thanh toán qua Ví điện tử MoMo/ZaloPay hoặc Tiền mặt, đồng thời cho phép khách hàng chấm điểm tài xế từ 1 đến 5 sao và viết bình luận sau khi hoàn thành chuyến đi.'
+                    )
+                  }
+                  title="Nạp nhanh bộ yêu cầu mẫu SmartRide App theo kịch bản nghiệm thu"
+                >
+                  ⚡ Nạp yêu cầu mẫu SmartRide
+                </button>
+              )}
+            </div>
             <textarea
               id="requirement-input"
               className="form-control analyzer-textarea"

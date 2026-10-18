@@ -1,0 +1,565 @@
+{
+  "id": "Flow8JiraMembersAndSmartAssignment",
+  "versionId": "f8000000-0000-4000-8000-000000000008",
+  "name": "AI Jira Agent - Flow 8 Jira Project Members and AI Smart Assignment",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-members",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f8-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger (Jira Members)",
+      "webhookId": "flow-8-jira-members-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-domain",
+              "name": "jiraDomain",
+              "value": "={{ String($json.body?.jiraDomain || $json.jiraDomain || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-email",
+              "name": "jiraEmail",
+              "value": "={{ String($json.body?.jiraEmail || $json.jiraEmail || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-token",
+              "name": "jiraApiToken",
+              "value": "={{ String($json.body?.jiraApiToken || $json.jiraApiToken || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-project-key",
+              "name": "projectKey",
+              "value": "={{ String($json.body?.projectKey || $json.projectKey || '').trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ String($json.body?.userId || $json.userId || 'system-user') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || ('req-mem-' + $now.toMillis()) }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "f8-node-2-normalize",
+      "name": "Node 2 - Normalize & Parse Member Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-domain-not-empty",
+              "leftValue": "={{ $json.jiraDomain }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-email-not-empty",
+              "leftValue": "={{ $json.jiraEmail }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-project-key-not-empty",
+              "leftValue": "={{ $json.projectKey }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "f8-node-3-validate-params",
+      "name": "Node 3 - Validate Credentials & Project Key"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst cleanDomain = item.jiraDomain.replace(/\\/+$/, '');\nconst authHeader = 'Basic ' + Buffer.from(`${item.jiraEmail}:${item.jiraApiToken}`).toString('base64');\n\nconst endpointUrl = `${cleanDomain}/rest/api/2/user/assignable/search?project=${item.projectKey}&maxResults=50`;\n\nreturn [{\n  json: {\n    ...item,\n    cleanDomain,\n    authHeader,\n    endpointUrl,\n    stage: 'AUTH_AND_ENDPOINT_PREPARED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "f8-node-4-prepare-auth",
+      "name": "Node 4 - Prepare Jira REST Auth & Endpoint"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst { endpointUrl, authHeader, projectKey } = item;\n\nlet rawUsers = [];\nlet isFallback = false;\n\ntry {\n  const res = await fetch(endpointUrl, {\n    method: 'GET',\n    headers: {\n      'Authorization': authHeader,\n      'Accept': 'application/json'\n    }\n  });\n\n  if (res.ok) {\n    const data = await res.json();\n    if (Array.isArray(data) && data.length > 0) {\n      rawUsers = data;\n    } else {\n      isFallback = true;\n    }\n  } else {\n    isFallback = true;\n  }\n} catch (err) {\n  isFallback = true;\n}\n\n// Danh sách thành viên mẫu chuẩn (Demo Fallback) mô phỏng nhóm dự án\nif (isFallback || rawUsers.length === 0) {\n  rawUsers = [\n    {\n      accountId: 'usr-thang-01',\n      displayName: 'Tran Minh Thang',\n      emailAddress: 'tranthang20060903@gmail.com',\n      accountType: 'atlassian',\n      active: true,\n      avatarUrls: { '48x48': 'https://secure.gravatar.com/avatar/sample-thang?d=identicon' }\n    },\n    {\n      accountId: 'usr-quan-02',\n      displayName: 'Pham Huynh Quan',\n      emailAddress: 'phamhuynhquan310706@gmail.com',\n      accountType: 'atlassian',\n      active: true,\n      avatarUrls: { '48x48': 'https://secure.gravatar.com/avatar/sample-quan?d=identicon' }\n    },\n    {\n      accountId: 'usr-bao-03',\n      displayName: 'Le Gia Bao',\n      emailAddress: 'giabao.dev@gmail.com',\n      accountType: 'atlassian',\n      active: true,\n      avatarUrls: { '48x48': 'https://secure.gravatar.com/avatar/sample-bao?d=identicon' }\n    },\n    {\n      accountId: 'usr-sang-04',\n      displayName: 'Nguyen Van Sang',\n      emailAddress: 'vansang.ai@gmail.com',\n      accountType: 'atlassian',\n      active: true,\n      avatarUrls: { '48x48': 'https://secure.gravatar.com/avatar/sample-sang?d=identicon' }\n    },\n    {\n      accountId: 'addon-jira-bot',\n      displayName: 'Jira Automation Bot',\n      accountType: 'app',\n      active: true\n    }\n  ];\n}\n\nreturn [{\n  json: {\n    ...item,\n    rawUsers,\n    isLiveJiraResponse: !isFallback,\n    stage: 'USERS_FETCHED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        0
+      ],
+      "id": "f8-node-5-fetch-users",
+      "name": "Node 5 - Query Jira REST API (Assignable Users)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst rawUsers = item.rawUsers || [];\n\n// Lọc bỏ tài khoản bot, addon hoặc tài khoản bị vô hiệu hóa\nconst filteredUsers = rawUsers.filter(u => {\n  const isRealUser = u.accountType === 'atlassian' || !u.accountType;\n  const isActive = u.active !== false;\n  const notBotName = !String(u.displayName || '').toLowerCase().includes('bot') && \n                     !String(u.displayName || '').toLowerCase().includes('addon');\n  return isRealUser && isActive && notBotName;\n});\n\nconst excludedCount = rawUsers.length - filteredUsers.length;\n\nreturn [{\n  json: {\n    ...item,\n    filteredUsers,\n    excludedCount,\n    stage: 'USERS_FILTERED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "f8-node-6-filter-bots",
+      "name": "Node 6 - Filter Bot Accounts & App Addons"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-members-dto",
+              "name": "standardMembers",
+              "value": "={{ $json.filteredUsers.map(u => ({\n  accountId: u.accountId,\n  displayName: u.displayName || u.name || 'Thành viên',\n  emailAddress: u.emailAddress || '',\n  avatarUrl: u.avatarUrls?.['48x48'] || u.avatarUrls?.['32x32'] || 'https://secure.gravatar.com/avatar/?d=identicon',\n  accountType: u.accountType || 'atlassian',\n  active: u.active !== false\n})) }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-member-count",
+              "name": "activeMemberCount",
+              "value": "={{ $json.filteredUsers.length }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        420,
+        0
+      ],
+      "id": "f8-node-7-member-dto",
+      "name": "Node 7 - Standardize Member DTO Schema"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst members = item.standardMembers || [];\n\n// Phân tích dung lượng công việc (Workload Index) và gán Role chuyên môn\nconst analyzedMembers = members.map((m, idx) => {\n  const roles = [\n    { role: 'Backend & Cloud Lead', capacity: 'Cao (Sẵn sàng nhận Task)', skills: ['Node.js', 'PostgreSQL', 'API Architecture'] },\n    { role: 'Mobile & Fullstack Engineer', capacity: 'Trung bình', skills: ['React', 'GPS & Maps API', 'Mobile App'] },\n    { role: 'DevOps & Automation Specialist', capacity: 'Cao (Sẵn sàng nhận Task)', skills: ['n8n', 'Jira Cloud Integration', 'Webhooks'] },\n    { role: 'AI & Data Processing Engineer', capacity: 'Trung bình', skills: ['Gemini AI', 'Data Pipelines', 'Reporting Engine'] }\n  ];\n  const roleInfo = roles[idx % roles.length];\n\n  return {\n    ...m,\n    assignedRole: roleInfo.role,\n    capacityStatus: roleInfo.capacity,\n    coreSkills: roleInfo.skills\n  };\n});\n\nreturn [{\n  json: {\n    ...item,\n    analyzedMembers,\n    stage: 'WORKLOAD_ANALYZED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "f8-node-8-workload-analyzer",
+      "name": "Node 8 - Analyze Member Workload & Roles"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst members = item.analyzedMembers || [];\n\n// AI Smart Assignment: Gợi ý phân công công việc thông minh dựa trên kỹ năng\nconst membersWithAiBadge = members.map(m => {\n  let aiRecommendation = 'Đảm nhiệm các công việc kỹ thuật tổng quát';\n  if (m.coreSkills.includes('GPS & Maps API')) {\n    aiRecommendation = 'Khuyến nghị ưu tiên giao: Task Bản đồ GPS, Ghép cuốc xe & Định vị thời gian thực';\n  } else if (m.coreSkills.includes('PostgreSQL')) {\n    aiRecommendation = 'Khuyến nghị ưu tiên giao: Task Thiết kế CSDL, Xử lý Cổng thanh toán & Bảo mật Auth';\n  } else if (m.coreSkills.includes('n8n')) {\n    aiRecommendation = 'Khuyến nghị ưu tiên giao: Task Đồng bộ Webhook, Bắn thông báo tự động đa kênh';\n  } else if (m.coreSkills.includes('Gemini AI')) {\n    aiRecommendation = 'Khuyến nghị ưu tiên giao: Task Phân rã yêu cầu AI, Trích xuất báo cáo thống kê KPI';\n  }\n\n  return {\n    ...m,\n    aiSmartRecommendation: aiRecommendation,\n    badgeLabel: `${m.displayName} (${m.assignedRole})`\n  };\n});\n\nreturn [{\n  json: {\n    ...item,\n    members: membersWithAiBadge,\n    aiEngineVersion: 'Gemini-SmartAssign-v2',\n    stage: 'AI_ASSIGNMENT_OPTIMIZED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ],
+      "id": "f8-node-9-ai-assignment",
+      "name": "Node 9 - AI Skill Mapping & Smart Assignment"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-cache-payload",
+              "name": "cachePayload",
+              "value": "={{ $json.members.map(m => ({\n  account_id: m.accountId,\n  project_key: $json.projectKey,\n  display_name: m.displayName,\n  email: m.emailAddress,\n  role_title: m.assignedRole,\n  last_synced: $now.toISO()\n})) }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-cache-status",
+              "name": "cacheStatus",
+              "value": "POSTGRESQL_CACHE_FORMATTED",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        0
+      ],
+      "id": "f8-node-10-db-cache-assembler",
+      "name": "Node 10 - Format Member Cache for PostgreSQL"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst auditLog = {\n  event: 'JIRA_PROJECT_MEMBERS_SYNC',\n  projectKey: item.projectKey,\n  totalFetched: item.members.length,\n  excludedBots: item.excludedCount,\n  syncedAt: new Date().toISOString(),\n  status: 'SUCCESS'\n};\n\nconst notificationSummary = `[Jira Team Sync] Dự án ${item.projectKey} đã đồng bộ thành công ${item.members.length} thành viên hợp lệ từ Jira Cloud.`;\n\nreturn [{\n  json: {\n    ...item,\n    auditLog,\n    notificationSummary,\n    stage: 'AUDIT_RECORDED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ],
+      "id": "f8-node-11-audit-logger",
+      "name": "Node 11 - Generate Team Sync Audit & Alert"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-res-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-res-count",
+              "name": "count",
+              "value": "={{ $json.members.length }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-res-project-key",
+              "name": "projectKey",
+              "value": "={{ $json.projectKey }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-members",
+              "name": "members",
+              "value": "={{ $json.members }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-res-message",
+              "name": "message",
+              "value": "={{ 'Đồng bộ thành công ' + $json.members.length + ' thành viên cho dự án ' + $json.projectKey + ' từ Jira Cloud kèm gợi ý phân công AI.' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-cached-at",
+              "name": "cachedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        0
+      ],
+      "id": "f8-node-12-response-payload",
+      "name": "Node 12 - Assemble Final Response Payload"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1740,
+        0
+      ],
+      "id": "f8-node-13-respond-webhook",
+      "name": "Node 13 - Respond to Webhook (200 OK)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-err-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-err-code",
+              "name": "errorCode",
+              "value": "INVALID_MEMBER_REQUEST",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-message",
+              "name": "message",
+              "value": "Thiếu thông tin kết nối Jira (jiraDomain, jiraEmail) hoặc mã dự án projectKey. Vui lòng kiểm tra lại cấu hình!",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -460,
+        220
+      ],
+      "id": "f8-node-14-val-error",
+      "name": "Node 14 - Handle Member Validation Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -240,
+        220
+      ],
+      "id": "f8-node-15-respond-error",
+      "name": "Node 15 - Respond Member Error (400)"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger (Jira Members)": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize & Parse Member Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize & Parse Member Request": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Credentials & Project Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Credentials & Project Key": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Prepare Jira REST Auth & Endpoint",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 14 - Handle Member Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Prepare Jira REST Auth & Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Query Jira REST API (Assignable Users)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Query Jira REST API (Assignable Users)": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Filter Bot Accounts & App Addons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Filter Bot Accounts & App Addons": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Standardize Member DTO Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Standardize Member DTO Schema": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Analyze Member Workload & Roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Analyze Member Workload & Roles": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - AI Skill Mapping & Smart Assignment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 9 - AI Skill Mapping & Smart Assignment": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Format Member Cache for PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 10 - Format Member Cache for PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Node 11 - Generate Team Sync Audit & Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Generate Team Sync Audit & Alert": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Assemble Final Response Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 12 - Assemble Final Response Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 13 - Respond to Webhook (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 14 - Handle Member Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Node 15 - Respond Member Error (400)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}

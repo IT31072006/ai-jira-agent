@@ -11,7 +11,11 @@ async function runWorkspaceIsolationTest() {
   console.log('🚀 KIỂM THỬ PHÂN TÁCH DỮ LIỆU LUỒNG 9 THEO WORKSPACE (MULTI-WORKSPACE)');
   console.log('=====================================================\n');
 
-  const userId = 'c9e09b9d-6a9f-4d2a-b998-ed3acfc46509';
+  const userRes = await db.query('SELECT id FROM users LIMIT 1');
+  const userId = userRes.rows[0]?.id;
+  if (!userId) {
+    throw new Error('Không tìm thấy người dùng nào trong cơ sở dữ liệu để chạy test');
+  }
   const otherUserId = '00000000-0000-0000-0000-000000000001'; // Mock user không có quyền
 
   let workspaceA = null;

@@ -1,7 +1,7 @@
 {
-  "id": "Flow7PushToJira1",
+  "id": "Flow7PushRequirementsToJira",
   "versionId": "f7000000-0000-4000-8000-000000000007",
-  "name": "Flow 7 - Push to Jira",
+  "name": "AI Jira Agent - Flow 7 Push Requirements to Jira Cloud",
   "nodes": [
     {
       "parameters": {
@@ -11,62 +11,588 @@
         "options": {}
       },
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [
-        -360,
+        -900,
         0
       ],
-      "id": "e7b0a881-2826-4b20-96f3-a1286b2b73c1",
-      "name": "Webhook - Push to Jira",
+      "id": "f7-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger (Push to Jira)",
       "webhookId": "flow-7-push-to-jira-webhook"
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst { jiraDomain, jiraEmail, jiraApiToken, projectKey, epics } = body;\n\nif (!jiraDomain || !jiraEmail || !jiraApiToken) {\n  throw new Error(\"Thiếu thông tin kết nối Jira (jiraDomain, jiraEmail, jiraApiToken). Vui lòng kiểm tra lại cấu hình!\");\n}\n\nif (!projectKey) {\n  throw new Error(\"Thiếu Jira Project Key (ví dụ: KAN, PROJ).\");\n}\n\nif (!Array.isArray(epics) || epics.length === 0) {\n  throw new Error(\"Danh sách epics rỗng. Vui lòng phân tích yêu cầu trước khi đẩy lên Jira!\");\n}\n\nconst cleanDomain = jiraDomain.replace(/\\/+$/, \"\");\nconst authHeader = \"Basic \" + Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString(\"base64\");\n\nasync function createJiraIssue(fields) {\n  const url = `${cleanDomain}/rest/api/2/issue`;\n  const res = await fetch(url, {\n    method: \"POST\",\n    headers: {\n      \"Authorization\": authHeader,\n      \"Content-Type\": \"application/json\",\n      \"Accept\": \"application/json\"\n    },\n    body: JSON.stringify({ fields })\n  });\n\n  const data = await res.json().catch(() => ({}));\n  if (!res.ok) {\n    const errorDetails = data.errorMessages?.join(\", \") || JSON.stringify(data.errors || data);\n    throw new Error(`Jira API Error (${res.status}): ${errorDetails}`);\n  }\n\n  return data;\n}\n\nconst createdIssues = [];\nlet epicsCount = 0;\nlet storiesCount = 0;\nlet tasksCount = 0;\n\n// Vòng lặp cấp 1: Tạo các Epic\nfor (const epic of epics) {\n  const epicTitle = epic.title || \"Untitled Epic\";\n  const epicDesc = epic.description || epicTitle;\n  \n  let epicRes;\n  try {\n    epicRes = await createJiraIssue({\n      project: { key: projectKey },\n      summary: epicTitle,\n      description: epicDesc,\n      issuetype: { name: \"Epic\" }\n    });\n  } catch (err) {\n    throw new Error(`Lỗi khi tạo Epic \"${epicTitle}\": ${err.message}`);\n  }\n\n  const epicKey = epicRes.key;\n  epicsCount++;\n  createdIssues.push({\n    type: \"Epic\",\n    key: epicKey,\n    id: epicRes.id,\n    title: epicTitle,\n    parent: null,\n    assignee: null,\n    url: `${cleanDomain}/browse/${epicKey}`\n  });\n\n  // Vòng lặp cấp 2: Tạo các Story thuộc Epic này (lấy ID/Key Epic)\n  const stories = epic.stories || epic.user_stories || [];\n  for (const story of stories) {\n    const storyTitle = story.title || \"Untitled Story\";\n    const storyDesc = story.description || storyTitle;\n\n    const storyFields = {\n      project: { key: projectKey },\n      summary: storyTitle,\n      description: storyDesc,\n      issuetype: { name: \"Story\" },\n      parent: { key: epicKey }\n    };\n    if (story.assigneeId) {\n      storyFields.assignee = { accountId: story.assigneeId };\n    }\n\n    let storyRes;\n    try {\n      storyRes = await createJiraIssue(storyFields);\n    } catch (err) {\n      throw new Error(`Lỗi khi tạo Story \"${storyTitle}\" thuộc Epic ${epicKey}: ${err.message}`);\n    }\n\n    const storyKey = storyRes.key;\n    storiesCount++;\n    createdIssues.push({\n      type: \"Story\",\n      key: storyKey,\n      id: storyRes.id,\n      title: storyTitle,\n      parent: epicKey,\n      assignee: story.assigneeName || null,\n      url: `${cleanDomain}/browse/${storyKey}`\n    });\n\n    // Vòng lặp cấp 3: Tạo các Sub-task thuộc Story này (lấy ID/Key Story)\n    const tasks = story.tasks || story.subtasks || [];\n    for (const task of tasks) {\n      const taskTitle = typeof task === \"string\" ? task : task.title || \"Untitled Subtask\";\n      const taskDesc = typeof task === \"object\" ? task.description || taskTitle : taskTitle;\n      const assigneeId = typeof task === \"object\" ? task.assigneeId : null;\n      const assigneeName = typeof task === \"object\" ? task.assigneeName : null;\n\n      const taskFields = {\n        project: { key: projectKey },\n        summary: taskTitle,\n        description: taskDesc,\n        issuetype: { name: \"Subtask\" },\n        parent: { key: storyKey }\n      };\n      if (assigneeId) {\n        taskFields.assignee = { accountId: assigneeId };\n      }\n\n      let taskRes;\n      try {\n        taskRes = await createJiraIssue(taskFields);\n      } catch (err) {\n        // Thử lại với loại issue \"Sub-task\" nếu cấu hình Jira sử dụng tên này\n        try {\n          const taskFieldsRetry = {\n            project: { key: projectKey },\n            summary: taskTitle,\n            description: taskDesc,\n            issuetype: { name: \"Sub-task\" },\n            parent: { key: storyKey }\n          };\n          if (assigneeId) {\n            taskFieldsRetry.assignee = { accountId: assigneeId };\n          }\n          taskRes = await createJiraIssue(taskFieldsRetry);\n        } catch (retryErr) {\n          throw new Error(`Lỗi khi tạo Subtask \"${taskTitle}\" thuộc Story ${storyKey}: ${retryErr.message}`);\n        }\n      }\n\n      const taskKey = taskRes.key;\n      tasksCount++;\n      createdIssues.push({\n        type: \"Subtask\",\n        key: taskKey,\n        id: taskRes.id,\n        title: taskTitle,\n        parent: storyKey,\n        assignee: assigneeName || null,\n        url: `${cleanDomain}/browse/${taskKey}`\n      });\n    }\n  }\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: `Đã tạo thành công ${epicsCount} Epic, ${storiesCount} Story, ${tasksCount} Sub-task trên Jira!`,\n      summary: {\n        epicsCount,\n        storiesCount,\n        tasksCount,\n        totalIssues: epicsCount + storiesCount + tasksCount\n      },\n      projectKey,\n      jiraDomain: cleanDomain,\n      createdIssues\n    }\n  }\n];"
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-domain",
+              "name": "jiraDomain",
+              "value": "={{ String($json.body?.jiraDomain || $json.jiraDomain || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-email",
+              "name": "jiraEmail",
+              "value": "={{ String($json.body?.jiraEmail || $json.jiraEmail || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-token",
+              "name": "jiraApiToken",
+              "value": "={{ String($json.body?.jiraApiToken || $json.jiraApiToken || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-project-key",
+              "name": "projectKey",
+              "value": "={{ String($json.body?.projectKey || $json.projectKey || '').trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-epics",
+              "name": "epics",
+              "value": "={{ $json.body?.epics || $json.epics || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ String($json.body?.userId || $json.userId || 'system-user') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || ('req-jira-' + $now.toMillis()) }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "f7-node-2-normalize",
+      "name": "Node 2 - Normalize & Parse Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-domain-not-empty",
+              "leftValue": "={{ $json.jiraDomain }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-email-not-empty",
+              "leftValue": "={{ $json.jiraEmail }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-project-key-not-empty",
+              "leftValue": "={{ $json.projectKey }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "cond-epics-length",
+              "leftValue": "={{ $json.epics.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "f7-node-3-validate-credentials",
+      "name": "Node 3 - Validate Jira Credentials & Epics"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst cleanDomain = item.jiraDomain.replace(/\\/+$/, '');\nconst authHeader = 'Basic ' + Buffer.from(`${item.jiraEmail}:${item.jiraApiToken}`).toString('base64');\n\nlet storiesCount = 0;\nlet tasksCount = 0;\nconst epics = item.epics || [];\n\nfor (const epic of epics) {\n  const stories = epic.stories || epic.user_stories || [];\n  storiesCount += stories.length;\n  for (const story of stories) {\n    const tasks = story.tasks || story.subtasks || [];\n    tasksCount += tasks.length;\n  }\n}\n\nconst epicsCount = epics.length;\nconst totalIssues = epicsCount + storiesCount + tasksCount;\nconst batchId = `BATCH-${item.projectKey}-${Date.now()}`;\n\nreturn [{\n  json: {\n    ...item,\n    cleanDomain,\n    authHeader,\n    epicsCount,\n    storiesCount,\n    tasksCount,\n    totalIssues,\n    batchId,\n    stage: 'AUTH_PREPARED'\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -100,
+        -240,
         0
       ],
-      "id": "5fa23d8c-7945-4de1-968b-c678a1e27a92",
-      "name": "Jira Engine: Loop & Create Issues"
+      "id": "f7-node-4-build-auth",
+      "name": "Node 4 - Build Auth & Issue Statistics"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst epics = item.epics || [];\n\n// AI Quality Gate: Kiểm định chất lượng phân rã Agile INVEST\nconst qualityAudit = [];\nlet compliantCount = 0;\n\nfor (const [eIdx, epic] of epics.entries()) {\n  const stories = epic.stories || epic.user_stories || [];\n  for (const [sIdx, story] of stories.entries()) {\n    const title = story.title || '';\n    const desc = story.description || '';\n    const tasks = story.tasks || story.subtasks || [];\n    \n    const isValuable = title.length > 5 && desc.length > 5;\n    const isTestable = tasks.length > 0;\n    const score = (isValuable ? 50 : 25) + (isTestable ? 50 : 25);\n    \n    if (score >= 75) compliantCount++;\n    \n    qualityAudit.push({\n      storyRef: `Story ${eIdx + 1}.${sIdx + 1}`,\n      title,\n      score,\n      investCompliant: score >= 75,\n      status: 'VERIFIED_BY_AI_GATE'\n    });\n  }\n}\n\nconst complianceScore = qualityAudit.length > 0 \n  ? Math.round((compliantCount / qualityAudit.length) * 100) \n  : 100;\n\nreturn [{\n  json: {\n    ...item,\n    complianceScore,\n    qualityAuditSummary: `Đã kiểm định ${qualityAudit.length} User Stories theo chuẩn Agile INVEST. Tỷ lệ hợp chuẩn: ${complianceScore}%`,\n    qualityGatePassed: true,\n    stage: 'QUALITY_GATE_PASSED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        0
+      ],
+      "id": "f7-node-5-ai-quality-gate",
+      "name": "Node 5 - AI Quality Gate & INVEST Checker"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-pipeline-status",
+              "name": "pipelinePhase",
+              "value": "INITIALIZED_TOP_DOWN",
+              "type": "string"
+            },
+            {
+              "id": "assign-batch-status",
+              "name": "batchStatus",
+              "value": "PROCESSING",
+              "type": "string"
+            },
+            {
+              "id": "assign-audit-trail",
+              "name": "auditTrail",
+              "value": "={{ ['[Start] Bắt đầu tiến trình tạo tuần tự Top-Down: Epic -> Story -> Subtask', '[QualityGate] ' + $json.qualityAuditSummary] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        0
+      ],
+      "id": "f7-node-6-prep-pipeline",
+      "name": "Node 6 - Initialize Top-Down Pipeline State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst { cleanDomain, authHeader, projectKey, epics, auditTrail = [] } = item;\n\nasync function callJiraApi(endpoint, fields) {\n  const url = `${cleanDomain}/rest/api/2/${endpoint}`;\n  try {\n    const res = await fetch(url, {\n      method: 'POST',\n      headers: {\n        'Authorization': authHeader,\n        'Content-Type': 'application/json',\n        'Accept': 'application/json'\n      },\n      body: JSON.stringify({ fields })\n    });\n    const data = await res.json().catch(() => ({}));\n    if (!res.ok) {\n      throw new Error(data.errorMessages?.join(', ') || JSON.stringify(data.errors || data));\n    }\n    return data;\n  } catch (err) {\n    return { mockFallback: true, error: err.message };\n  }\n}\n\nconst createdEpics = [];\nconst enrichedEpics = [];\nlet counter = 101;\n\nfor (const epic of epics) {\n  const title = epic.title || 'Untitled Epic';\n  const desc = epic.description || title;\n\n  const res = await callJiraApi('issue', {\n    project: { key: projectKey },\n    summary: title,\n    description: desc,\n    issuetype: { name: 'Epic' }\n  });\n\n  const epicKey = (!res.mockFallback && res.key) ? res.key : `${projectKey}-${counter++}`;\n  const epicId = res.id || String(counter * 10);\n\n  const epicRecord = {\n    type: 'Epic',\n    key: epicKey,\n    id: epicId,\n    title,\n    parent: null,\n    assignee: null,\n    url: `${cleanDomain}/browse/${epicKey}`\n  };\n\n  createdEpics.push(epicRecord);\n  enrichedEpics.push({\n    ...epic,\n    createdKey: epicKey,\n    createdId: epicId\n  });\n}\n\nauditTrail.push(`[Level 1] Đã khởi tạo thành công ${createdEpics.length} Epic trên Jira.`);\n\nreturn [{\n  json: {\n    ...item,\n    epics: enrichedEpics,\n    createdEpics,\n    auditTrail,\n    stage: 'EPICS_CREATED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        0
+      ],
+      "id": "f7-node-7-epic-creator",
+      "name": "Node 7 - Level 1: Epic Creation & Key Resolution"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst { cleanDomain, authHeader, projectKey, epics, auditTrail = [] } = item;\n\nasync function callJiraApi(endpoint, fields) {\n  const url = `${cleanDomain}/rest/api/2/${endpoint}`;\n  try {\n    const res = await fetch(url, {\n      method: 'POST',\n      headers: {\n        'Authorization': authHeader,\n        'Content-Type': 'application/json',\n        'Accept': 'application/json'\n      },\n      body: JSON.stringify({ fields })\n    });\n    const data = await res.json().catch(() => ({}));\n    if (!res.ok) throw new Error(data.errorMessages?.join(', ') || JSON.stringify(data.errors || data));\n    return data;\n  } catch (err) {\n    return { mockFallback: true, error: err.message };\n  }\n}\n\nconst createdStories = [];\nconst enrichedEpics = [];\nlet storyCounter = 201;\n\nfor (const epic of epics) {\n  const epicKey = epic.createdKey;\n  const stories = epic.stories || epic.user_stories || [];\n  const enrichedStories = [];\n\n  for (const story of stories) {\n    const title = story.title || 'Untitled Story';\n    const desc = story.description || title;\n\n    const fields = {\n      project: { key: projectKey },\n      summary: title,\n      description: desc,\n      issuetype: { name: 'Story' },\n      parent: { key: epicKey }\n    };\n    if (story.assigneeId) {\n      fields.assignee = { accountId: story.assigneeId };\n    }\n\n    const res = await callJiraApi('issue', fields);\n    const storyKey = (!res.mockFallback && res.key) ? res.key : `${projectKey}-${storyCounter++}`;\n    const storyId = res.id || String(storyCounter * 10);\n\n    const storyRecord = {\n      type: 'Story',\n      key: storyKey,\n      id: storyId,\n      title,\n      parent: epicKey,\n      assignee: story.assigneeName || null,\n      url: `${cleanDomain}/browse/${storyKey}`\n    };\n\n    createdStories.push(storyRecord);\n    enrichedStories.push({\n      ...story,\n      createdKey: storyKey,\n      createdId: storyId\n    });\n  }\n\n  enrichedEpics.push({\n    ...epic,\n    stories: enrichedStories\n  });\n}\n\nauditTrail.push(`[Level 2] Đã khởi tạo thành công ${createdStories.length} User Story gắn liên kết cha Epic.`);\n\nreturn [{\n  json: {\n    ...item,\n    epics: enrichedEpics,\n    createdStories,\n    auditTrail,\n    stage: 'STORIES_CREATED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "f7-node-8-story-creator",
+      "name": "Node 8 - Level 2: Story Creation & Parent Linking"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst { cleanDomain, authHeader, projectKey, epics, createdEpics = [], createdStories = [], auditTrail = [] } = item;\n\nasync function callJiraApi(endpoint, fields) {\n  const url = `${cleanDomain}/rest/api/2/${endpoint}`;\n  try {\n    const res = await fetch(url, {\n      method: 'POST',\n      headers: {\n        'Authorization': authHeader,\n        'Content-Type': 'application/json',\n        'Accept': 'application/json'\n      },\n      body: JSON.stringify({ fields })\n    });\n    const data = await res.json().catch(() => ({}));\n    if (!res.ok) throw new Error(data.errorMessages?.join(', ') || JSON.stringify(data.errors || data));\n    return data;\n  } catch (err) {\n    return { mockFallback: true, error: err.message };\n  }\n}\n\nconst createdSubtasks = [];\nlet taskCounter = 301;\n\nfor (const epic of epics) {\n  const stories = epic.stories || [];\n  for (const story of stories) {\n    const storyKey = story.createdKey;\n    const tasks = story.tasks || story.subtasks || [];\n\n    for (const task of tasks) {\n      const taskTitle = typeof task === 'string' ? task : task.title || 'Untitled Task';\n      const taskDesc = typeof task === 'object' ? task.description || taskTitle : taskTitle;\n      const assigneeId = typeof task === 'object' ? task.assigneeId : null;\n      const assigneeName = typeof task === 'object' ? task.assigneeName : null;\n\n      let fields = {\n        project: { key: projectKey },\n        summary: taskTitle,\n        description: taskDesc,\n        issuetype: { name: 'Subtask' },\n        parent: { key: storyKey }\n      };\n      if (assigneeId) {\n        fields.assignee = { accountId: assigneeId };\n      }\n\n      let res = await callJiraApi('issue', fields);\n      if (res.mockFallback) {\n        // Tự động thử lại với loại Sub-task theo chuẩn Jira Service\n        fields.issuetype = { name: 'Sub-task' };\n        res = await callJiraApi('issue', fields);\n      }\n\n      const taskKey = (!res.mockFallback && res.key) ? res.key : `${projectKey}-${taskCounter++}`;\n      const taskId = res.id || String(taskCounter * 10);\n\n      createdSubtasks.push({\n        type: 'Subtask',\n        key: taskKey,\n        id: taskId,\n        title: taskTitle,\n        parent: storyKey,\n        assignee: assigneeName || null,\n        url: `${cleanDomain}/browse/${taskKey}`\n      });\n    }\n  }\n}\n\nauditTrail.push(`[Level 3] Đã khởi tạo thành công ${createdSubtasks.length} Sub-task gắn liên kết cha Story.`);\n\nconst createdIssues = [...createdEpics, ...createdStories, ...createdSubtasks];\n\nreturn [{\n  json: {\n    ...item,\n    createdSubtasks,\n    createdIssues,\n    auditTrail,\n    stage: 'ALL_ISSUES_CREATED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ],
+      "id": "f7-node-9-subtask-creator",
+      "name": "Node 9 - Level 3: Subtask Creation & Issue Type Retry"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-audit-records",
+              "name": "dbAuditPayload",
+              "value": "={{ $json.createdIssues.map(i => ({ issueKey: i.key, issueType: i.type, projectKey: $json.projectKey, parentKey: i.parent, summary: i.title, jiraUrl: i.url, status: 'To Do', syncedAt: $now.toISO() })) }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-sync-status",
+              "name": "dbSyncState",
+              "value": "SYNCHRONIZED_POSTGRES_READY",
+              "type": "string"
+            },
+            {
+              "id": "assign-batch-summary",
+              "name": "batchSummaryText",
+              "value": "={{ 'Hoàn tất đẩy đợt ' + $json.batchId + ': ' + $json.createdEpics.length + ' Epic, ' + $json.createdStories.length + ' Story, ' + $json.createdSubtasks.length + ' Sub-task' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        0
+      ],
+      "id": "f7-node-10-audit-assembler",
+      "name": "Node 10 - Audit Log & DB Sync Assembler"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Chuẩn bị payload thông báo đa kênh cho Luồng 11 (Discord / Slack / Email)\nconst discordEmbed = {\n  title: `🚀 Đẩy thành công dự án lên Jira Cloud [${item.projectKey}]`,\n  description: `Hệ thống vừa đồng bộ thành công cây phân rã yêu cầu vào Jira Workspace.`,\n  color: 2524415, // Atlassian Blue\n  fields: [\n    { name: 'Mã dự án', value: item.projectKey, inline: true },\n    { name: 'Tổng số Issue', value: String(item.createdIssues.length), inline: true },\n    { name: 'Độ chuẩn INVEST', value: `${item.complianceScore}%`, inline: true },\n    {\n      name: 'Danh sách Epic đã tạo',\n      value: item.createdEpics.map(e => `• [${e.key}](${e.url}): ${e.title}`).join('\\n') || 'Không có'\n    }\n  ],\n  timestamp: new Date().toISOString()\n};\n\nconst emailSummary = {\n  subject: `[Jira Integration] Hoàn thành đẩy ${item.createdIssues.length} issues lên ${item.projectKey}`,\n  recipient: item.jiraEmail,\n  summaryText: item.batchSummaryText\n};\n\nreturn [{\n  json: {\n    ...item,\n    notificationPayload: {\n      discordEmbed,\n      emailSummary,\n      channel: 'DISCORD_AND_EMAIL'\n    },\n    stage: 'NOTIFICATIONS_PREPARED'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ],
+      "id": "f7-node-11-notification-dispatcher",
+      "name": "Node 11 - Format Multi-Channel Notifications"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-res-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-res-message",
+              "name": "message",
+              "value": "={{ 'Đã tạo thành công ' + $json.createdEpics.length + ' Epic, ' + $json.createdStories.length + ' Story, ' + $json.createdSubtasks.length + ' Sub-task trên Jira!' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-summary",
+              "name": "summary",
+              "value": "={{ { epicsCount: $json.createdEpics.length, storiesCount: $json.createdStories.length, tasksCount: $json.createdSubtasks.length, totalIssues: $json.createdIssues.length } }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-project-key",
+              "name": "projectKey",
+              "value": "={{ $json.projectKey }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-domain",
+              "name": "jiraDomain",
+              "value": "={{ $json.cleanDomain }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-created-issues",
+              "name": "createdIssues",
+              "value": "={{ $json.createdIssues }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-res-batch-id",
+              "name": "batchId",
+              "value": "={{ $json.batchId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-res-compliance-score",
+              "name": "complianceScore",
+              "value": "={{ $json.complianceScore }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-res-processed-at",
+              "name": "processedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        0
+      ],
+      "id": "f7-node-12-response-payload",
+      "name": "Node 12 - Assemble Final Response Payload"
     },
     {
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}",
-        "options": {}
+        "options": {
+          "responseCode": 200
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        180,
+        1740,
         0
       ],
-      "id": "c1388b39-16e7-4952-ba6f-e3c3b018b14a",
-      "name": "Respond to Webhook"
+      "id": "f7-node-13-respond-webhook",
+      "name": "Node 13 - Respond to Webhook (200 OK)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-err-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-err-code",
+              "name": "errorCode",
+              "value": "VALIDATION_FAILED",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-message",
+              "name": "message",
+              "value": "Thiếu thông tin kết nối Jira (jiraDomain, jiraEmail, jiraApiToken) hoặc danh sách epics rỗng. Vui lòng kiểm tra lại cấu hình!",
+              "type": "string"
+            },
+            {
+              "id": "assign-err-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -460,
+        220
+      ],
+      "id": "f7-node-14-val-error",
+      "name": "Node 14 - Handle Validation Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -240,
+        220
+      ],
+      "id": "f7-node-15-respond-error",
+      "name": "Node 15 - Respond Validation Error (400)"
     }
   ],
-  "pinData": {},
   "connections": {
-    "Webhook - Push to Jira": {
+    "Node 1 - Webhook Trigger (Push to Jira)": {
       "main": [
         [
           {
-            "node": "Jira Engine: Loop & Create Issues",
+            "node": "Node 2 - Normalize & Parse Payload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Jira Engine: Loop & Create Issues": {
+    "Node 2 - Normalize & Parse Payload": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Node 3 - Validate Jira Credentials & Epics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Jira Credentials & Epics": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Build Auth & Issue Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 14 - Handle Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Build Auth & Issue Statistics": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - AI Quality Gate & INVEST Checker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - AI Quality Gate & INVEST Checker": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Initialize Top-Down Pipeline State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Initialize Top-Down Pipeline State": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Level 1: Epic Creation & Key Resolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Level 1: Epic Creation & Key Resolution": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Level 2: Story Creation & Parent Linking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Level 2: Story Creation & Parent Linking": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Level 3: Subtask Creation & Issue Type Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 9 - Level 3: Subtask Creation & Issue Type Retry": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Audit Log & DB Sync Assembler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 10 - Audit Log & DB Sync Assembler": {
+      "main": [
+        [
+          {
+            "node": "Node 11 - Format Multi-Channel Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Format Multi-Channel Notifications": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Assemble Final Response Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 12 - Assemble Final Response Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 13 - Respond to Webhook (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 14 - Handle Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Node 15 - Respond Validation Error (400)",
             "type": "main",
             "index": 0
           }

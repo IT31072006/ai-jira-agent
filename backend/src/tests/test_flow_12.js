@@ -16,6 +16,7 @@ async function runTests() {
 
   let passedTests = 0;
   let totalTests = 0;
+  let testServer = null;
 
   function assert(condition, testName) {
     totalTests++;
@@ -28,10 +29,17 @@ async function runTests() {
   }
 
   try {
-    // 1. Lấy user kiểm thử
-    const userRes = await db.query('SELECT id, name, email FROM users LIMIT 1');
+    // 1. Lấy user kiểm thử có dữ liệu project & issues
+    const userRes = await db.query(
+      `SELECT u.id, u.name, u.email 
+       FROM users u 
+       JOIN projects p ON p.user_id = u.id 
+       JOIN jira_issues j ON j.project_key = p.project_key 
+       GROUP BY u.id, u.name, u.email 
+       LIMIT 1`
+    );
     if (!userRes.rows.length) {
-      console.log('⚠️ Không tìm thấy người dùng trong DB để test.');
+      console.log('⚠️ Không tìm thấy người dùng có dữ liệu trong DB để test.');
       process.exit(1);
     }
     const user = userRes.rows[0];
@@ -44,11 +52,17 @@ async function runTests() {
 
     // 2. Lấy project mẫu có issue
     const projectRes = await db.query(
-      'SELECT id, name, project_key, description FROM projects WHERE user_id = $1 LIMIT 1',
+      `SELECT p.id, p.name, p.project_key, p.description 
+       FROM projects p
+       JOIN jira_issues j ON j.project_key = p.project_key
+       WHERE p.user_id = $1
+       GROUP BY p.id, p.name, p.project_key, p.description
+       ORDER BY COUNT(j.id) DESC
+       LIMIT 1`,
       [user.id]
     );
     if (!projectRes.rows.length) {
-      console.log('⚠️ Không tìm thấy project nào của user để test.');
+      console.log('⚠️ Không tìm thấy project nào có issue của user để test.');
       process.exit(1);
     }
     const project = projectRes.rows[0];
@@ -126,6 +140,17 @@ async function runTests() {
 
     // --- TEST 6: Phân quyền API GET /api/projects/:projectId/export ---
     console.log('\n--- Test 6: Kiểm tra xác thực và phân quyền qua HTTP API ---');
+    const app = require('../app');
+    try {
+      await axios.get(`${API_BASE}/projects`);
+    } catch (e) {
+      if (e.code === 'ECONNREFUSED') {
+        await new Promise((resolve) => {
+          testServer = app.listen(5000, () => resolve());
+        });
+      }
+    }
+
     // 6.1: Gọi hợp lệ với Bearer token của owner
     const apiRes = await axios.get(
       `${API_BASE}/projects/${project.id}/export?format=markdown&source=jira`,
@@ -273,6 +298,12 @@ async function runTests() {
   } catch (error) {
     console.error('❌ Lỗi khi thực hiện kiểm thử:', error);
   } finally {
+    if (testServer) {
+      if (typeof testServer.closeAllConnections === 'function') {
+        testServer.closeAllConnections();
+      }
+      await new Promise((resolve) => testServer.close(resolve));
+    }
     await db.pool.end();
   }
 }
