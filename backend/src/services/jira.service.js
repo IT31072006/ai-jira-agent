@@ -10,6 +10,10 @@ const N8N_JIRA_WEBHOOK_URL =
   process.env.N8N_JIRA_WEBHOOK_URL ||
   'http://localhost:5678/webhook-test/push-to-jira';
 
+const N8N_JIRA_MEMBERS_WEBHOOK_URL =
+  process.env.N8N_JIRA_MEMBERS_WEBHOOK_URL ||
+  'http://localhost:5678/webhook-test/jira-members';
+
 async function postToN8n(url, payload, options = {}) {
   try {
     return await axios.post(url, payload, options);
@@ -273,7 +277,32 @@ class JiraService {
       'Basic ' +
       Buffer.from(`${config.jira_email.trim()}:${jiraApiToken}`).toString('base64');
 
-    // 3. Gọi Jira API lấy danh sách assignable users
+    // 3. Ưu tiên gọi sang n8n Workflow Luồng 8 (Flow 8 - Jira Members)
+    try {
+      console.log(`[JiraService] Gọi sang n8n webhook lấy thành viên: ${N8N_JIRA_MEMBERS_WEBHOOK_URL}`);
+      const n8nRes = await postToN8n(
+        N8N_JIRA_MEMBERS_WEBHOOK_URL,
+        {
+          jiraDomain: cleanDomain,
+          jiraEmail: config.jira_email.trim(),
+          jiraApiToken,
+          projectKey: (projectKey || '').trim().toUpperCase(),
+          userId,
+        },
+        { timeout: 15000 }
+      );
+
+      if (n8nRes?.data && Array.isArray(n8nRes.data.members) && n8nRes.data.members.length > 0) {
+        console.log(`[JiraService] Đã nhận ${n8nRes.data.members.length} thành viên từ n8n Workflow Luồng 8!`);
+        return n8nRes.data.members;
+      }
+    } catch (n8nErr) {
+      console.warn(
+        `[JiraService] n8n members webhook không phản hồi hoặc gặp lỗi (${n8nErr.message}). Chuyển sang fallback Jira REST API trực tiếp...`
+      );
+    }
+
+    // 4. Fallback: Gọi Jira API lấy danh sách assignable users trực tiếp
     const queryParams = new URLSearchParams();
     if (projectKey && projectKey.trim()) {
       queryParams.append('project', projectKey.trim().toUpperCase());
@@ -283,7 +312,7 @@ class JiraService {
     const jiraUrl = `${cleanDomain}/rest/api/2/user/assignable/search?${queryParams.toString()}`;
 
     try {
-      console.log(`[JiraService] Gọi Jira API lấy danh sách thành viên: ${jiraUrl}`);
+      console.log(`[JiraService] Gọi Jira API trực tiếp lấy danh sách thành viên: ${jiraUrl}`);
       const response = await axios.get(jiraUrl, {
         headers: {
           Authorization: authHeader,
