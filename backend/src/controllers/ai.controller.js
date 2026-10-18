@@ -2,7 +2,8 @@ const { analyzeRequirement } = require('../services/ai.service');
 
 const analyze = async (req, res, next) => {
   try {
-    const { requirement } = req.body;
+    const { requirement, projectId } = req.body;
+    const userId = req.user?.id || 'system-user';
 
     if (!requirement || !requirement.trim()) {
       return res.status(400).json({
@@ -10,7 +11,11 @@ const analyze = async (req, res, next) => {
       });
     }
 
-    const result = await analyzeRequirement(requirement);
+    const result = await analyzeRequirement(requirement, {
+      projectId,
+      userId,
+      requestId: `req-ai-${Date.now()}`,
+    });
 
     res.json(result);
   } catch (error) {

@@ -32,7 +32,9 @@ const normalizeEpics = (result) => {
   let raw;
   if (Array.isArray(result)) raw = result;
   else if (Array.isArray(result.epics)) raw = result.epics;
+  else if (Array.isArray(result.treeData)) raw = result.treeData;
   else if (result.data && Array.isArray(result.data.epics)) raw = result.data.epics;
+  else if (result.data && Array.isArray(result.data.treeData)) raw = result.data.treeData;
   else if (result.result && Array.isArray(result.result.epics)) raw = result.result.epics;
   else return [];
 
@@ -620,7 +622,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
         }
       }
 
-      const data = await analyzeRequirement(requirement.trim());
+      const data = await analyzeRequirement(requirement.trim(), project?.id);
       setEditableEpics(normalizeEpics(data));
     } catch (err) {
       const msg =

@@ -37,6 +37,11 @@ const env = {
 
   // Luồng 3: Jira & AI Configuration Webhook
   N8N_CONFIG_WEBHOOK_URL: process.env.N8N_CONFIG_WEBHOOK_URL || 'http://localhost:5678/webhook/jira-ai-config',
+
+  // Luồng 5: Requirement Hierarchy Tree Webhook
+  N8N_HIERARCHY_TREE_WEBHOOK_URL:
+    process.env.N8N_HIERARCHY_TREE_WEBHOOK_URL ||
+    'http://localhost:5678/webhook-test/hierarchy-tree',
 };
 
 module.exports = env;

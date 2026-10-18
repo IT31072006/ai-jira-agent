@@ -4,6 +4,10 @@ const N8N_WEBHOOK_URL =
   process.env.N8N_WEBHOOK_URL ||
   'http://localhost:5678/webhook-test/ai-requirement';
 
+const N8N_HIERARCHY_TREE_WEBHOOK_URL =
+  process.env.N8N_HIERARCHY_TREE_WEBHOOK_URL ||
+  'http://localhost:5678/webhook-test/hierarchy-tree';
+
 async function postToN8n(url, payload, options = {}) {
   const mergedOptions = {
     timeout: 7000,
@@ -241,12 +245,152 @@ function getSmartFallback(requirement = '') {
   };
 }
 
-const analyzeRequirement = async (requirement) => {
+/**
+ * Chuyển đổi cây phân cấp cục bộ (Local Hierarchy Fallback):
+ * Được kích hoạt khi n8n Flow 5 gặp sự cố hoặc offline, đảm bảo cây luôn
+ * có ID (epic-0, story-0-0, task-0-0-0), level (1, 2, 3), parentId và KPIs.
+ */
+function getLocalHierarchyFallback(rawEpics = [], context = {}) {
+  const epics = Array.isArray(rawEpics) ? rawEpics : [];
+  let totalStories = 0;
+  let totalTasks = 0;
+
+  const treeData = epics.map((epic, ei) => {
+    const epicId = `epic-${ei}`;
+    const rawStories = epic.stories || epic.user_stories || epic.userStories || [];
+
+    const stories = (Array.isArray(rawStories) ? rawStories : []).map((story, si) => {
+      const storyId = `${epicId}-story-${si}`;
+      const rawTasks = story.tasks || story.subtasks || [];
+
+      const tasks = (Array.isArray(rawTasks) ? rawTasks : []).map((task, ti) => {
+        const taskId = `${storyId}-task-${ti}`;
+        const title =
+          typeof task === 'string'
+            ? task.trim()
+            : String(task.title || task.name || `Task #${ti + 1}`).trim();
+        const description =
+          typeof task === 'object'
+            ? String(task.description || task.desc || '').trim()
+            : '';
+
+        return {
+          id: taskId,
+          parentId: storyId,
+          level: 3,
+          type: 'Task',
+          title,
+          description,
+          assigneeId: typeof task === 'object' ? task.assigneeId || null : null,
+          assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',
+          assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : '',
+        };
+      });
+
+      totalTasks += tasks.length;
+      return {
+        id: storyId,
+        parentId: epicId,
+        level: 2,
+        type: 'Story',
+        title: String(story.title || story.name || `User Story #${si + 1}`).trim(),
+        description: String(story.description || story.desc || '').trim(),
+        assigneeId: story.assigneeId || null,
+        assigneeName: story.assigneeName || '',
+        assigneeAvatar: story.assigneeAvatar || '',
+        tasks,
+      };
+    });
+
+    totalStories += stories.length;
+    return {
+      id: epicId,
+      parentId: null,
+      level: 1,
+      type: 'Epic',
+      title: String(epic.title || epic.name || `Epic #${ei + 1}`).trim(),
+      description: String(epic.description || epic.details || epic.desc || '').trim(),
+      stories,
+    };
+  });
+
+  return {
+    success: true,
+    treeData,
+    kpiMetrics: {
+      totalEpics: treeData.length,
+      totalStories,
+      totalTasks,
+      totalNodes: treeData.length + totalStories + totalTasks,
+      treeDepth: treeData.length > 0 ? (totalStories > 0 ? (totalTasks > 0 ? 3 : 2) : 1) : 0,
+      avgTasksPerStory: totalStories > 0 ? parseFloat((totalTasks / totalStories).toFixed(1)) : 0,
+    },
+    healthAudit: {
+      healthScore: 100,
+      warnings: [],
+    },
+    uiConfig: {
+      expandedNodesMap: treeData.reduce((acc, ep) => {
+        acc[ep.id] = true;
+        (ep.stories || []).forEach((st) => (acc[st.id] = true));
+        return acc;
+      }, {}),
+    },
+    metadata: {
+      requestId: context.requestId || `req-tree-fallback-${Date.now()}`,
+      projectId: context.projectId || null,
+      userId: context.userId || 'system-user',
+      processedAt: new Date().toISOString(),
+      flow5Fallback: true,
+    },
+  };
+}
+
+/**
+ * Gửi dữ liệu epics sang Flow 5 (Requirement Hierarchy Tree Transformer)
+ */
+async function transformHierarchyTree(rawEpics, context = {}) {
+  try {
+    const response = await postToN8n(N8N_HIERARCHY_TREE_WEBHOOK_URL, {
+      epics: rawEpics,
+      projectId: context.projectId || null,
+      userId: context.userId || 'system-user',
+      requestId: context.requestId,
+    });
+
+    const flow5Data = response.data;
+    if (flow5Data && (flow5Data.treeData || flow5Data.epics)) {
+      return {
+        ...flow5Data,
+        flow5Success: true,
+      };
+    }
+    throw new Error('n8n Flow 5 không trả về cấu trúc treeData hợp lệ');
+  } catch (err) {
+    console.warn(
+      `[AIService] Flow 5 (hierarchy-tree) gặp sự cố (${err.message}). Kích hoạt Local Hierarchy Fallback Engine an toàn...`
+    );
+    const fallbackTree = getLocalHierarchyFallback(rawEpics, context);
+    return {
+      ...fallbackTree,
+      flow5Success: false,
+      flow5Fallback: true,
+      flow5Error: err.message,
+    };
+  }
+}
+
+const analyzeRequirement = async (requirement, context = {}) => {
   let lastErr = null;
+  let rawEpics = null;
+  let flow4Success = false;
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await postToN8n(N8N_WEBHOOK_URL, {
         requirement,
+        projectId: context.projectId,
+        userId: context.userId,
       });
 
       const rawData = response.data;
@@ -258,7 +402,9 @@ const analyzeRequirement = async (requirement) => {
 
       // Trường hợp n8n trả về trực tiếp object đã có epics
       if (typeof rawData === 'object' && (rawData.epics || rawData.data?.epics)) {
-        return rawData;
+        rawEpics = rawData.epics || rawData.data?.epics;
+        flow4Success = true;
+        break;
       }
 
       // Trường hợp trả về qua parts, content, text hoặc string
@@ -269,7 +415,9 @@ const analyzeRequirement = async (requirement) => {
         (typeof rawData === 'string' ? rawData : null);
 
       if (!text && typeof rawData === 'object') {
-        return rawData;
+        rawEpics = rawData;
+        flow4Success = true;
+        break;
       }
 
       if (!text) {
@@ -279,14 +427,18 @@ const analyzeRequirement = async (requirement) => {
       // Làm sạch markdown nếu LLM bọc trong ```json ... ```
       if (typeof text === 'string') {
         const cleaned = text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-        return JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+        rawEpics = parsed.epics || (Array.isArray(parsed) ? parsed : null);
+        flow4Success = true;
+        break;
       }
 
-      return text;
+      rawEpics = text;
+      flow4Success = true;
+      break;
     } catch (err) {
       lastErr = err;
-      console.warn(`[AIService] Lần gọi n8n ${attempt} thất bại: ${err.message}`);
-      // Nếu n8n trả về 500 (lỗi cấu hình/credential trong workflow), không cần thử lại để tránh chờ lâu
+      console.warn(`[AIService] Lần gọi n8n Flow 4 ${attempt} thất bại: ${err.message}`);
       if (err.response?.status === 500) {
         break;
       }
@@ -296,14 +448,40 @@ const analyzeRequirement = async (requirement) => {
     }
   }
 
-  // Nếu n8n gặp lỗi (500 Error in workflow, ECONNREFUSED, hoặc timeout),
-  // tự động kích hoạt AI Simulation Fallback Engine để không làm gián đoạn người dùng
-  console.warn(
-    `[AIService] n8n gặp sự cố (${lastErr?.message}). Kích hoạt AI Simulation Fallback Engine an toàn...`
+  // Nếu Flow 4 lỗi, kích hoạt fallback thông minh của Flow 4
+  if (!rawEpics || !Array.isArray(rawEpics) || rawEpics.length === 0) {
+    console.warn(
+      `[AIService] Flow 4 gặp sự cố (${lastErr?.message}). Kích hoạt AI Simulation Fallback Engine...`
+    );
+    const simulated = getSmartFallback(requirement);
+    rawEpics = simulated.epics;
+  }
+
+  // TÍCH HỢP FLOW 5: Chuyển dữ liệu epics sang Flow 5 (hierarchy-tree) để chuẩn hóa cấu trúc cây và tính KPI
+  console.log(
+    `[AIService] Gửi ${rawEpics.length} Epic(s) sang Flow 5 (hierarchy-tree) để chuẩn hóa cấu trúc cây...`
   );
-  return getSmartFallback(requirement);
+  const flow5Result = await transformHierarchyTree(rawEpics, context);
+
+  return {
+    success: true,
+    epics: flow5Result.treeData || rawEpics, // Đảm bảo trường epics luôn khớp 100% với Frontend cũ
+    treeData: flow5Result.treeData || rawEpics,
+    kpiMetrics: flow5Result.kpiMetrics || null,
+    healthAudit: flow5Result.healthAudit || null,
+    uiConfig: flow5Result.uiConfig || null,
+    metadata: {
+      ...(flow5Result.metadata || {}),
+      flow4Success,
+      flow5Success: flow5Result.flow5Success !== false,
+      flow5Fallback: flow5Result.flow5Fallback === true,
+      flow5Error: flow5Result.flow5Error || null,
+    },
+  };
 };
 
 module.exports = {
   analyzeRequirement,
+  transformHierarchyTree,
+  getLocalHierarchyFallback,
 };

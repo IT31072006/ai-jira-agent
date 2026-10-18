@@ -1,0 +1,565 @@
+{
+  "id": "Flow5HierarchyTree",
+  "versionId": "f5000000-0000-4000-8000-000000000005",
+  "name": "AI Jira Agent - Flow 5 Requirement Hierarchy Tree Transformer & Health Validator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hierarchy-tree",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        0
+      ],
+      "id": "f5-node-1-webhook",
+      "name": "Node 1 - Webhook Trigger (Hierarchy Tree)",
+      "webhookId": "flow-5-hierarchy-tree-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-epics",
+              "name": "epics",
+              "value": "={{ $json.body?.epics || $json.epics || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-project-id",
+              "name": "projectId",
+              "value": "={{ String($json.body?.projectId || $json.projectId || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-user-id",
+              "name": "userId",
+              "value": "={{ String($json.body?.userId || $json.userId || 'system-user') }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-request-id",
+              "name": "requestId",
+              "value": "={{ $json.body?.requestId || $json.requestId || ('req-tree-' + $now.toMillis()) }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-epics-count",
+              "name": "epicsCount",
+              "value": "={{ ($json.body?.epics || $json.epics || []).length || 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -660,
+        0
+      ],
+      "id": "f5-node-2-normalize",
+      "name": "Node 2 - Normalize Inbound Tree Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-epics-not-empty",
+              "leftValue": "={{ $json.epicsCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        0
+      ],
+      "id": "f5-node-3-validate-input",
+      "name": "Node 3 - Validate Tree Input (If)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst rawEpics = item.epics || [];\n\nconst treeData = (Array.isArray(rawEpics) ? rawEpics : []).map((epic, ei) => {\n  const epicId = `epic-${ei}`;\n  const rawStories = epic.stories || epic.user_stories || epic.userStories || [];\n\n  const stories = (Array.isArray(rawStories) ? rawStories : []).map((story, si) => {\n    const storyId = `${epicId}-story-${si}`;\n    const rawTasks = story.tasks || story.subtasks || [];\n\n    const tasks = (Array.isArray(rawTasks) ? rawTasks : []).map((task, ti) => {\n      const taskId = `${storyId}-task-${ti}`;\n      const title = typeof task === 'string' ? task.trim() : String(task.title || task.name || `Task #${ti + 1}`).trim();\n      const description = typeof task === 'object' ? String(task.description || task.desc || '').trim() : '';\n\n      return {\n        id: taskId,\n        parentId: storyId,\n        level: 3,\n        type: 'Task',\n        title: title,\n        description: description,\n        assigneeId: typeof task === 'object' ? task.assigneeId || null : null,\n        assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',\n        assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : ''\n      };\n    });\n\n    const sTitle = String(story.title || story.name || story.user_story || `User Story #${si + 1}`).trim();\n    const sDesc = String(story.description || story.desc || '').trim();\n\n    return {\n      id: storyId,\n      parentId: epicId,\n      level: 2,\n      type: 'Story',\n      title: sTitle,\n      description: sDesc,\n      assigneeId: story.assigneeId || null,\n      assigneeName: story.assigneeName || '',\n      assigneeAvatar: story.assigneeAvatar || '',\n      tasks: tasks\n    };\n  });\n\n  const eTitle = String(epic.title || epic.name || epic.epic_name || `Epic #${ei + 1}`).trim();\n  const eDesc = String(epic.description || epic.details || epic.desc || '').trim();\n\n  return {\n    id: epicId,\n    parentId: null,\n    level: 1,\n    type: 'Epic',\n    title: eTitle,\n    description: eDesc,\n    stories: stories\n  };\n});\n\nreturn {\n  json: {\n    ...item,\n    treeData: treeData\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "id": "f5-node-4-generate-ids",
+      "name": "Node 4 - Recursively Generate Tree IDs & Levels"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst tree = item.treeData || [];\n\nlet totalEpics = tree.length;\nlet totalStories = 0;\nlet totalTasks = 0;\nlet storiesWithoutTasks = 0;\nlet epicsWithoutStories = 0;\nconst warnings = [];\n\ntree.forEach((epic) => {\n  const stories = epic.stories || [];\n  if (stories.length === 0) {\n    epicsWithoutStories++;\n    warnings.push(`Epic \"${epic.title}\" (ID: ${epic.id}) không chứa bất kỳ User Story nào.`);\n  }\n  totalStories += stories.length;\n\n  stories.forEach((story) => {\n    const tasks = story.tasks || [];\n    if (tasks.length === 0) {\n      storiesWithoutTasks++;\n      warnings.push(`Story \"${story.title}\" (ID: ${story.id}) không có Sub-task kỹ thuật nào.`);\n    }\n    totalTasks += tasks.length;\n  });\n});\n\nconst hasFatalError = totalEpics > 0 && totalStories === 0;\n\nlet penalty = (epicsWithoutStories * 25) + (storiesWithoutTasks * 10);\nlet healthScore = Math.max(100 - penalty, 0);\nif (hasFatalError) healthScore = 0;\n\nreturn {\n  json: {\n    ...item,\n    hasFatalError: hasFatalError,\n    healthScore: healthScore,\n    warnings: warnings,\n    auditStats: {\n      epicsWithoutStories: epicsWithoutStories,\n      storiesWithoutTasks: storiesWithoutTasks\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f5-node-5-quality-gate",
+      "name": "Node 5 - Agile Quality Gate & Health Auditor"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-health-not-fatal",
+              "leftValue": "={{ $json.hasFatalError }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "f5-node-6-check-health",
+      "name": "Node 6 - Check Tree Health Integrity (If)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst tree = item.treeData || [];\n\nlet totalStories = 0;\nlet totalTasks = 0;\nlet maxDepth = tree.length > 0 ? 1 : 0;\n\ntree.forEach((epic) => {\n  const stories = epic.stories || [];\n  if (stories.length > 0 && maxDepth < 2) maxDepth = 2;\n  totalStories += stories.length;\n\n  stories.forEach((story) => {\n    const tasks = story.tasks || [];\n    if (tasks.length > 0) maxDepth = 3;\n    totalTasks += tasks.length;\n  });\n});\n\nconst avgTasksPerStory = totalStories > 0 ? parseFloat((totalTasks / totalStories).toFixed(1)) : 0;\nconst startMs = item.timestamp ? new Date(item.timestamp).getTime() : Date.now();\nconst transformationDurationMs = Math.max(Date.now() - startMs, 5);\n\nconst kpiMetrics = {\n  totalEpics: tree.length,\n  totalStories: totalStories,\n  totalTasks: totalTasks,\n  totalNodes: tree.length + totalStories + totalTasks,\n  treeDepth: maxDepth,\n  avgTasksPerStory: avgTasksPerStory,\n  transformationDurationMs: transformationDurationMs\n};\n\nreturn {\n  json: {\n    ...item,\n    kpiMetrics: kpiMetrics\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "f5-node-7-metrics",
+      "name": "Node 7 - Calculate KPI Metrics & Depth Matrix"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst tree = item.treeData || [];\n\nconst expandedNodesMap = {};\nconst uniqueAssignees = new Set();\n\ntree.forEach((epic) => {\n  expandedNodesMap[epic.id] = true;\n  (epic.stories || []).forEach((story) => {\n    expandedNodesMap[story.id] = true;\n    if (story.assigneeName) uniqueAssignees.add(story.assigneeName);\n    (story.tasks || []).forEach((task) => {\n      if (task.assigneeName) uniqueAssignees.add(task.assigneeName);\n    });\n  });\n});\n\nconst uiTheme = {\n  levelColors: {\n    1: { name: 'Epic', color: '#7c3aed', badge: 'bg-purple-100 text-purple-700' },\n    2: { name: 'User Story', color: '#2563eb', badge: 'bg-blue-100 text-blue-700' },\n    3: { name: 'Sub-task', color: '#16a34a', badge: 'bg-green-100 text-green-700' }\n  },\n  totalAssigneesCount: uniqueAssignees.size\n};\n\nreturn {\n  json: {\n    ...item,\n    uiConfig: {\n      expandedNodesMap: expandedNodesMap,\n      theme: uiTheme\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "f5-node-8-ui-schema",
+      "name": "Node 8 - Generate Expansion Map & UI Theme Schema"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-res-success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "assign-res-tree",
+              "name": "treeData",
+              "value": "={{ $json.treeData }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-res-metrics",
+              "name": "kpiMetrics",
+              "value": "={{ $json.kpiMetrics }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-health",
+              "name": "healthAudit",
+              "value": "={{ { healthScore: $json.healthScore, warnings: $json.warnings, stats: $json.auditStats } }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-ui",
+              "name": "uiConfig",
+              "value": "={{ $json.uiConfig }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-res-meta",
+              "name": "metadata",
+              "value": "={{ { requestId: $json.requestId, projectId: $json.projectId || null, userId: $json.userId || 'system-user', processedAt: $now.toISO() } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        0
+      ],
+      "id": "f5-node-9-assemble-dto",
+      "name": "Node 9 - Assemble Final Tree Presentation DTO"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "f5-node-10-respond-success",
+      "name": "Node 10 - Respond Success (200 OK)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-empty-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-empty-code",
+              "name": "error",
+              "value": "EMPTY_OR_INVALID_TREE",
+              "type": "string"
+            },
+            {
+              "id": "err-empty-msg",
+              "name": "message",
+              "value": "Dữ liệu cây yêu cầu (epics) không hợp lệ hoặc rỗng. Yêu cầu ít nhất 1 Epic để khởi tạo cây phân cấp.",
+              "type": "string"
+            },
+            {
+              "id": "err-empty-count",
+              "name": "receivedEpicsCount",
+              "value": "={{ $json.epicsCount || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "err-empty-reqid",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "err-empty-time",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -440,
+        220
+      ],
+      "id": "f5-node-11-handle-empty-err",
+      "name": "Node 11 - Handle Empty Tree Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -220,
+        220
+      ],
+      "id": "f5-node-12-respond-empty-err",
+      "name": "Node 12 - Respond Tree Error (400)"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-struct-success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "err-struct-code",
+              "name": "error",
+              "value": "CORRUPTED_TREE_HIERARCHY",
+              "type": "string"
+            },
+            {
+              "id": "err-struct-msg",
+              "name": "message",
+              "value": "Cấu trúc cây yêu cầu bị đứt gãy nghiêm trọng (các Epic hoàn toàn không chứa bất kỳ User Story nào).",
+              "type": "string"
+            },
+            {
+              "id": "err-struct-score",
+              "name": "healthScore",
+              "value": "={{ $json.healthScore || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "err-struct-warn",
+              "name": "warnings",
+              "value": "={{ $json.warnings || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "err-struct-reqid",
+              "name": "requestId",
+              "value": "={{ $json.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "err-struct-time",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        220
+      ],
+      "id": "f5-node-13-handle-struct-err",
+      "name": "Node 13 - Handle Structural Disconnect Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        220
+      ],
+      "id": "f5-node-14-respond-struct-err",
+      "name": "Node 14 - Respond Structure Error (422)"
+    }
+  ],
+  "connections": {
+    "Node 1 - Webhook Trigger (Hierarchy Tree)": {
+      "main": [
+        [
+          {
+            "node": "Node 2 - Normalize Inbound Tree Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 - Normalize Inbound Tree Payload": {
+      "main": [
+        [
+          {
+            "node": "Node 3 - Validate Tree Input (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 - Validate Tree Input (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 4 - Recursively Generate Tree IDs & Levels",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 11 - Handle Empty Tree Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 - Recursively Generate Tree IDs & Levels": {
+      "main": [
+        [
+          {
+            "node": "Node 5 - Agile Quality Gate & Health Auditor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 - Agile Quality Gate & Health Auditor": {
+      "main": [
+        [
+          {
+            "node": "Node 6 - Check Tree Health Integrity (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 - Check Tree Health Integrity (If)": {
+      "main": [
+        [
+          {
+            "node": "Node 7 - Calculate KPI Metrics & Depth Matrix",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 13 - Handle Structural Disconnect Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 - Calculate KPI Metrics & Depth Matrix": {
+      "main": [
+        [
+          {
+            "node": "Node 8 - Generate Expansion Map & UI Theme Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 - Generate Expansion Map & UI Theme Schema": {
+      "main": [
+        [
+          {
+            "node": "Node 9 - Assemble Final Tree Presentation DTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 9 - Assemble Final Tree Presentation DTO": {
+      "main": [
+        [
+          {
+            "node": "Node 10 - Respond Success (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 11 - Handle Empty Tree Error": {
+      "main": [
+        [
+          {
+            "node": "Node 12 - Respond Tree Error (400)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 13 - Handle Structural Disconnect Error": {
+      "main": [
+        [
+          {
+            "node": "Node 14 - Respond Structure Error (422)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}
+
