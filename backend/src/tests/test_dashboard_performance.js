@@ -14,7 +14,11 @@ async function runPerformanceBenchmark() {
 
   try {
     // 1. Tìm user thử nghiệm
-    const user = await UserModel.findByEmail('tranthang20060903@gmail.com');
+    let user = await UserModel.findByEmail('tranthang20060903@gmail.com');
+    if (!user) {
+      const anyUser = await db.query('SELECT * FROM users LIMIT 1');
+      user = anyUser.rows[0];
+    }
     if (!user) {
       console.error('Không tìm thấy user thử nghiệm');
       process.exit(1);

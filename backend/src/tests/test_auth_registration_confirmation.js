@@ -225,6 +225,18 @@ async function runTests() {
 
   // 4. Kiểm thử qua HTTP Endpoint thực tế của Express Server (POST /api/auth/register)
   console.log('\n--- TEST GROUP 7: Kiểm thử thực tế qua HTTP Endpoint /api/auth/register ---');
+  const app = require('../app');
+  let testServer = null;
+  try {
+    await axios.get('http://localhost:5000/health');
+  } catch (e) {
+    if (e.code === 'ECONNREFUSED') {
+      await new Promise((resolve) => {
+        testServer = app.listen(5000, () => resolve());
+      });
+    }
+  }
+
   const testEmailHttp = `http_test_${Date.now()}@example.com`;
   try {
     const res = await axios.post('http://localhost:5000/api/auth/register', {
@@ -245,6 +257,13 @@ async function runTests() {
   } catch (httpErr) {
     console.error('  ✗ Lỗi khi gọi POST /api/auth/register:', httpErr.response?.data || httpErr.message);
     failedTests++;
+  } finally {
+    if (testServer) {
+      if (typeof testServer.closeAllConnections === 'function') {
+        testServer.closeAllConnections();
+      }
+      await new Promise((resolve) => testServer.close(resolve));
+    }
   }
 
   console.log('\n======================================================================');

@@ -10,7 +10,11 @@ async function runPersistenceReloadTest() {
   console.log('🚀 KIỂM THỬ KHÔI PHỤC DỮ LIỆU SAU KHI TẢI LẠI (F5 / RELOAD)');
   console.log('=====================================================\n');
 
-  const userId = 'c9e09b9d-6a9f-4d2a-b998-ed3acfc46509';
+  const userRes = await db.query('SELECT id FROM users LIMIT 1');
+  const userId = userRes.rows[0]?.id;
+  if (!userId) {
+    throw new Error('Không tìm thấy người dùng nào trong CSDL để chạy test');
+  }
   let projectA = null;
   let projectB = null;
 
