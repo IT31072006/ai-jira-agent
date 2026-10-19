@@ -47,6 +47,15 @@ const env = {
   N8N_STORY_TASK_WEBHOOK_URL:
     process.env.N8N_STORY_TASK_WEBHOOK_URL ||
     'http://localhost:5678/webhook-test/story-task-mutation',
+
+  // Luồng 10: Dashboard Analytics Webhook & Internal Service Security
+  N8N_DASHBOARD_WEBHOOK_URL:
+    process.env.N8N_DASHBOARD_WEBHOOK_URL ||
+    'http://localhost:5678/webhook/dashboard-analytics',
+  INTERNAL_SERVICE_KEY:
+    process.env.INTERNAL_SERVICE_KEY ||
+    process.env.N8N_WEBHOOK_SECRET ||
+    'ai_jira_agent_internal_secret_2026',
 };
 
 module.exports = env;
