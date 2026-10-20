@@ -8,6 +8,7 @@ const jiraRoutes = require('./jira.routes');
 const dashboardRoutes = require('./dashboard.routes');
 const JiraController = require('../controllers/jira.controller');
 const NotificationController = require('../controllers/notification.controller');
+const internalDashboardRoutes = require('./internal-dashboard.routes');
 
 const router = express.Router();
 
@@ -21,6 +22,9 @@ router.use('/config', configRoutes);
 router.use('/ai', aiRoutes);
 router.use('/jira', jiraRoutes);
 router.use('/dashboard', dashboardRoutes);
+
+// Internal routes: n8n Workflow 10 Fetch & Verify APIs
+router.use('/internal/dashboard', internalDashboardRoutes);
 
 // Alias cho webhook đồng bộ Jira theo chuẩn spec tài liệu
 router.post('/webhooks/jira-sync', JiraController.handleWebhook);

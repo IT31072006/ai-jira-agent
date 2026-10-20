@@ -1,16 +1,17 @@
+const DashboardFlowService = require('../services/dashboard-flow.service');
 const DashboardService = require('../services/dashboard.service');
 
 class DashboardController {
   /**
    * GET /api/dashboard/summary
-   * Tổng quan số liệu thống kê Dashboard
+   * Tổng quan số liệu thống kê Dashboard thông qua Flow 10
    */
   static async getSummary(req, res, next) {
     try {
       const userId = req.user.id;
       const { projectId } = req.query;
 
-      const summary = await DashboardService.getSummary({ userId, projectId });
+      const summary = await DashboardFlowService.getSummary({ userId, projectId });
 
       return res.status(200).json({
         success: true,
@@ -30,7 +31,7 @@ class DashboardController {
       const userId = req.user.id;
       const { projectId } = req.query;
 
-      const breakdown = await DashboardService.getIssueBreakdown({ userId, projectId });
+      const breakdown = await DashboardFlowService.getIssueBreakdown({ userId, projectId });
 
       return res.status(200).json({
         success: true,
@@ -50,7 +51,7 @@ class DashboardController {
       const userId = req.user.id;
       const { projectId } = req.query;
 
-      const distribution = await DashboardService.getStatusDistribution({ userId, projectId });
+      const distribution = await DashboardFlowService.getStatusDistribution({ userId, projectId });
 
       return res.status(200).json({
         success: true,
@@ -70,11 +71,31 @@ class DashboardController {
       const userId = req.user.id;
       const { projectId } = req.query;
 
-      const trend = await DashboardService.getCreationTrend({ userId, projectId });
+      const trend = await DashboardFlowService.getCreationTrend({ userId, projectId });
 
       return res.status(200).json({
         success: true,
         data: trend,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/dashboard/analytics
+   * Lấy toàn bộ số liệu Dashboard tổng hợp từ n8n Flow 10 trong 1 lượt gọi
+   */
+  static async getAnalytics(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { projectId } = req.query;
+
+      const analytics = await DashboardFlowService.getAllAnalytics({ userId, projectId });
+
+      return res.status(200).json({
+        success: true,
+        data: analytics,
       });
     } catch (error) {
       next(error);

@@ -138,6 +138,7 @@ class DashboardService {
       totalStories: row.total_stories || 0,
       totalTasks: row.total_tasks || 0,
       totalIssues,
+      totalStoryPoints: (row.total_stories || 0) * 5 + (row.total_tasks || 0) * 2,
       issuesThisMonth: row.issues_this_month || 0,
       epicsThisMonth: row.epics_this_month || 0,
       storiesThisMonth: row.stories_this_month || 0,

@@ -9,5 +9,6 @@ router.get('/summary', authMiddleware, DashboardController.getSummary);
 router.get('/issue-breakdown', authMiddleware, DashboardController.getIssueBreakdown);
 router.get('/status-distribution', authMiddleware, DashboardController.getStatusDistribution);
 router.get('/creation-trend', authMiddleware, DashboardController.getCreationTrend);
+router.get('/analytics', authMiddleware, DashboardController.getAnalytics);
 
 module.exports = router;
