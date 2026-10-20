@@ -200,6 +200,9 @@ class NotificationService {
         eventId,
         eventType: 'jira.epic.created',
         timestamp: new Date().toISOString(),
+        userId,
+        backendUrl: process.env.BACKEND_INTERNAL_URL || 'http://localhost:5000',
+        internalSecret: NOTIFICATION_WEBHOOK_SECRET,
         project: {
           id: project?.id || projectId || null,
           name: projectName,
@@ -258,8 +261,8 @@ class NotificationService {
         };
       }
 
-      // 7. Nếu là kênh email, thực hiện gửi email thực tế qua EmailService (SMTP)
-      if (channel === 'email') {
+      // 7. Nếu là kênh email và chưa được dispatch qua backend MAIN 10, thực hiện gửi email qua EmailService (SMTP)
+      if (channel === 'email' && !n8nData.deliveryDetails && n8nData.status !== 'sent') {
         const formatted = n8nData.formattedPayload || {};
         const emailResult = await EmailService.sendEmail({
           to: targetEmail,
@@ -365,6 +368,9 @@ class NotificationService {
       eventType: 'jira.epic.created',
       timestamp: new Date().toISOString(),
       isTest: true,
+      userId,
+      backendUrl: process.env.BACKEND_INTERNAL_URL || 'http://localhost:5000',
+      internalSecret: NOTIFICATION_WEBHOOK_SECRET,
       project: {
         id: null,
         name: 'Dự án Kiểm thử (Demo Workspace)',
@@ -420,8 +426,8 @@ class NotificationService {
         throw err;
       }
 
-      // Nếu là kênh email, thực hiện gửi email thử nghiệm thực tế qua EmailService (SMTP)
-      if (channel === 'email') {
+      // Nếu là kênh email và chưa được dispatch qua backend MAIN 10, gửi qua EmailService
+      if (channel === 'email' && !n8nData.deliveryDetails && n8nData.status !== 'sent') {
         const formatted = n8nData.formattedPayload || {};
         const emailResult = await EmailService.sendEmail({
           to: targetEmail,

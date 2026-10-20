@@ -10,14 +10,19 @@ function internalAuthMiddleware(req, res, next) {
     req.headers['x-webhook-secret'] ||
     req.query.internalSecret;
 
-  const validSecret = env.INTERNAL_SERVICE_KEY || env.N8N_WEBHOOK_SECRET || 'ai_jira_agent_internal_secret_2026';
+  const validSecrets = [
+    env.INTERNAL_SERVICE_KEY,
+    env.N8N_WEBHOOK_SECRET,
+    process.env.NOTIFICATION_WEBHOOK_SECRET || 'ai_jira_agent_notification_secret_key_2026',
+    'ai_jira_agent_internal_secret_2026',
+  ].filter(Boolean);
 
-  if (!secretKey || secretKey !== validSecret) {
+  if (!secretKey || !validSecrets.includes(secretKey)) {
     return res.status(401).json({
       success: false,
       statusCode: 401,
       error: 'Unauthorized',
-      message: 'Từ chối truy cập API nội bộ: X-Internal-Service-Key không hợp lệ hoặc bị thiếu.',
+      message: 'Từ chối truy cập API nội bộ: X-Internal-Service-Key hoặc X-Webhook-Secret không hợp lệ hoặc bị thiếu.',
     });
   }
 

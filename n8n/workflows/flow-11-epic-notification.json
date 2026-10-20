@@ -1,7 +1,7 @@
 {
   "id": "Flow11NotifyEpic",
   "versionId": "f11a0000-0000-4000-8000-000000000011",
-  "name": "Flow 11 - Automated Notification",
+  "name": "AI Jira Agent - Flow 11 Automated Epic Notification Engine",
   "nodes": [
     {
       "parameters": {
@@ -11,92 +11,365 @@
         "options": {}
       },
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [
-        -700,
+        -1000,
         0
       ],
-      "id": "f11-webhook-trigger",
-      "name": "Node 1 - Webhook Trigger",
+      "id": "f11-main-01-webhook",
+      "name": "MAIN 01 — Epic Created Webhook Trigger",
       "webhookId": "flow-11-epic-created-notification-webhook"
     },
     {
       "parameters": {
-        "jsCode": "try {\n  const item = $input.first().json;\n  const headers = item.headers || {};\n  const receivedSecret = headers['x-webhook-secret'] || headers['X-Webhook-Secret'];\n  const expectedSecret = 'ai_jira_agent_notification_secret_key_2026';\n\n  if (!receivedSecret || receivedSecret !== expectedSecret) {\n    return [{\n      json: {\n        authorized: false,\n        statusCode: 401,\n        error: 'Unauthorized: X-Webhook-Secret không hợp lệ hoặc bị thiếu.'\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      headers: { ...headers, 'x-webhook-secret': '***MASKED***' },\n      body: item.body || item\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      authorized: false,\n      statusCode: 500,\n      error: `Security Check Error: ${err.message}`\n    }\n  }];\n}"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-is-auth-valid",
+              "leftValue": "={{ [\"ai_jira_agent_notification_secret_key_2026\", \"ai_jira_agent_internal_secret_2026\"].includes($json.headers?.[\"x-webhook-secret\"] || $json.headers?.[\"X-Webhook-Secret\"] || $json.headers?.[\"x-notification-secret\"] || $json.headers?.[\"x-internal-service-key\"] || $json.body?.internalSecret) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        0
+      ],
+      "id": "f11-main-02-auth-check",
+      "name": "MAIN 02 — Verify Webhook Authentication"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  const body = item.body || item || {};\n\n  const eventId = String(body.eventId || \"\").trim();\n  const eventType = String(body.eventType || \"\").trim();\n  const project = body.project || {};\n  const epic = body.epic || {};\n  const actor = body.actor || {};\n  const channelConfig = body.channelConfig || {};\n  const isTest = Boolean(body.isTest);\n  const userId = body.userId || actor.id || null;\n  const backendUrl = String(body.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\");\n\n  const errors = [];\n  if (!eventId) errors.push(\"Thiếu eventId hợp lệ\");\n  if (!eventType || (!eventType.startsWith(\"jira.epic.\") && eventType !== \"jira.epic.created\" && eventType !== \"jira.epic.test\")) {\n    errors.push(\"eventType không đúng chuẩn (phải là jira.epic.created hoặc jira.epic.test)\");\n  }\n  if (!project.jiraProjectKey && !body.projectKey && !isTest) {\n    errors.push(\"Thiếu mã dự án (project.jiraProjectKey)\");\n  }\n  if (!epic.key) errors.push(\"Thiếu mã Epic (epic.key)\");\n  if (!epic.url && !isTest) errors.push(\"Thiếu đường dẫn Jira Epic (epic.url)\");\n\n  const isValidEvent = errors.length === 0;\n  const projectKey = String(project.jiraProjectKey || body.projectKey || \"DEMO\").trim().toUpperCase();\n  const projectName = project.name || body.projectName || `Dự án ${projectKey}`;\n  const epicKey = String(epic.key || \"\").trim().toUpperCase();\n  const epicSummary = epic.summary || epic.title || `Epic ${epicKey}`;\n  const epicDescription = epic.description || \"Không có mô tả chi tiết.\";\n  const jiraUrl = epic.url || `https://jira.example.com/browse/${epicKey}`;\n\n  return [{\n    json: {\n      isValidEvent,\n      validationError: errors.join(\"; \"),\n      eventId,\n      eventType,\n      userId,\n      backendUrl,\n      isTest,\n      project: {\n        id: project.id || body.projectId || null,\n        name: projectName,\n        jiraProjectKey: projectKey\n      },\n      epic: {\n        id: epic.id || null,\n        key: epicKey,\n        summary: epicSummary,\n        description: epicDescription,\n        url: jiraUrl\n      },\n      actor: {\n        id: userId,\n        displayName: actor.displayName || \"AI Jira Agent User\"\n      },\n      channelConfig,\n      projectId: project.id || body.projectId || null,\n      projectKey,\n      epicKey,\n      epicSummary,\n      jiraUrl,\n      channel: (channelConfig.channel || \"discord\").toLowerCase()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      isValidEvent: false,\n      validationError: err.message\n    }\n  }];\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -480,
+        -600,
         0
       ],
-      "id": "f11-security-check",
-      "name": "Node 2 - Security Check"
+      "id": "f11-aux-main-03-norm",
+      "name": "AUX — MAIN 03 — Normalize Event Data"
     },
     {
       "parameters": {
-        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized) {\n    return [{ json: item }];\n  }\n\n  const body = item.body || {};\n  const { eventId, eventType, project, epic } = body;\n\n  const errors = [];\n  if (!eventId || typeof eventId !== 'string') errors.push('Thiếu eventId hợp lệ');\n  if (!eventType || (eventType !== 'jira.epic.created' && eventType !== 'jira.epic.test')) {\n    errors.push('eventType không đúng chuẩn (phải là jira.epic.created hoặc jira.epic.test)');\n  }\n  if (!project || !project.jiraProjectKey) errors.push('Thiếu project hoặc project.jiraProjectKey');\n  if (!epic || !epic.key) errors.push('Thiếu epic hoặc epic.key');\n  if (!epic || !epic.summary) errors.push('Thiếu epic.summary');\n  if (!epic || !epic.url) errors.push('Thiếu epic.url');\n\n  if (errors.length > 0) {\n    return [{\n      json: {\n        authorized: true,\n        valid: false,\n        statusCode: 400,\n        error: `Validation Error: ${errors.join('; ')}`,\n        eventId: eventId || null\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      valid: true,\n      body\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      authorized: true,\n      valid: false,\n      statusCode: 500,\n      error: `Validation Exception: ${err.message}`\n    }\n  }];\n}"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-is-valid-event",
+              "leftValue": "={{ $json.isValidEvent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
       },
-      "type": "n8n-nodes-base.code",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -260,
+        -400,
         0
       ],
-      "id": "f11-validate-event",
-      "name": "Node 3 - Validate Event"
+      "id": "f11-main-03-validate-event",
+      "name": "MAIN 03 — Validate Notification Event"
     },
     {
       "parameters": {
-        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized || !item.valid) {\n    return [{ json: item }];\n  }\n\n  const { body } = item;\n  const { eventId } = body;\n\n  let isDuplicate = false;\n  try {\n    const staticData = $getWorkflowStaticData('global');\n    if (staticData && staticData.processedEvents) {\n      if (staticData.processedEvents[eventId] && staticData.processedEvents[eventId].status === 'success') {\n        isDuplicate = true;\n      }\n    }\n  } catch (e) {\n    // staticData may not be available\n  }\n\n  if (isDuplicate) {\n    return [{\n      json: {\n        authorized: true,\n        valid: true,\n        isDuplicate: true,\n        statusCode: 200,\n        eventId,\n        message: 'Sự kiện này đã được xử lý thành công trước đó (Idempotent - Skipped duplicate).',\n        status: 'duplicate_skipped'\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      valid: true,\n      isDuplicate: false,\n      body\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...item,\n      isDuplicate: false,\n      error: err.message\n    }\n  }];\n}"
+        "method": "POST",
+        "url": "={{ ($json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") }}/api/internal/notifications/verify-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "ai_jira_agent_notification_secret_key_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ eventId: $json.eventId, eventType: $json.eventType, projectKey: $json.projectKey, projectId: $json.projectId, userId: $json.userId, epicKey: $json.epicKey, isTest: $json.isTest }) }}",
+        "options": {
+          "neverError": true,
+          "timeout": 8000
+        }
       },
-      "type": "n8n-nodes-base.code",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "f11-main-04-verify-backend",
+      "name": "MAIN 04 — Verify Event with Backend",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($(\"AUX — MAIN 03 — Normalize Event Data\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") }}/api/internal/notifications/config",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "ai_jira_agent_notification_secret_key_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ userId: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.userId, projectKey: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.projectKey, eventId: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.eventId }) }}",
+        "options": {
+          "neverError": true,
+          "timeout": 8000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f11-main-05-fetch-config",
+      "name": "MAIN 05 — Fetch Notification Configuration",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-is-eligible",
+              "leftValue": "={{ Boolean(($(\"MAIN 04 — Verify Event with Backend\").item.json.verified || $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.isTest) && ($json.notification_enabled !== false || $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.isTest) && ($json.is_channel_configured || $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.isTest)) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -40,
+        200,
         0
       ],
-      "id": "f11-idempotency",
-      "name": "Node 4 - Idempotency Check"
+      "id": "f11-main-06-eligibility-check",
+      "name": "MAIN 06 — Notification Eligibility Check"
     },
     {
       "parameters": {
-        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized || !item.valid || item.isDuplicate) {\n    return [{ json: item }];\n  }\n\n  const { body } = item;\n  const { eventId, project, epic, actor, channelConfig = {} } = body;\n  const channel = (channelConfig.channel || 'discord').toLowerCase();\n\n  const projectName = project.name || `Dự án ${project.jiraProjectKey}`;\n  const projectKey = project.jiraProjectKey;\n  const epicKey = epic.key;\n  const epicSummary = epic.summary;\n  const epicDesc = epic.description || 'Không có mô tả chi tiết.';\n  const actorName = actor?.displayName || 'Thành viên hệ thống';\n  const jiraUrl = epic.url;\n\n  let formattedPayload = {};\n  let dispatchTarget = null;\n\n  if (channel === 'discord') {\n    dispatchTarget = channelConfig.targetUrl;\n    formattedPayload = {\n      content: `🎉 **New Jira Epic Created**\\n📁 **Project:** ${projectName} (\\`${projectKey}\\`)\\n🎯 **Epic:** \\`${epicKey}\\` — ${epicSummary}\\n👤 **Created by:** ${actorName}\\n🔗 **Jira:** ${jiraUrl}`,\n      embeds: [\n        {\n          title: `⚡ Epic Created: ${epicKey} — ${epicSummary}`,\n          url: jiraUrl,\n          color: 5814783,\n          fields: [\n            { name: \"📁 Project\", value: `${projectName} (\\`${projectKey}\\`)`, inline: true },\n            { name: \"👤 Created by\", value: actorName, inline: true },\n            { name: \"📝 Description\", value: epicDesc.length > 200 ? `${epicDesc.slice(0, 200)}...` : epicDesc, inline: false },\n            { name: \"🔗 Jira Issue\", value: `[Xem chi tiết trên Jira](${jiraUrl})`, inline: false }\n          ],\n          footer: {\n            text: `AI Jira Agent • Event ID: ${eventId}`\n          },\n          timestamp: new Date().toISOString()\n        }\n      ]\n    };\n  } else if (channel === 'slack') {\n    dispatchTarget = channelConfig.targetUrl;\n    formattedPayload = {\n      text: `🎉 *New Jira Epic Created*: <${jiraUrl}|${epicKey}> — ${epicSummary}`,\n      blocks: [\n        {\n          type: \"header\",\n          text: { type: \"plain_text\", text: \"🎉 New Jira Epic Created\", emoji: true }\n        },\n        {\n          type: \"section\",\n          fields: [\n            { type: \"mrkdwn\", text: `*Project:*\\n${projectName} (\\`${projectKey}\\`)` },\n            { type: \"mrkdwn\", text: `*Created by:*\\n${actorName}` }\n          ]\n        },\n        {\n          type: \"section\",\n          text: {\n            type: \"mrkdwn\",\n            text: `*Epic:*\\n<${jiraUrl}|*${epicKey}*> — *${epicSummary}*\\n${epicDesc.length > 200 ? `${epicDesc.slice(0, 200)}...` : epicDesc}`\n          }\n        },\n        {\n          type: \"context\",\n          elements: [\n            { type: \"mrkdwn\", text: `AI Jira Agent • Event ID: \\`${eventId}\\`` }\n          ]\n        }\n      ]\n    };\n  } else if (channel === 'email') {\n    dispatchTarget = channelConfig.targetEmail;\n    formattedPayload = {\n      to: dispatchTarget,\n      subject: `[AI Jira Agent] 🎉 New Epic Created: ${epicKey} - ${epicSummary}`,\n      html: `<div style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;\"><h2 style=\"color: #2563eb; margin-top: 0;\">🎉 New Jira Epic Created</h2><p><strong>Project:</strong> ${projectName} (<code>${projectKey}</code>)</p><p><strong>Epic:</strong> <a href=\"${jiraUrl}\" style=\"color: #2563eb; text-decoration: none; font-weight: bold;\">${epicKey}</a> — ${epicSummary}</p><p><strong>Created by:</strong> ${actorName}</p><p><strong>Description:</strong> ${epicDesc}</p><div style=\"margin-top: 25px;\"><a href=\"${jiraUrl}\" style=\"background-color: #2563eb; color: #ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none; display: inline-block;\">Xem chi tiết trên Jira</a></div><hr style=\"margin-top: 30px; border: none; border-top: 1px solid #e2e8f0;\" /><p style=\"font-size: 12px; color: #64748b;\">Event ID: ${eventId} • Gửi tự động từ AI Jira Agent</p></div>`\n    };\n  }\n\n  return [{\n    json: {\n      authorized: true,\n      valid: true,\n      isDuplicate: false,\n      channel,\n      dispatchTarget,\n      formattedPayload,\n      eventId,\n      projectKey,\n      epicKey,\n      jiraUrl\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...item,\n      error: `Format Error: ${err.message}`\n    }\n  }];\n}"
+        "method": "POST",
+        "url": "={{ ($(\"AUX — MAIN 03 — Normalize Event Data\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") }}/api/internal/notifications/claim-idempotency",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "ai_jira_agent_notification_secret_key_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ eventId: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.eventId, eventType: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.eventType, userId: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.userId, projectId: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.projectId, projectKey: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.projectKey, epicKey: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.epicKey, epicSummary: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.epicSummary, channel: ($(\"MAIN 05 — Fetch Notification Configuration\").item.json?.notification_channel || $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.channel || \"discord\").toLowerCase(), payload: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json }) }}",
+        "options": {
+          "neverError": true,
+          "timeout": 8000
+        }
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        180,
-        0
-      ],
-      "id": "f11-route-format",
-      "name": "Node 5 & 6 - Route & Format Message"
-    },
-    {
-      "parameters": {
-        "jsCode": "try {\n  const item = $input.first().json;\n  if (!item.authorized || !item.valid || item.isDuplicate) {\n    return [{ json: item }];\n  }\n\n  const { channel, dispatchTarget, formattedPayload, eventId } = item;\n\n  if (!dispatchTarget) {\n    return [{\n      json: {\n        ...item,\n        sentSuccess: false,\n        statusCode: 400,\n        errorMessage: `Kênh ${channel} chưa được cấu hình webhook URL hoặc email nhận!`\n      }\n    }];\n  }\n\n  let sendResult = { ok: false };\n\n  if (channel === 'discord' || channel === 'slack') {\n    if (typeof fetch === 'function') {\n      try {\n        const res = await fetch(dispatchTarget, {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify(formattedPayload)\n        });\n        sendResult = { ok: res.ok, status: res.status };\n      } catch (fErr) {\n        sendResult = { ok: false, error: fErr.message };\n      }\n    } else {\n      sendResult = { ok: true, status: 200, note: 'Notification queued for webhook dispatch' };\n    }\n  } else if (channel === 'email') {\n    sendResult = { ok: true, status: 200, note: `SMTP delivery payload prepared for ${dispatchTarget}` };\n  }\n\n  return [{\n    json: {\n      ...item,\n      sentSuccess: sendResult.ok,\n      statusCode: sendResult.ok ? 200 : (sendResult.status || 502),\n      errorMessage: sendResult.ok ? null : sendResult.error,\n      deliveryDetails: sendResult\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...item,\n      sentSuccess: false,\n      statusCode: 500,\n      errorMessage: `Dispatch Exception: ${err.message}`\n    }\n  }];\n}"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         400,
         0
       ],
-      "id": "f11-dispatch-notification",
-      "name": "Node 7 - Dispatch Notification"
+      "id": "f11-main-07-claim-idempotency",
+      "name": "MAIN 07 — Backend Idempotency Claim",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "try {\n  const item = $input.first().json;\n\n  let responsePayload = {};\n  let finalStatusCode = 200;\n\n  if (!item.authorized) {\n    finalStatusCode = item.statusCode || 401;\n    responsePayload = {\n      success: false,\n      error: item.error || 'Unauthorized',\n      statusCode: finalStatusCode\n    };\n  } else if (!item.valid) {\n    finalStatusCode = item.statusCode || 400;\n    responsePayload = {\n      success: false,\n      error: item.error || 'Invalid event payload',\n      statusCode: finalStatusCode,\n      eventId: item.eventId\n    };\n  } else if (item.isDuplicate) {\n    finalStatusCode = 200;\n    responsePayload = {\n      success: true,\n      eventId: item.eventId,\n      status: 'duplicate_skipped',\n      message: item.message\n    };\n  } else if (!item.sentSuccess) {\n    finalStatusCode = item.statusCode || 502;\n    responsePayload = {\n      success: false,\n      eventId: item.eventId,\n      channel: item.channel,\n      error: item.errorMessage || 'Provider delivery error',\n      statusCode: finalStatusCode\n    };\n  } else {\n    finalStatusCode = 200;\n    responsePayload = {\n      success: true,\n      eventId: item.eventId,\n      channel: item.channel,\n      epicKey: item.epicKey,\n      jiraUrl: item.jiraUrl,\n      formattedPayload: item.formattedPayload || null,\n      message: `Đã xử lý thông báo Epic ${item.epicKey} cho kênh ${item.channel ? item.channel.toUpperCase() : ''} thành công!`\n    };\n  }\n\n  if (item.authorized && item.valid && !item.isDuplicate && item.sentSuccess && item.eventId) {\n    try {\n      const staticData = $getWorkflowStaticData('global');\n      if (staticData) {\n        staticData.processedEvents = staticData.processedEvents || {};\n        staticData.processedEvents[item.eventId] = {\n          status: 'success',\n          timestamp: Date.now(),\n          channel: item.channel,\n          epicKey: item.epicKey\n        };\n      }\n    } catch (e) {}\n  }\n\n  const payloadString = JSON.stringify(responsePayload);\n  return [{\n    json: {\n      content: payloadString,\n      ...responsePayload,\n      _statusCode: finalStatusCode\n    }\n  }];\n} catch (err) {\n  const errPayload = { success: false, error: err.message, statusCode: 500 };\n  return [{\n    json: {\n      content: JSON.stringify(errPayload),\n      ...errPayload\n    }\n  }];\n}"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-is-claimed-not-dup",
+              "leftValue": "={{ $json.isDuplicate === false && $json.claimed === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "id": "f11-aux-main-07-if",
+      "name": "AUX — MAIN 07 — Idempotency Branch IF"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const claimRes = $input.first().json;\n  const eventData = $(\"AUX — MAIN 03 — Normalize Event Data\").item.json;\n  const configData = $(\"MAIN 05 — Fetch Notification Configuration\").item.json || {};\n  const rawChannel = String(configData.notification_channel || eventData.channel || \"\").toLowerCase().trim();\n  const validChannels = [\"discord\", \"slack\", \"email\"];\n  const channel = validChannels.includes(rawChannel) ? rawChannel : \"discord\";\n  return [{\n    json: {\n      ...eventData,\n      config: configData,\n      targetEmail: configData.target_email || eventData.channelConfig?.targetEmail || null,\n      claimRes,\n      channel,\n      channelResolvedAt: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...($(\"AUX — MAIN 03 — Normalize Event Data\").item.json),\n      channel: \"discord\",\n      resolveError: err.message\n    }\n  }];\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        620,
+        800,
         0
       ],
-      "id": "f11-record-result",
-      "name": "Node 8 - Record Result"
+      "id": "f11-main-08-resolve-channel",
+      "name": "MAIN 08 — Resolve Notification Channel"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n  const { channel, eventId, project, epic, actor, targetEmail } = item;\n\n  const projectName = project?.name || `Dự án ${project?.jiraProjectKey || \"\"}`;\n  const projectKey = project?.jiraProjectKey || \"PROJ\";\n  const epicKey = epic?.key || \"EPIC-101\";\n  const epicSummary = epic?.summary || \"Tạo mới Epic\";\n  const epicDesc = epic?.description || \"Không có mô tả chi tiết.\";\n  const actorName = actor?.displayName || \"AI Jira Agent User\";\n  const jiraUrl = epic?.url || `https://jira.example.com/browse/${epicKey}`;\n\n  let formattedMessage = {};\n\n  if (channel === \"discord\") {\n    formattedMessage = {\n      content: `🎉 **New Jira Epic Created**\\n📁 **Project:** ${projectName} (\\`${projectKey}\\`)\\n🎯 **Epic:** \\`${epicKey}\\` — ${epicSummary}\\n👤 **Created by:** ${actorName}\\n🔗 **Jira:** ${jiraUrl}`,\n      embeds: [\n        {\n          title: `⚡ Epic Created: ${epicKey} — ${epicSummary}`,\n          url: jiraUrl,\n          color: 5814783,\n          fields: [\n            { name: \"📁 Project\", value: `${projectName} (\\`${projectKey}\\`)`, inline: true },\n            { name: \"👤 Created by\", value: actorName, inline: true },\n            { name: \"📝 Description\", value: epicDesc.length > 200 ? `${epicDesc.slice(0, 200)}...` : epicDesc, inline: false },\n            { name: \"🔗 Jira Issue\", value: `[Xem chi tiết trên Jira](${jiraUrl})`, inline: false }\n          ],\n          footer: {\n            text: `AI Jira Agent • Event ID: ${eventId}`\n          },\n          timestamp: new Date().toISOString()\n        }\n      ]\n    };\n  } else if (channel === \"slack\") {\n    formattedMessage = {\n      text: `🎉 *New Jira Epic Created*: <${jiraUrl}|${epicKey}> — ${epicSummary}`,\n      blocks: [\n        {\n          type: \"header\",\n          text: { type: \"plain_text\", text: \"🎉 New Jira Epic Created\", emoji: true }\n        },\n        {\n          type: \"section\",\n          fields: [\n            { type: \"mrkdwn\", text: `*Project:*\\n${projectName} (\\`${projectKey}\\`)` },\n            { type: \"mrkdwn\", text: `*Created by:*\\n${actorName}` }\n          ]\n        },\n        {\n          type: \"section\",\n          text: {\n            type: \"mrkdwn\",\n            text: `*Epic:*\\n<${jiraUrl}|*${epicKey}*> — *${epicSummary}*\\n${epicDesc.length > 200 ? `${epicDesc.slice(0, 200)}...` : epicDesc}`\n          }\n        },\n        {\n          type: \"context\",\n          elements: [\n            { type: \"mrkdwn\", text: `AI Jira Agent • Event ID: \\`${eventId}\\`` }\n          ]\n        }\n      ]\n    };\n  } else if (channel === \"email\") {\n    formattedMessage = {\n      to: targetEmail,\n      subject: `[AI Jira Agent] 🎉 New Epic Created: ${epicKey} - ${epicSummary}`,\n      html: `<div style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;\"><h2 style=\"color: #2563eb; margin-top: 0;\">🎉 New Jira Epic Created</h2><p><strong>Project:</strong> ${projectName} (<code>${projectKey}</code>)</p><p><strong>Epic:</strong> <a href=\"${jiraUrl}\" style=\"color: #2563eb; text-decoration: none; font-weight: bold;\">${epicKey}</a> — ${epicSummary}</p><p><strong>Created by:</strong> ${actorName}</p><p><strong>Description:</strong> ${epicDesc}</p><div style=\"margin-top: 25px;\"><a href=\"${jiraUrl}\" style=\"background-color: #2563eb; color: #ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none; display: inline-block;\">Xem chi tiết trên Jira</a></div><hr style=\"margin-top: 30px; border: none; border-top: 1px solid #e2e8f0;\" /><p style=\"font-size: 12px; color: #64748b;\">Event ID: ${eventId} • Gửi tự động từ AI Jira Agent</p></div>`,\n      text: `🎉 New Jira Epic Created: ${epicKey} - ${epicSummary}\\nProject: ${projectName} (${projectKey})\\nCreated by: ${actorName}\\nJira: ${jiraUrl}\\nEvent ID: ${eventId}`\n    };\n  }\n\n  return [{\n    json: {\n      ...item,\n      formattedMessage\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ...($input.first().json),\n      formatError: err.message\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "id": "f11-main-09-build-message",
+      "name": "MAIN 09 — Build Notification Message"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") }}/api/internal/notifications/dispatch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "ai_jira_agent_notification_secret_key_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ eventId: $json.eventId, channel: $json.channel, formattedMessage: $json.formattedMessage, userId: $json.userId, isTest: $json.isTest }) }}",
+        "options": {
+          "neverError": true,
+          "timeout": 12000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "f11-main-10-dispatch",
+      "name": "MAIN 10 — Dispatch Notification via Backend",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($(\"AUX — MAIN 03 — Normalize Event Data\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") }}/api/internal/notifications/finalize",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "ai_jira_agent_notification_secret_key_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ eventId: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.eventId, status: ($json.delivered !== undefined) ? ($json.delivered ? \"sent\" : \"failed\") : \"skipped\", responseData: $json, errorMessage: ($json.delivered || $json.success) ? null : ($json.error || $json.message || null), skipReason: ($json.delivered !== undefined) ? null : (!$(\"MAIN 04 — Verify Event with Backend\").item.json.verified ? \"Dự án hoặc sự kiện không hợp lệ với hệ thống Backend.\" : ($(\"MAIN 05 — Fetch Notification Configuration\").item.json.notification_enabled === false ? \"Tính năng thông báo tự động đang tắt (notification_enabled = false).\" : \"Kênh thông báo chưa được cấu hình webhook URL hoặc email nhận.\")), channel: $(\"MAIN 05 — Fetch Notification Configuration\").item.json?.notification_channel || $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.channel || \"discord\", epicKey: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.epicKey, jiraUrl: $(\"AUX — MAIN 03 — Normalize Event Data\").item.json.jiraUrl }) }}",
+        "options": {
+          "neverError": true,
+          "timeout": 8000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        0
+      ],
+      "id": "f11-main-11-finalize",
+      "name": "MAIN 11 — Finalize Notification Result",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const item = $input.first().json;\n\n  // 1. Phân loại Unauthorized (từ MAIN 02 False)\n  if (item.headers !== undefined && item.isValidEvent === undefined && item.status === undefined && item.claimed === undefined) {\n    const res = {\n      success: false,\n      statusCode: 401,\n      error: \"Unauthorized: X-Webhook-Secret không hợp lệ hoặc bị thiếu.\"\n    };\n    return [{ json: { content: JSON.stringify(res), ...res, _statusCode: 401 } }];\n  }\n\n  // 2. Phân loại Validation Error (từ MAIN 03 False)\n  if (item.isValidEvent === false) {\n    const res = {\n      success: false,\n      statusCode: 400,\n      error: `Validation Error: ${item.validationError || \"Dữ liệu sự kiện không hợp lệ hoặc thiếu thông tin bắt buộc.\"}`,\n      eventId: item.eventId || null\n    };\n    return [{ json: { content: JSON.stringify(res), ...res, _statusCode: 400 } }];\n  }\n\n  // 3. Phân loại Duplicate (từ AUX 07 IF False)\n  if (item.isDuplicate === true || item.claimed === false) {\n    const eventData = $(\"AUX — MAIN 03 — Normalize Event Data\").item.json || {};\n    const configData = $(\"MAIN 05 — Fetch Notification Configuration\").item.json || {};\n    const res = {\n      success: true,\n      eventId: eventData.eventId || item.eventId,\n      channel: configData.notification_channel || eventData.channel || \"discord\",\n      epicKey: eventData.epicKey,\n      status: \"duplicate_skipped\",\n      message: item.message || item.claimMessage || \"Sự kiện này đã được xử lý thành công trước đó (Idempotent - Skipped duplicate).\",\n      statusCode: 200\n    };\n    return [{ json: { content: JSON.stringify(res), ...res, _statusCode: 200 } }];\n  }\n\n  // 4. Phân loại Finalized (từ MAIN 11)\n  const status = item.status || \"sent\";\n  const isSuccess = status === \"sent\" || status === \"skipped\" || status === \"duplicate_skipped\";\n\n  let message = item.message;\n  if (!message) {\n    if (status === \"sent\") {\n      message = `Đã gửi thông báo Epic ${item.epicKey || \"\"} qua kênh ${String(item.channel || \"\").toUpperCase()} thành công!`;\n    } else if (status === \"skipped\") {\n      message = `Đã bỏ qua thông báo: ${item.skipReason || \"Tính năng thông báo đang tắt\"}.`;\n    } else {\n      message = item.errorMessage || item.dispatchError || item.error || \"Gửi thông báo thất bại.\";\n    }\n  }\n\n  const finalStatusCode = status === \"failed\" ? 502 : 200;\n\n  const responsePayload = {\n    success: isSuccess,\n    eventId: item.eventId,\n    channel: item.channel,\n    epicKey: item.epicKey,\n    jiraUrl: item.jiraUrl,\n    status,\n    message,\n    deliveryDetails: item.deliveryDetails || null,\n    dispatchedByBackend: true,\n    statusCode: finalStatusCode\n  };\n\n  return [{\n    json: {\n      content: JSON.stringify(responsePayload),\n      ...responsePayload,\n      _statusCode: finalStatusCode\n    }\n  }];\n} catch (err) {\n  const errPayload = { success: false, error: err.message, statusCode: 500 };\n  return [{\n    json: {\n      content: JSON.stringify(errPayload),\n      ...errPayload,\n      _statusCode: 500\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ],
+      "id": "f11-aux-shared-response-formatter",
+      "name": "AUX — Shared Response Formatter"
     },
     {
       "parameters": {
@@ -117,86 +390,191 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        840,
+        1800,
         0
       ],
-      "id": "f11-respond-webhook",
-      "name": "Node 9 - Respond to Webhook"
+      "id": "f11-main-12-respond",
+      "name": "MAIN 12 — Respond to Notification Webhook"
     }
   ],
   "pinData": {},
   "connections": {
-    "Node 1 - Webhook Trigger": {
+    "MAIN 01 — Epic Created Webhook Trigger": {
       "main": [
         [
           {
-            "node": "Node 2 - Security Check",
+            "node": "MAIN 02 — Verify Webhook Authentication",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Node 2 - Security Check": {
+    "MAIN 02 — Verify Webhook Authentication": {
       "main": [
         [
           {
-            "node": "Node 3 - Validate Event",
+            "node": "AUX — MAIN 03 — Normalize Event Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AUX — Shared Response Formatter",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Node 3 - Validate Event": {
+    "AUX — MAIN 03 — Normalize Event Data": {
       "main": [
         [
           {
-            "node": "Node 4 - Idempotency Check",
+            "node": "MAIN 03 — Validate Notification Event",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Node 4 - Idempotency Check": {
+    "MAIN 03 — Validate Notification Event": {
       "main": [
         [
           {
-            "node": "Node 5 & 6 - Route & Format Message",
+            "node": "MAIN 04 — Verify Event with Backend",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AUX — Shared Response Formatter",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Node 5 & 6 - Route & Format Message": {
+    "MAIN 04 — Verify Event with Backend": {
       "main": [
         [
           {
-            "node": "Node 7 - Dispatch Notification",
+            "node": "MAIN 05 — Fetch Notification Configuration",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Node 7 - Dispatch Notification": {
+    "MAIN 05 — Fetch Notification Configuration": {
       "main": [
         [
           {
-            "node": "Node 8 - Record Result",
+            "node": "MAIN 06 — Notification Eligibility Check",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Node 8 - Record Result": {
+    "MAIN 06 — Notification Eligibility Check": {
       "main": [
         [
           {
-            "node": "Node 9 - Respond to Webhook",
+            "node": "MAIN 07 — Backend Idempotency Claim",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 11 — Finalize Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 07 — Backend Idempotency Claim": {
+      "main": [
+        [
+          {
+            "node": "AUX — MAIN 07 — Idempotency Branch IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AUX — MAIN 07 — Idempotency Branch IF": {
+      "main": [
+        [
+          {
+            "node": "MAIN 08 — Resolve Notification Channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AUX — Shared Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 08 — Resolve Notification Channel": {
+      "main": [
+        [
+          {
+            "node": "MAIN 09 — Build Notification Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 09 — Build Notification Message": {
+      "main": [
+        [
+          {
+            "node": "MAIN 10 — Dispatch Notification via Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 10 — Dispatch Notification via Backend": {
+      "main": [
+        [
+          {
+            "node": "MAIN 11 — Finalize Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 11 — Finalize Notification Result": {
+      "main": [
+        [
+          {
+            "node": "AUX — Shared Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AUX — Shared Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "MAIN 12 — Respond to Notification Webhook",
             "type": "main",
             "index": 0
           }

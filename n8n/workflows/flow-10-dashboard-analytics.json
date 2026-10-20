@@ -1,6 +1,4 @@
 {
-  "id": "Flow10DashboardAnalytics",
-  "versionId": "f1000000-0000-4000-8000-000000000010",
   "name": "AI Jira Agent - Flow 10 Dashboard Analytics & Agile Metrics Engine",
   "nodes": [
     {
@@ -13,25 +11,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -900,
+        -800,
         0
       ],
       "id": "f10-main-01-webhook",
       "name": "MAIN 01 — Dashboard Webhook Trigger",
       "webhookId": "flow-10-dashboard-analytics-webhook"
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst body = item.body || item;\n\nconst userId = String(body.userId || '').trim();\nconst projectId = body.projectId ? String(body.projectId).trim() : null;\nconst requestId = String(body.requestId || ('req-dash-' + Date.now()));\nconst timestamp = body.timestamp || new Date().toISOString();\nconst backendUrl = String(body.backendUrl || 'http://localhost:5000').replace(/\\/+$/, '');\nconst internalSecret = String(body.internalSecret || 'ai_jira_agent_internal_secret_2026');\n\n// Kiểm tra tính hợp lệ tối thiểu của request: Bắt buộc phải có userId xác thực\nconst isValid = Boolean(userId && userId.length > 0);\n\nreturn [{\n  json: {\n    userId,\n    projectId,\n    requestId,\n    timestamp,\n    backendUrl,\n    internalSecret,\n    isValid,\n    stage: 'INBOUND_NORMALIZED'\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -700,
-        0
-      ],
-      "id": "f10-aux-main-02-normalize",
-      "name": "AUX — MAIN 02 — Normalize Inbound Request"
     },
     {
       "parameters": {
@@ -44,7 +29,7 @@
           "conditions": [
             {
               "id": "cond-is-valid-request",
-              "leftValue": "={{ $json.isValid }}",
+              "leftValue": "={{ Boolean(($json.body?.userId || $json.userId) && String($json.body?.userId || $json.userId).trim().length > 0) }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -56,134 +41,24 @@
         }
       },
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.2,
       "position": [
-        -500,
+        -550,
         0
       ],
-      "id": "f10-main-02-validation",
+      "id": "f10-main-02-validate-request",
       "name": "MAIN 02 — Request Validation"
     },
     {
       "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "val-err-success",
-              "name": "success",
-              "value": false,
-              "type": "boolean"
-            },
-            {
-              "id": "val-err-status-code",
-              "name": "statusCode",
-              "value": 400,
-              "type": "number"
-            },
-            {
-              "id": "val-err-code",
-              "name": "errorCode",
-              "value": "INVALID_DASHBOARD_REQUEST",
-              "type": "string"
-            },
-            {
-              "id": "val-err-message",
-              "name": "message",
-              "value": "Yêu cầu phân tích Dashboard không hợp lệ: Thiếu userId hoặc thông tin phiên làm việc.",
-              "type": "string"
-            },
-            {
-              "id": "val-err-req-id",
-              "name": "requestId",
-              "value": "={{ $json.requestId }}",
-              "type": "string"
-            },
-            {
-              "id": "val-err-timestamp",
-              "name": "timestamp",
-              "value": "={{ $now.toISO() }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -500,
-        240
-      ],
-      "id": "f10-aux-main-02-val-err",
-      "name": "AUX — MAIN 02 — Validation Error Handler"
-    },
-    {
-      "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "prep-verify-url",
-              "name": "verifyUrl",
-              "value": "={{ $json.backendUrl + '/api/internal/dashboard/verify-access' }}",
-              "type": "string"
-            },
-            {
-              "id": "prep-user-id",
-              "name": "userId",
-              "value": "={{ $json.userId }}",
-              "type": "string"
-            },
-            {
-              "id": "prep-project-id",
-              "name": "projectId",
-              "value": "={{ $json.projectId || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "prep-request-id",
-              "name": "requestId",
-              "value": "={{ $json.requestId }}",
-              "type": "string"
-            },
-            {
-              "id": "prep-backend-url",
-              "name": "backendUrl",
-              "value": "={{ $json.backendUrl }}",
-              "type": "string"
-            },
-            {
-              "id": "prep-internal-secret",
-              "name": "internalSecret",
-              "value": "={{ $json.internalSecret }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -300,
-        0
-      ],
-      "id": "f10-aux-main-03-prepare-verify",
-      "name": "AUX — MAIN 03 — Prepare Access Verification Payload"
-    },
-    {
-      "parameters": {
         "method": "POST",
-        "url": "={{ $json.verifyUrl }}",
+        "url": "={{ String($json.body?.backendUrl || $json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/verify-access\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $json.internalSecret }}"
+              "value": "={{ $json.body?.internalSecret || $json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
             },
             {
               "name": "Content-Type",
@@ -193,7 +68,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ userId: $json.userId, projectId: $json.projectId || null, requestId: $json.requestId }) }}",
+        "jsonBody": "={{ JSON.stringify({ userId: String($json.body?.userId || $json.userId || \"\").trim(), projectId: ($json.body?.projectId || $json.projectId) ? String($json.body?.projectId || $json.projectId).trim() : null, requestId: String($json.body?.requestId || $json.requestId || (\"req-dash-\" + Date.now())) }) }}",
         "options": {
           "timeout": 5000,
           "response": {
@@ -207,7 +82,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -100,
+        -300,
         0
       ],
       "id": "f10-main-03-verify-access",
@@ -236,9 +111,9 @@
         }
       },
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.2,
       "position": [
-        100,
+        -50,
         0
       ],
       "id": "f10-aux-main-03-verify-result",
@@ -246,82 +121,14 @@
     },
     {
       "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "denied-success",
-              "name": "success",
-              "value": false,
-              "type": "boolean"
-            },
-            {
-              "id": "denied-status-code",
-              "name": "statusCode",
-              "value": 403,
-              "type": "number"
-            },
-            {
-              "id": "denied-code",
-              "name": "errorCode",
-              "value": "PROJECT_ACCESS_DENIED",
-              "type": "string"
-            },
-            {
-              "id": "denied-message",
-              "name": "message",
-              "value": "Dự án không tồn tại hoặc người dùng không có quyền truy cập vào Workspace này.",
-              "type": "string"
-            },
-            {
-              "id": "denied-req-id",
-              "name": "requestId",
-              "value": "={{ $('AUX — MAIN 02 — Normalize Inbound Request').first().json.requestId }}",
-              "type": "string"
-            },
-            {
-              "id": "denied-timestamp",
-              "name": "timestamp",
-              "value": "={{ $now.toISO() }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        100,
-        240
-      ],
-      "id": "f10-aux-main-03-denied-err",
-      "name": "AUX — MAIN 03 — Access Denied Handler"
-    },
-    {
-      "parameters": {
-        "jsCode": "const verifyRes = $input.first().json;\nconst initialReq = $('AUX — MAIN 02 — Normalize Inbound Request').first().json;\n\nconst verifiedProject = verifyRes.project || verifyRes.data?.project || null;\n\nreturn [{\n  json: {\n    ...initialReq,\n    verifiedProject,\n    accessVerified: true,\n    stage: 'ACCESS_VERIFIED_PREPARE_QUERIES'\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        300,
-        0
-      ],
-      "id": "f10-aux-main-03-check-access",
-      "name": "AUX — MAIN 03 — Check Access & Prepare Queries"
-    },
-    {
-      "parameters": {
         "method": "GET",
-        "url": "={{ $json.backendUrl + '/api/internal/dashboard/summary' }}",
+        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/summary\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $json.internalSecret }}"
+              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
             }
           ]
         },
@@ -330,11 +137,11 @@
           "parameters": [
             {
               "name": "userId",
-              "value": "={{ $json.userId }}"
+              "value": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.userId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.userId || \"\").trim() }}"
             },
             {
               "name": "projectId",
-              "value": "={{ $json.projectId || '' }}"
+              "value": "={{ ($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId) ? String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId).trim() : \"\" }}"
             }
           ]
         },
@@ -351,35 +158,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        500,
+        200,
         0
       ],
-      "id": "f10-main-04-fetch-summary",
+      "id": "f10-main-04-summary",
       "name": "MAIN 04 — Fetch Dashboard Summary"
     },
     {
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nconst prevState = $('AUX — MAIN 03 — Check Access & Prepare Queries').first().json;\n\nconst summaryData = res.data || res;\n\nreturn [{\n  json: {\n    ...prevState,\n    summaryData,\n    stage: 'SUMMARY_FETCHED'\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        700,
-        0
-      ],
-      "id": "f10-aux-main-04-preserve-summary",
-      "name": "AUX — MAIN 04 — Preserve Summary Data"
-    },
-    {
-      "parameters": {
         "method": "GET",
-        "url": "={{ $json.backendUrl + '/api/internal/dashboard/status-distribution' }}",
+        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/status-distribution\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $json.internalSecret }}"
+              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
             }
           ]
         },
@@ -388,11 +182,11 @@
           "parameters": [
             {
               "name": "userId",
-              "value": "={{ $json.userId }}"
+              "value": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.userId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.userId || \"\").trim() }}"
             },
             {
               "name": "projectId",
-              "value": "={{ $json.projectId || '' }}"
+              "value": "={{ ($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId) ? String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId).trim() : \"\" }}"
             }
           ]
         },
@@ -409,35 +203,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        900,
+        450,
         0
       ],
-      "id": "f10-main-05-fetch-status",
+      "id": "f10-main-05-status",
       "name": "MAIN 05 — Fetch Status Distribution"
     },
     {
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nconst prevState = $('AUX — MAIN 04 — Preserve Summary Data').first().json;\n\nconst statusData = res.data || res;\n\nreturn [{\n  json: {\n    ...prevState,\n    statusData,\n    stage: 'STATUS_DISTRIBUTION_FETCHED'\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1100,
-        0
-      ],
-      "id": "f10-aux-main-05-preserve-status",
-      "name": "AUX — MAIN 05 — Preserve Status Distribution"
-    },
-    {
-      "parameters": {
         "method": "GET",
-        "url": "={{ $json.backendUrl + '/api/internal/dashboard/issue-breakdown' }}",
+        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/issue-breakdown\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $json.internalSecret }}"
+              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
             }
           ]
         },
@@ -446,11 +227,11 @@
           "parameters": [
             {
               "name": "userId",
-              "value": "={{ $json.userId }}"
+              "value": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.userId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.userId || \"\").trim() }}"
             },
             {
               "name": "projectId",
-              "value": "={{ $json.projectId || '' }}"
+              "value": "={{ ($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId) ? String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId).trim() : \"\" }}"
             }
           ]
         },
@@ -467,35 +248,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1300,
+        700,
         0
       ],
-      "id": "f10-main-06-fetch-breakdown",
+      "id": "f10-main-06-breakdown",
       "name": "MAIN 06 — Fetch Issue Type Breakdown"
     },
     {
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nconst prevState = $('AUX — MAIN 05 — Preserve Status Distribution').first().json;\n\nconst breakdownData = res.data || res;\n\nreturn [{\n  json: {\n    ...prevState,\n    breakdownData,\n    stage: 'ISSUE_BREAKDOWN_FETCHED'\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1500,
-        0
-      ],
-      "id": "f10-aux-main-06-preserve-breakdown",
-      "name": "AUX — MAIN 06 — Preserve Issue Breakdown"
-    },
-    {
-      "parameters": {
         "method": "GET",
-        "url": "={{ $json.backendUrl + '/api/internal/dashboard/creation-trend' }}",
+        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/creation-trend\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $json.internalSecret }}"
+              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
             }
           ]
         },
@@ -504,11 +272,11 @@
           "parameters": [
             {
               "name": "userId",
-              "value": "={{ $json.userId }}"
+              "value": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.userId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.userId || \"\").trim() }}"
             },
             {
               "name": "projectId",
-              "value": "={{ $json.projectId || '' }}"
+              "value": "={{ ($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId) ? String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.projectId || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.projectId).trim() : \"\" }}"
             }
           ]
         },
@@ -525,24 +293,11 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1700,
+        950,
         0
       ],
-      "id": "f10-main-07-fetch-trend",
+      "id": "f10-main-07-trend",
       "name": "MAIN 07 — Fetch Issue Creation Trend"
-    },
-    {
-      "parameters": {
-        "jsCode": "const trendRes = $input.first().json;\nconst prevState = $('AUX — MAIN 06 — Preserve Issue Breakdown').first().json;\n\nconst summary = prevState.summaryData || {};\nconst status = prevState.statusData || {};\nconst breakdown = prevState.breakdownData || {};\nconst trend = trendRes.data || trendRes || {};\n\n// Kiểm tra tính đầy đủ và hợp lệ của các tập dữ liệu thống kê\nconst errors = [];\nif (typeof summary.totalIssues !== 'number' || summary.totalIssues < 0) {\n  errors.push('Tổng số Issue không hợp lệ hoặc âm trong summary dataset.');\n}\nif (typeof status.total !== 'number' || status.total < 0) {\n  errors.push('Tổng số trạng thái không hợp lệ trong status distribution dataset.');\n}\nif (!Array.isArray(breakdown.breakdown)) {\n  errors.push('Dữ liệu phân loại Issue Breakdown không phải là mảng hợp lệ.');\n}\nif (!Array.isArray(trend.trend)) {\n  errors.push('Dữ liệu xu hướng Creation Trend không phải là mảng hợp lệ.');\n}\n\nconst datasetValid = errors.length === 0;\n\nreturn [{\n  json: {\n    ...prevState,\n    summary,\n    status,\n    breakdown,\n    trend,\n    datasetValid,\n    validationErrors: errors,\n    stage: 'DATASETS_AGGREGATED'\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1900,
-        0
-      ],
-      "id": "f10-aux-main-07-aggregate",
-      "name": "AUX — MAIN 07 — Aggregate All Datasets"
     },
     {
       "parameters": {
@@ -555,7 +310,7 @@
           "conditions": [
             {
               "id": "cond-dataset-valid",
-              "leftValue": "={{ $json.datasetValid }}",
+              "leftValue": "={{\n  (() => {\n    try {\n      const summary = $(\"MAIN 04 — Fetch Dashboard Summary\").item.json.data || $(\"MAIN 04 — Fetch Dashboard Summary\").item.json || {};\n      const status = $(\"MAIN 05 — Fetch Status Distribution\").item.json.data || $(\"MAIN 05 — Fetch Status Distribution\").item.json || {};\n      const breakdown = $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json.data || $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json || {};\n      const trend = $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json.data || $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json || {};\n\n      const hasValidSummary = typeof summary.totalIssues === \"number\" && summary.totalIssues >= 0;\n      const hasValidStatus = typeof status.total === \"number\" && status.total >= 0;\n      const hasValidBreakdown = Array.isArray(breakdown.breakdown);\n      const hasValidTrend = Array.isArray(trend.trend);\n\n      return hasValidSummary && hasValidStatus && hasValidBreakdown && hasValidTrend;\n    } catch (e) {\n      return false;\n    }\n  })()\n}}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -567,9 +322,9 @@
         }
       },
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.2,
       "position": [
-        2100,
+        1200,
         0
       ],
       "id": "f10-main-08-validate-dataset",
@@ -577,73 +332,12 @@
     },
     {
       "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "ds-err-success",
-              "name": "success",
-              "value": false,
-              "type": "boolean"
-            },
-            {
-              "id": "ds-err-status-code",
-              "name": "statusCode",
-              "value": 502,
-              "type": "number"
-            },
-            {
-              "id": "ds-err-code",
-              "name": "errorCode",
-              "value": "INVALID_ANALYTICS_DATASET",
-              "type": "string"
-            },
-            {
-              "id": "ds-err-message",
-              "name": "message",
-              "value": "Dữ liệu phân tích nhận được từ Backend bị thiếu hoặc không hợp lệ.",
-              "type": "string"
-            },
-            {
-              "id": "ds-err-details",
-              "name": "details",
-              "value": "={{ $json.validationErrors }}",
-              "type": "array"
-            },
-            {
-              "id": "ds-err-req-id",
-              "name": "requestId",
-              "value": "={{ $json.requestId }}",
-              "type": "string"
-            },
-            {
-              "id": "ds-err-timestamp",
-              "name": "timestamp",
-              "value": "={{ $now.toISO() }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        2100,
-        240
-      ],
-      "id": "f10-aux-main-08-dataset-err",
-      "name": "AUX — MAIN 08 — Dataset Error Handler"
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst summary = item.summary || {};\nconst status = item.status || {};\n\nconst totalIssues = summary.totalIssues !== undefined ? summary.totalIssues : (status.total || 0);\nconst doneIssues = status.done !== undefined ? status.done : (summary.statusDistribution?.done || 0);\nconst inProgressIssues = status.inProgress !== undefined ? status.inProgress : (summary.statusDistribution?.inProgress || 0);\nconst toDoIssues = status.toDo !== undefined ? status.toDo : (summary.statusDistribution?.toDo || 0);\n\n// Tính tỷ lệ hoàn thành chính xác tuyệt đối, tránh lỗi chia cho 0\nconst rawRate = totalIssues > 0 ? (doneIssues / totalIssues) * 100 : 0;\nconst completionRate = parseFloat(rawRate.toFixed(1));\n\n// Thống kê Story Points theo tiêu chuẩn Agile ước tính\nconst totalStoryPoints = summary.totalStoryPoints || ((summary.totalStories || 0) * 5 + (summary.totalTasks || 0) * 2);\nconst completedStoryPoints = Math.round((totalStoryPoints * completionRate) / 100);\n\nconst completionMetrics = {\n  totalIssues,\n  doneIssues,\n  inProgressIssues,\n  toDoIssues,\n  completionRate,\n  formattedPercentage: `${completionRate}%`,\n  totalStoryPoints,\n  completedStoryPoints,\n  formula: '(Số issue Done ÷ Tổng số issue) × 100%',\n  isZeroState: totalIssues === 0,\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    ...item,\n    completionMetrics,\n    stage: 'METRICS_CALCULATED'\n  }\n}];"
+        "jsCode": "const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json;\nconst body = webhookItem.body || webhookItem;\nconst userId = String(body.userId || \"\").trim();\nconst projectId = body.projectId ? String(body.projectId).trim() : null;\nconst requestId = String(body.requestId || (\"req-dash-\" + Date.now()));\nconst backendUrl = String(body.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\");\nconst internalSecret = String(body.internalSecret || \"ai_jira_agent_internal_secret_2026\");\n\nconst verifyRes = $(\"MAIN 03 — Project Access Verification\").item.json || {};\nconst verifiedProject = verifyRes.project || verifyRes.data?.project || null;\n\nconst summaryRes = $(\"MAIN 04 — Fetch Dashboard Summary\").item.json || {};\nconst statusRes = $(\"MAIN 05 — Fetch Status Distribution\").item.json || {};\nconst breakdownRes = $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json || {};\nconst trendRes = $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json || {};\n\nconst summary = summaryRes.data || summaryRes || {};\nconst status = statusRes.data || statusRes || {};\nconst breakdown = breakdownRes.data || breakdownRes || {};\nconst trend = trendRes.data || trendRes || {};\n\nconst totalIssues = summary.totalIssues !== undefined ? summary.totalIssues : (status.total || 0);\nconst doneIssues = status.done !== undefined ? status.done : (summary.statusDistribution?.done || 0);\nconst inProgressIssues = status.inProgress !== undefined ? status.inProgress : (summary.statusDistribution?.inProgress || 0);\nconst toDoIssues = status.toDo !== undefined ? status.toDo : (summary.statusDistribution?.toDo || 0);\n\n// Tính tỷ lệ hoàn thành chính xác tuyệt đối, tránh lỗi chia cho 0\nconst rawRate = totalIssues > 0 ? (doneIssues / totalIssues) * 100 : 0;\nconst completionRate = parseFloat(rawRate.toFixed(1));\n\n// Thống kê Story Points theo tiêu chuẩn Agile ước tính\nconst totalStoryPoints = summary.totalStoryPoints || ((summary.totalStories || 0) * 5 + (summary.totalTasks || 0) * 2);\nconst completedStoryPoints = Math.round((totalStoryPoints * completionRate) / 100);\n\nconst completionMetrics = {\n  totalIssues,\n  doneIssues,\n  inProgressIssues,\n  toDoIssues,\n  completionRate,\n  formattedPercentage: `${completionRate}%`,\n  totalStoryPoints,\n  completedStoryPoints,\n  formula: \"(Số issue Done ÷ Tổng số issue) × 100%\",\n  isZeroState: totalIssues === 0,\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    userId,\n    projectId,\n    requestId,\n    backendUrl,\n    internalSecret,\n    verifiedProject,\n    accessVerified: true,\n    summary,\n    status,\n    breakdown,\n    trend,\n    datasetValid: true,\n    completionMetrics,\n    stage: \"METRICS_CALCULATED\"\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2300,
+        1450,
         0
       ],
       "id": "f10-main-09-calc-metrics",
@@ -651,12 +345,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst { summary, status, breakdown, trend, completionMetrics, verifiedProject, requestId } = item;\n\n// 1. Chuẩn hóa Status Distribution với mã màu và nhãn tiếng Việt phục vụ Pie/Donut Chart\nconst normalizedDistribution = [\n  {\n    status: 'To Do',\n    label: 'Cần làm (To Do)',\n    count: completionMetrics.toDoIssues,\n    percentage: completionMetrics.totalIssues > 0 ? parseFloat(((completionMetrics.toDoIssues / completionMetrics.totalIssues) * 100).toFixed(1)) : 0,\n    color: '#64748b'\n  },\n  {\n    status: 'In Progress',\n    label: 'Đang thực hiện (In Progress)',\n    count: completionMetrics.inProgressIssues,\n    percentage: completionMetrics.totalIssues > 0 ? parseFloat(((completionMetrics.inProgressIssues / completionMetrics.totalIssues) * 100).toFixed(1)) : 0,\n    color: '#3b82f6'\n  },\n  {\n    status: 'Done',\n    label: 'Hoàn thành (Done)',\n    count: completionMetrics.doneIssues,\n    percentage: completionMetrics.totalIssues > 0 ? parseFloat(((completionMetrics.doneIssues / completionMetrics.totalIssues) * 100).toFixed(1)) : 0,\n    color: '#10b981'\n  }\n];\n\n// 2. Chuẩn hóa Summary DTO\nconst normalizedSummary = {\n  totalProjects: summary.totalProjects || 0,\n  totalEpics: summary.totalEpics || 0,\n  totalStories: summary.totalStories || 0,\n  totalTasks: summary.totalTasks || 0,\n  totalIssues: completionMetrics.totalIssues,\n  totalStoryPoints: completionMetrics.totalStoryPoints,\n  issuesThisMonth: summary.issuesThisMonth || 0,\n  epicsThisMonth: summary.epicsThisMonth || 0,\n  storiesThisMonth: summary.storiesThisMonth || 0,\n  tasksThisMonth: summary.tasksThisMonth || 0,\n  completionRate: completionMetrics.completionRate,\n  statusDistribution: {\n    toDo: completionMetrics.toDoIssues,\n    inProgress: completionMetrics.inProgressIssues,\n    done: completionMetrics.doneIssues\n  },\n  timeWindow: summary.timeWindow || {\n    monthStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),\n    nextMonthStart: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString(),\n    timezone: 'UTC'\n  },\n  filteredProject: verifiedProject || summary.filteredProject || null\n};\n\n// 3. Chuẩn hóa Status DTO\nconst normalizedStatus = {\n  total: completionMetrics.totalIssues,\n  done: completionMetrics.doneIssues,\n  inProgress: completionMetrics.inProgressIssues,\n  toDo: completionMetrics.toDoIssues,\n  completionRate: completionMetrics.completionRate,\n  denominatorNote: 'Mẫu số tính tỷ lệ hoàn thành là tổng số Issue trong phạm vi truy cập (To Do + In Progress + Done)',\n  distribution: normalizedDistribution\n};\n\n// 4. Chuẩn hóa Breakdown DTO phục vụ BarChart\nconst normalizedBreakdown = breakdown.breakdown ? breakdown : {\n  breakdown: [\n    { type: 'Epic', name: 'Epics', thisMonth: summary.epicsThisMonth || 0, allTime: summary.totalEpics || 0 },\n    { type: 'Story', name: 'Stories', thisMonth: summary.storiesThisMonth || 0, allTime: summary.totalStories || 0 },\n    { type: 'Task', name: 'Tasks / Sub-tasks', thisMonth: summary.tasksThisMonth || 0, allTime: summary.totalTasks || 0 }\n  ],\n  totals: breakdown.totals || {\n    thisMonth: (summary.epicsThisMonth || 0) + (summary.storiesThisMonth || 0) + (summary.tasksThisMonth || 0),\n    allTime: (summary.totalEpics || 0) + (summary.totalStories || 0) + (summary.totalTasks || 0)\n  }\n};\n\n// 5. Chuẩn hóa Creation Trend DTO phục vụ AreaChart/LineChart\nconst normalizedTrend = trend.trend ? trend : {\n  month: new Date().toISOString().slice(0, 7),\n  totalInMonth: summary.issuesThisMonth || 0,\n  trend: []\n};\n\nreturn [{\n  json: {\n    ...item,\n    normalizedSummary,\n    normalizedStatus,\n    normalizedBreakdown,\n    normalizedTrend,\n    stage: 'RESULTS_NORMALIZED'\n  }\n}];"
+        "jsCode": "const item = $input.first().json;\nconst { summary, status, breakdown, trend, completionMetrics, verifiedProject, requestId } = item;\n\n// 1. Chuẩn hóa Status Distribution với mã màu và nhãn tiếng Việt phục vụ Pie/Donut Chart\nconst normalizedDistribution = [\n  {\n    status: \"To Do\",\n    label: \"Cần làm (To Do)\",\n    count: completionMetrics.toDoIssues,\n    percentage: completionMetrics.totalIssues > 0 ? parseFloat(((completionMetrics.toDoIssues / completionMetrics.totalIssues) * 100).toFixed(1)) : 0,\n    color: \"#64748b\"\n  },\n  {\n    status: \"In Progress\",\n    label: \"Đang thực hiện (In Progress)\",\n    count: completionMetrics.inProgressIssues,\n    percentage: completionMetrics.totalIssues > 0 ? parseFloat(((completionMetrics.inProgressIssues / completionMetrics.totalIssues) * 100).toFixed(1)) : 0,\n    color: \"#3b82f6\"\n  },\n  {\n    status: \"Done\",\n    label: \"Hoàn thành (Done)\",\n    count: completionMetrics.doneIssues,\n    percentage: completionMetrics.totalIssues > 0 ? parseFloat(((completionMetrics.doneIssues / completionMetrics.totalIssues) * 100).toFixed(1)) : 0,\n    color: \"#10b981\"\n  }\n];\n\n// 2. Chuẩn hóa Summary DTO\nconst normalizedSummary = {\n  totalProjects: summary.totalProjects || 0,\n  totalEpics: summary.totalEpics || 0,\n  totalStories: summary.totalStories || 0,\n  totalTasks: summary.totalTasks || 0,\n  totalIssues: completionMetrics.totalIssues,\n  totalStoryPoints: completionMetrics.totalStoryPoints,\n  issuesThisMonth: summary.issuesThisMonth || 0,\n  epicsThisMonth: summary.epicsThisMonth || 0,\n  storiesThisMonth: summary.storiesThisMonth || 0,\n  tasksThisMonth: summary.tasksThisMonth || 0,\n  completionRate: completionMetrics.completionRate,\n  statusDistribution: {\n    toDo: completionMetrics.toDoIssues,\n    inProgress: completionMetrics.inProgressIssues,\n    done: completionMetrics.doneIssues\n  },\n  timeWindow: summary.timeWindow || {\n    monthStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),\n    nextMonthStart: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString(),\n    timezone: \"UTC\"\n  },\n  filteredProject: verifiedProject || summary.filteredProject || null\n};\n\n// 3. Chuẩn hóa Status DTO\nconst normalizedStatus = {\n  total: completionMetrics.totalIssues,\n  done: completionMetrics.doneIssues,\n  inProgress: completionMetrics.inProgressIssues,\n  toDo: completionMetrics.toDoIssues,\n  completionRate: completionMetrics.completionRate,\n  denominatorNote: \"Mẫu số tính tỷ lệ hoàn thành là tổng số Issue trong phạm vi truy cập (To Do + In Progress + Done)\",\n  distribution: normalizedDistribution\n};\n\n// 4. Chuẩn hóa Breakdown DTO phục vụ BarChart\nconst normalizedBreakdown = breakdown.breakdown ? breakdown : {\n  breakdown: [\n    { type: \"Epic\", name: \"Epics\", thisMonth: summary.epicsThisMonth || 0, allTime: summary.totalEpics || 0 },\n    { type: \"Story\", name: \"Stories\", thisMonth: summary.storiesThisMonth || 0, allTime: summary.totalStories || 0 },\n    { type: \"Task\", name: \"Tasks / Sub-tasks\", thisMonth: summary.tasksThisMonth || 0, allTime: summary.totalTasks || 0 }\n  ],\n  totals: breakdown.totals || {\n    thisMonth: (summary.epicsThisMonth || 0) + (summary.storiesThisMonth || 0) + (summary.tasksThisMonth || 0),\n    allTime: (summary.totalEpics || 0) + (summary.totalStories || 0) + (summary.totalTasks || 0)\n  }\n};\n\n// 5. Chuẩn hóa Creation Trend DTO phục vụ AreaChart/LineChart\nconst normalizedTrend = trend.trend ? trend : {\n  month: new Date().toISOString().slice(0, 7),\n  totalInMonth: summary.issuesThisMonth || 0,\n  trend: []\n};\n\nreturn [{\n  json: {\n    ...item,\n    normalizedSummary,\n    normalizedStatus,\n    normalizedBreakdown,\n    normalizedTrend,\n    stage: \"RESULTS_NORMALIZED\"\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2500,
+        1700,
         0
       ],
       "id": "f10-main-10-normalize-results",
@@ -664,8 +358,6 @@
     },
     {
       "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
         "assignments": {
           "assignments": [
             {
@@ -713,7 +405,7 @@
             {
               "id": "build-res-data",
               "name": "data",
-              "value": "={{ { summary: $json.normalizedSummary, breakdown: $json.normalizedBreakdown, statusDistribution: $json.normalizedStatus, creationTrend: $json.normalizedTrend, completionMetrics: $json.completionMetrics, filteredProject: $json.normalizedSummary.filteredProject, executionEngine: 'n8n-Flow10-DashboardAnalytics', generatedAt: $now.toISO() } }}",
+              "value": "={{ { summary: $json.normalizedSummary, breakdown: $json.normalizedBreakdown, statusDistribution: $json.normalizedStatus, creationTrend: $json.normalizedTrend, completionMetrics: $json.completionMetrics, filteredProject: $json.normalizedSummary.filteredProject, executionEngine: \"n8n-Flow10-DashboardAnalytics\", generatedAt: $now.toISO() } }}",
               "type": "object"
             },
             {
@@ -729,7 +421,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        2700,
+        1950,
         0
       ],
       "id": "f10-main-11-build-response",
@@ -737,52 +429,37 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {
-          "responseCode": 200
-        }
+        "jsCode": "const item = $input.first().json || {};\nlet webhookBody = {};\ntry {\n  const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json || {};\n  webhookBody = webhookItem.body || webhookItem;\n} catch (e) {}\n\nconst requestId = item.requestId || webhookBody.requestId || (\"req-dash-\" + Date.now());\nconst now = new Date().toISOString();\n\n// 1. Phân loại Access Denied (từ AUX 03 IF False)\nconst isAccessDenied = item.allowed === false || item.statusCode === 403 || item.error === \"ACCESS_DENIED\" || item.data?.allowed === false;\nif (isAccessDenied) {\n  const errRes = {\n    success: false,\n    statusCode: 403,\n    errorCode: \"PROJECT_ACCESS_DENIED\",\n    message: \"Dự án không tồn tại hoặc người dùng không có quyền truy cập vào Workspace này.\",\n    requestId,\n    timestamp: now\n  };\n  return [{ json: errRes }];\n}\n\n// 2. Phân loại Validation Error (từ MAIN 02 False)\nconst isValidationError = !webhookBody.userId || String(webhookBody.userId).trim().length === 0;\nif (isValidationError) {\n  const errRes = {\n    success: false,\n    statusCode: 400,\n    errorCode: \"INVALID_DASHBOARD_REQUEST\",\n    message: \"Yêu cầu phân tích Dashboard không hợp lệ: Thiếu userId hoặc thông tin phiên làm việc.\",\n    requestId,\n    timestamp: now\n  };\n  return [{ json: errRes }];\n}\n\n// 3. Phân loại Dataset Error (từ MAIN 08 False)\nconst errRes = {\n  success: false,\n  statusCode: 502,\n  errorCode: \"INVALID_ANALYTICS_DATASET\",\n  message: \"Dữ liệu phân tích nhận được từ Backend bị thiếu hoặc không hợp lệ.\",\n  details: [\"Một hoặc nhiều tập dữ liệu thống kê từ Backend không hợp lệ hoặc rỗng.\"],\n  requestId,\n  timestamp: now\n};\nreturn [{ json: errRes }];"
       },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        2900,
-        0
+        450,
+        320
       ],
-      "id": "f10-main-12-respond-backend",
-      "name": "MAIN 12 — Respond to Backend"
+      "id": "f10-aux-shared-error-formatter",
+      "name": "AUX — Shared Error Formatter"
     },
     {
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}",
         "options": {
-          "responseCode": "={{ $json.statusCode || 400 }}"
+          "responseCode": "={{ $json.statusCode || 200 }}"
         }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        2100,
-        480
+        2200,
+        0
       ],
-      "id": "f10-aux-main-12-respond-error",
-      "name": "AUX — MAIN 12 — Respond Error to Backend"
+      "id": "f10-main-12-respond-backend",
+      "name": "MAIN 12 — Respond to Backend"
     }
   ],
   "connections": {
     "MAIN 01 — Dashboard Webhook Trigger": {
-      "main": [
-        [
-          {
-            "node": "AUX — MAIN 02 — Normalize Inbound Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 02 — Normalize Inbound Request": {
       "main": [
         [
           {
@@ -797,36 +474,14 @@
       "main": [
         [
           {
-            "node": "AUX — MAIN 03 — Prepare Access Verification Payload",
+            "node": "MAIN 03 — Project Access Verification",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "AUX — MAIN 02 — Validation Error Handler",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 02 — Validation Error Handler": {
-      "main": [
-        [
-          {
-            "node": "AUX — MAIN 12 — Respond Error to Backend",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 03 — Prepare Access Verification Payload": {
-      "main": [
-        [
-          {
-            "node": "MAIN 03 — Project Access Verification",
+            "node": "AUX — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -848,36 +503,14 @@
       "main": [
         [
           {
-            "node": "AUX — MAIN 03 — Check Access & Prepare Queries",
+            "node": "MAIN 04 — Fetch Dashboard Summary",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "AUX — MAIN 03 — Access Denied Handler",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 03 — Access Denied Handler": {
-      "main": [
-        [
-          {
-            "node": "AUX — MAIN 12 — Respond Error to Backend",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 03 — Check Access & Prepare Queries": {
-      "main": [
-        [
-          {
-            "node": "MAIN 04 — Fetch Dashboard Summary",
+            "node": "AUX — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -885,17 +518,6 @@
       ]
     },
     "MAIN 04 — Fetch Dashboard Summary": {
-      "main": [
-        [
-          {
-            "node": "AUX — MAIN 04 — Preserve Summary Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 04 — Preserve Summary Data": {
       "main": [
         [
           {
@@ -910,17 +532,6 @@
       "main": [
         [
           {
-            "node": "AUX — MAIN 05 — Preserve Status Distribution",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 05 — Preserve Status Distribution": {
-      "main": [
-        [
-          {
             "node": "MAIN 06 — Fetch Issue Type Breakdown",
             "type": "main",
             "index": 0
@@ -932,17 +543,6 @@
       "main": [
         [
           {
-            "node": "AUX — MAIN 06 — Preserve Issue Breakdown",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 06 — Preserve Issue Breakdown": {
-      "main": [
-        [
-          {
             "node": "MAIN 07 — Fetch Issue Creation Trend",
             "type": "main",
             "index": 0
@@ -951,17 +551,6 @@
       ]
     },
     "MAIN 07 — Fetch Issue Creation Trend": {
-      "main": [
-        [
-          {
-            "node": "AUX — MAIN 07 — Aggregate All Datasets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 07 — Aggregate All Datasets": {
       "main": [
         [
           {
@@ -983,18 +572,7 @@
         ],
         [
           {
-            "node": "AUX — MAIN 08 — Dataset Error Handler",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AUX — MAIN 08 — Dataset Error Handler": {
-      "main": [
-        [
-          {
-            "node": "AUX — MAIN 12 — Respond Error to Backend",
+            "node": "AUX — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -1033,9 +611,23 @@
           }
         ]
       ]
+    },
+    "AUX — Shared Error Formatter": {
+      "main": [
+        [
+          {
+            "node": "MAIN 12 — Respond to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1"
-  }
+  },
+  "versionId": "f10-opt-14nodes-2026",
+  "id": "Flow10DashboardAnalytics"
 }

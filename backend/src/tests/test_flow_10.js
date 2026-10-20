@@ -93,7 +93,8 @@ async function runTests() {
     const otherNodes = workflow.nodes.filter((n) => !n.name.startsWith('MAIN ') && !n.name.startsWith('AUX '));
 
     testAssert(mainNodes.length === 12, `Workflow có CHÍNH XÁC 12 MAIN Nodes (hiện có: ${mainNodes.length})`);
-    testAssert(auxNodes.length >= 8, `Workflow có đầy đủ AUX Nodes phụ trợ (hiện có: ${auxNodes.length})`);
+    testAssert(auxNodes.length === 2, `Workflow có CHÍNH XÁC 2 AUX Nodes (hiện có: ${auxNodes.length} nodes)`);
+    testAssert(workflow.nodes.length === 14, `Tổng số Node vật lý CHÍNH XÁC 14 Node (hiện có: ${workflow.nodes.length} nodes)`);
     testAssert(otherNodes.length === 0, `Không có node không xác định ngoài MAIN và AUX (hiện có: ${otherNodes.length})`);
 
     const expectedMainNames = [
