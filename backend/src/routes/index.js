@@ -10,6 +10,7 @@ const JiraController = require('../controllers/jira.controller');
 const NotificationController = require('../controllers/notification.controller');
 const internalDashboardRoutes = require('./internal-dashboard.routes');
 const internalNotificationRoutes = require('./internal-notification.routes');
+const internalExportRoutes = require('./internal-export.routes');
 
 const router = express.Router();
 
@@ -29,6 +30,9 @@ router.use('/internal/dashboard', internalDashboardRoutes);
 
 // Internal routes: n8n Workflow 11 Internal Notification APIs
 router.use('/internal/notifications', internalNotificationRoutes);
+
+// Internal routes: n8n Workflow 12 Documentation Export APIs
+router.use('/internal/export', internalExportRoutes);
 
 // Alias cho webhook đồng bộ Jira theo chuẩn spec tài liệu
 router.post('/webhooks/jira-sync', JiraController.handleWebhook);
