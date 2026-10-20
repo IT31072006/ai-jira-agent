@@ -1,0 +1,568 @@
+{
+  "name": "AI Jira Agent - Flow 12 PDF & Markdown Export Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "export-documentation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        0
+      ],
+      "id": "f12-main-01-webhook",
+      "name": "MAIN 01 — Export Webhook Trigger",
+      "webhookId": "flow-12-export-documentation-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-project-id",
+              "leftValue": "={{ Boolean(($json.body?.projectId || $json.projectId) && String($json.body?.projectId || $json.projectId).trim().length > 0) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-valid-format",
+              "leftValue": "={{ Boolean([\"pdf\", \"markdown\", \"md\"].includes(String($json.body?.format || $json.format || \"pdf\").toLowerCase().trim())) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -550,
+        0
+      ],
+      "id": "f12-main-02-validate-request",
+      "name": "MAIN 02 — Validate Export Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ String($json.body?.backendUrl || $json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/export/verify-permission\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "={{ $json.body?.internalSecret || $json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ userId: String($json.body?.userId || $json.userId || \"\").trim(), projectId: String($json.body?.projectId || $json.projectId || \"\").trim(), requestId: String($json.body?.requestId || $json.requestId || (\"req-exp-\" + Date.now())) }) }}",
+        "options": {
+          "timeout": 5000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "f12-main-03-verify-permission",
+      "name": "MAIN 03 — Verify Project Permission"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ String($('MAIN 01 — Export Webhook Trigger').item.json.body?.backendUrl || $('MAIN 01 — Export Webhook Trigger').item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/export/fetch-data\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "={{ $('MAIN 01 — Export Webhook Trigger').item.json.body?.internalSecret || $('MAIN 01 — Export Webhook Trigger').item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ userId: String($('MAIN 01 — Export Webhook Trigger').item.json.body?.userId || $('MAIN 01 — Export Webhook Trigger').item.json.userId || \"\").trim(), projectId: String($('MAIN 01 — Export Webhook Trigger').item.json.body?.projectId || $('MAIN 01 — Export Webhook Trigger').item.json.projectId || \"\").trim(), source: String($('MAIN 01 — Export Webhook Trigger').item.json.body?.source || $('MAIN 01 — Export Webhook Trigger').item.json.source || \"jira\").trim(), draftData: $('MAIN 01 — Export Webhook Trigger').item.json.body?.draftData || $('MAIN 01 — Export Webhook Trigger').item.json.draftData || null }) }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -50,
+        0
+      ],
+      "id": "f12-main-04-fetch-data",
+      "name": "MAIN 04 — Fetch Project Export Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid-dataset",
+              "leftValue": "={{ Boolean($json.success === true && $json.data && $json.data.model) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "f12-main-05-validate-dataset",
+      "name": "MAIN 05 — Validate Hierarchy Dataset"
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-is-pdf",
+                    "leftValue": "={{ String($('MAIN 01 — Export Webhook Trigger').item.json.body?.format || $('MAIN 01 — Export Webhook Trigger').item.json.format || \"pdf\").toLowerCase().trim() }}",
+                    "rightValue": "pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "pdf"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-is-markdown",
+                    "leftValue": "={{ [\"markdown\", \"md\"].includes(String($('MAIN 01 — Export Webhook Trigger').item.json.body?.format || $('MAIN 01 — Export Webhook Trigger').item.json.format || \"pdf\").toLowerCase().trim()) }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "markdown"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        450,
+        0
+      ],
+      "id": "f12-main-06-route-format",
+      "name": "MAIN 06 — Route Export Format"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "fields": {
+          "values": [
+            {
+              "name": "format",
+              "value": "pdf",
+              "type": "string"
+            },
+            {
+              "name": "model",
+              "value": "={{ $('MAIN 04 — Fetch Project Export Data').item.json.data.model }}",
+              "type": "object"
+            },
+            {
+              "name": "project",
+              "value": "={{ $('MAIN 04 — Fetch Project Export Data').item.json.data.project }}",
+              "type": "object"
+            },
+            {
+              "name": "pdfConfig",
+              "value": "={{ { pageSize: \"A4\", orientation: \"portrait\", margin: 45, fontRegular: \"DejaVuSans\", fontBold: \"DejaVuSans-Bold\", bannerBg: \"#0f172a\", showCoverBanner: true, showPageNumbers: true } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        700,
+        -150
+      ],
+      "id": "f12-main-07-prepare-pdf",
+      "name": "MAIN 07 — Prepare PDF Configuration"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ String($('MAIN 01 — Export Webhook Trigger').item.json.body?.backendUrl || $('MAIN 01 — Export Webhook Trigger').item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/export/generate-pdf\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "={{ $('MAIN 01 — Export Webhook Trigger').item.json.body?.internalSecret || $('MAIN 01 — Export Webhook Trigger').item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $('MAIN 04 — Fetch Project Export Data').item.json.data.model, pdfConfig: $json.pdfConfig }) }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        950,
+        -150
+      ],
+      "id": "f12-main-08-generate-pdf",
+      "name": "MAIN 08 — Generate PDF via Backend"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "fields": {
+          "values": [
+            {
+              "name": "format",
+              "value": "markdown",
+              "type": "string"
+            },
+            {
+              "name": "model",
+              "value": "={{ $('MAIN 04 — Fetch Project Export Data').item.json.data.model }}",
+              "type": "object"
+            },
+            {
+              "name": "project",
+              "value": "={{ $('MAIN 04 — Fetch Project Export Data').item.json.data.project }}",
+              "type": "object"
+            },
+            {
+              "name": "markdownConfig",
+              "value": "={{ { charset: \"utf-8\", includeStats: true, includeChecklists: true, includeJiraLinks: true } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        700,
+        150
+      ],
+      "id": "f12-main-09-prepare-markdown",
+      "name": "MAIN 09 — Prepare Markdown Configuration"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ String($('MAIN 01 — Export Webhook Trigger').item.json.body?.backendUrl || $('MAIN 01 — Export Webhook Trigger').item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/export/generate-markdown\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "={{ $('MAIN 01 — Export Webhook Trigger').item.json.body?.internalSecret || $('MAIN 01 — Export Webhook Trigger').item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $('MAIN 04 — Fetch Project Export Data').item.json.data.model, markdownConfig: $json.markdownConfig }) }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        950,
+        150
+      ],
+      "id": "f12-main-10-generate-markdown",
+      "name": "MAIN 10 — Generate Markdown via Backend"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nif (item.success && item.exportId) {\n  return [{\n    json: {\n      success: true,\n      status: 'completed',\n      statusCode: 200,\n      exportId: item.exportId,\n      fileName: item.fileName,\n      format: item.format,\n      contentType: item.contentType,\n      size: item.size,\n      downloadUrl: item.downloadUrl,\n      message: 'Tài liệu đã được tạo thành công bởi Backend qua Flow 12.'\n    }\n  }];\n}\n\nconst statusCode = item.statusCode || (item.response && item.response.status) || 500;\nconst errorMsg = item.message || item.error || 'Quá trình sinh tài liệu thất bại.';\n\nreturn [{\n  json: {\n    success: false,\n    status: 'failed',\n    statusCode: statusCode,\n    error: item.error || 'EXPORT_GENERATION_FAILED',\n    message: errorMsg\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "f12-main-11-normalize-result",
+      "name": "MAIN 11 — Normalize Export Result"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (function() { const item = $json; if (item.status === 'completed' || item.status === 'failed') return item; if (item.success === false && (item.message || item.error)) { return { success: false, statusCode: item.statusCode || 400, error: item.error || 'EXPORT_ERROR', message: item.message || 'Lỗi xử lý yêu cầu xuất tài liệu.' }; } if (item.error) { const errMsg = typeof item.error === 'string' ? item.error : (item.error.message || 'Lỗi kết nối Backend.'); return { success: false, statusCode: item.statusCode || 500, error: 'BACKEND_COMMUNICATION_ERROR', message: errMsg }; } let wb = {}; try { const raw = $('MAIN 01 — Export Webhook Trigger').item.json; wb = raw.body || raw; } catch (e) { wb = item.body || item; } const projId = wb.projectId; const hasProj = Boolean(projId && String(projId).trim().length > 0); const fmt = String(wb.format || '').toLowerCase().trim(); const validFmt = (fmt === 'pdf' || fmt === 'markdown' || fmt === 'md'); if (!hasProj) { return { success: false, statusCode: 400, error: 'BAD_REQUEST', message: 'Yêu cầu thiếu projectId bắt buộc.' }; } if (!validFmt) { return { success: false, statusCode: 400, error: 'INVALID_FORMAT', message: 'Định dạng export không hợp lệ. Chỉ chấp nhận pdf hoặc markdown.' }; } return { success: false, statusCode: 422, error: 'INVALID_HIERARCHY_DATASET', message: 'Dữ liệu phân cấp dự án không hợp lệ hoặc không có nội dung để xuất file.' }; })() }}",
+        "options": {
+          "responseCode": "={{ (function() { const item = $json; if (item.status === 'completed') return 200; if (item.statusCode) return item.statusCode; if (item.error) return 500; let wb = {}; try { const raw = $('MAIN 01 — Export Webhook Trigger').item.json; wb = raw.body || raw; } catch (e) { wb = item.body || item; } const projId = wb.projectId; const hasProj = Boolean(projId && String(projId).trim().length > 0); const fmt = String(wb.format || '').toLowerCase().trim(); const validFmt = (fmt === 'pdf' || fmt === 'markdown' || fmt === 'md'); if (!hasProj || !validFmt) return 400; return 422; })() }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1450,
+        0
+      ],
+      "id": "f12-main-12-respond-export",
+      "name": "MAIN 12 — Respond to Export Request"
+    }
+  ],
+  "connections": {
+    "MAIN 01 — Export Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "MAIN 02 — Validate Export Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 02 — Validate Export Request": {
+      "main": [
+        [
+          {
+            "node": "MAIN 03 — Verify Project Permission",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 12 — Respond to Export Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 03 — Verify Project Permission": {
+      "main": [
+        [
+          {
+            "node": "MAIN 04 — Fetch Project Export Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 04 — Fetch Project Export Data": {
+      "main": [
+        [
+          {
+            "node": "MAIN 05 — Validate Hierarchy Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 05 — Validate Hierarchy Dataset": {
+      "main": [
+        [
+          {
+            "node": "MAIN 06 — Route Export Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 12 — Respond to Export Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 06 — Route Export Format": {
+      "main": [
+        [
+          {
+            "node": "MAIN 07 — Prepare PDF Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 09 — Prepare Markdown Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 07 — Prepare PDF Configuration": {
+      "main": [
+        [
+          {
+            "node": "MAIN 08 — Generate PDF via Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 08 — Generate PDF via Backend": {
+      "main": [
+        [
+          {
+            "node": "MAIN 11 — Normalize Export Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 09 — Prepare Markdown Configuration": {
+      "main": [
+        [
+          {
+            "node": "MAIN 10 — Generate Markdown via Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 10 — Generate Markdown via Backend": {
+      "main": [
+        [
+          {
+            "node": "MAIN 11 — Normalize Export Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 11 — Normalize Export Result": {
+      "main": [
+        [
+          {
+            "node": "MAIN 12 — Respond to Export Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f12-12main-0aux-2026",
+  "id": "Flow12ExportDocumentation"
+}

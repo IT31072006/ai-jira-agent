@@ -1,9 +1,11 @@
 const ExportService = require('../services/export.service');
+const ExportFlowService = require('../services/export-flow.service');
 const ProjectModel = require('../models/project.model');
 
 class ExportController {
   /**
    * Xuất tài liệu phân cấp yêu cầu phần mềm dưới dạng PDF hoặc Markdown
+   * Điều phối qua n8n Flow 12 (12 MAIN Node) hoặc trực tiếp khi fallback
    * Hỗ trợ GET /api/projects/:projectId/export?format=pdf|markdown&source=jira|draft
    * và POST /api/projects/:projectId/export (truyền draftData trong body khi xuất bản nháp)
    */
@@ -16,6 +18,7 @@ class ExportController {
       const format = (req.query.format || req.body?.format || 'pdf').toLowerCase().trim();
       const source = (req.query.source || req.body?.source || 'jira').toLowerCase().trim();
       const draftData = req.body?.draftData || null;
+      const options = req.body?.options || {};
 
       // 1. Kiểm tra format hợp lệ
       if (format !== 'pdf' && format !== 'markdown' && format !== 'md') {
@@ -39,40 +42,37 @@ class ExportController {
         throw err;
       }
 
-      // 4. Lấy và chuẩn hóa mô hình dữ liệu đồng nhất
-      let model;
-      if (source === 'draft') {
-        if (!draftData || (Array.isArray(draftData) && draftData.length === 0)) {
-          const err = new Error('Không tìm thấy dữ liệu bản nháp AI để xuất. Vui lòng cung cấp danh sách bản nháp (draftData).');
-          err.statusCode = 400;
-          throw err;
-        }
-        model = ExportService.normalizeHierarchyFromDraft({ draftData, project });
-      } else {
-        // source === 'jira' (lấy từ PostgreSQL bảng jira_issues)
-        model = await ExportService.getHierarchyFromJira({ projectId, userId, project });
+      // 4. Nếu là source draft nhưng không có dữ liệu draft
+      if (source === 'draft' && (!draftData || (Array.isArray(draftData) && draftData.length === 0))) {
+        const err = new Error('Không tìm thấy dữ liệu bản nháp AI để xuất. Vui lòng cung cấp danh sách bản nháp (draftData).');
+        err.statusCode = 400;
+        throw err;
       }
 
-      // 5. Sinh tên file an toàn: AI-Jira-Agent-[KEY]-[YYYY-MM-DD].[pdf|md]
-      const finalFormat = (format === 'md' || format === 'markdown') ? 'md' : 'pdf';
-      const fileName = ExportService.generateFileName(project.project_key, finalFormat);
+      // 5. Điều phối xuất file qua n8n Flow 12
+      const result = await ExportFlowService.exportViaFlow12({
+        userId,
+        projectId,
+        format,
+        source,
+        draftData,
+        options,
+      });
 
-      // 6. Xử lý xuất file theo định dạng
-      if (finalFormat === 'md') {
-        const markdownContent = ExportService.generateMarkdown(model);
+      const { stored, fileName, contentType } = result;
 
-        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      // 6. Trả response nhị phân stream hoặc chuỗi văn bản về client
+      if (stored.buffer) {
+        res.setHeader('Content-Type', contentType || 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Content-Length', stored.buffer.length);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return res.status(200).send(markdownContent);
+        return res.status(200).end(stored.buffer);
       } else {
-        const pdfBuffer = await ExportService.generatePdf(model);
-
-        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Type', contentType || 'text/markdown; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        res.setHeader('Content-Length', pdfBuffer.length);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return res.status(200).end(pdfBuffer);
+        return res.status(200).send(stored.content);
       }
     } catch (error) {
       next(error);
