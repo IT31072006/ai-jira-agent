@@ -154,7 +154,7 @@ export const ProjectDetailPage = () => {
                       Project ID: <code>{project.id}</code>
                       {project.project_key && (
                         <span style={{ marginLeft: '0.75rem' }}>
-                          Jira Key: <code style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>{project.project_key}</code>
+                          Jira Key: <code style={{ color: 'var(--primary)', background: 'var(--primary-light)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)', fontWeight: 600 }}>{project.project_key}</code>
                         </span>
                       )}
                     </p>

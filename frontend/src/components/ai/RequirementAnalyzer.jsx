@@ -1055,7 +1055,9 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                     {/* ── Epic header ─────────────────────────────────────── */}
                     <div className="epic-header">
                       <div className="epic-title-container">
-                        <Layers size={22} className="epic-icon" />
+                        <div className="epic-icon-wrapper">
+                          <Layers size={20} className="epic-icon" />
+                        </div>
                         <div className="epic-fields">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                             <span className="badge badge-primary-subtle">EPIC</span>
@@ -1074,20 +1076,20 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             <>
                               <input
                                 type="text"
-                                className="form-control edit-field-title"
+                                className="form-control edit-field-title edit-field-epic-title"
                                 value={epic.title}
                                 onChange={(e) =>
                                   updateEpicField(epicIdx, 'title', e.target.value)
                                 }
-                                placeholder="Tên Epic"
+                                placeholder="Tên Epic (VD: Quản lý Bảo mật & Phiên làm việc)"
                               />
                               <textarea
-                                className="form-control edit-field-desc"
+                                className="form-control edit-field-desc edit-field-epic-desc"
                                 value={epic.description}
                                 onChange={(e) =>
                                   updateEpicField(epicIdx, 'description', e.target.value)
                                 }
-                                placeholder="Mô tả Epic (tuỳ chọn)"
+                                placeholder="Mô tả mục tiêu của Epic (tuỳ chọn)"
                                 rows={2}
                               />
                             </>
@@ -1101,19 +1103,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                         </span>
                         <button
                           type="button"
-                          className="btn-icon"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '4px',
-                            background: 'var(--bg-tertiary)',
-                            color: 'var(--text-secondary)',
-                            border: '1px solid var(--border-subtle)',
-                            cursor: 'pointer',
-                          }}
+                          className="btn-toggle-expand"
                           onClick={() => toggleEpicExpand(epic.id, epicIdx)}
                           title={isEpicExpanded(epic.id, epicIdx) ? 'Thu gọn Epic' : 'Mở rộng Epic'}
                         >
@@ -1132,25 +1122,15 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                           >
                             {/* Story header */}
                             <div className="story-header">
-                              <Bookmark size={18} className="story-icon" />
+                              <div className="story-icon-wrapper">
+                                <Bookmark size={16} className="story-icon" />
+                              </div>
                               <div className="story-fields">
                                 <div className="story-badge-row">
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     <button
                                       type="button"
-                                      className="btn-icon"
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: '24px',
-                                        height: '24px',
-                                        borderRadius: '4px',
-                                        background: 'var(--bg-tertiary)',
-                                        color: 'var(--text-secondary)',
-                                        border: '1px solid var(--border-subtle)',
-                                        cursor: 'pointer',
-                                      }}
+                                      className="btn-toggle-expand btn-toggle-expand-sm"
                                       onClick={() => toggleStoryExpand(story.id, storyIdx)}
                                       title={isStoryExpanded(story.id, storyIdx) ? 'Thu gọn Tasks' : 'Mở rộng Tasks'}
                                     >
@@ -1212,7 +1192,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                 <>
                                   <input
                                     type="text"
-                                    className="form-control edit-field-title"
+                                    className="form-control edit-field-title edit-field-story-title"
                                     value={story.title}
                                     onChange={(e) =>
                                       updateStoryField(epicIdx, storyIdx, 'title', e.target.value)
@@ -1223,7 +1203,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     placeholder="Tên User Story"
                                   />
                                   <textarea
-                                    className="form-control edit-field-desc"
+                                    className="form-control edit-field-desc edit-field-story-desc"
                                     value={story.description}
                                     onChange={(e) =>
                                       updateStoryField(
@@ -1276,7 +1256,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                         <div className="task-edit-fields">
                                           <input
                                             type="text"
-                                            className="form-control edit-field-title"
+                                            className="form-control edit-field-title edit-field-task-title"
                                             value={task.title}
                                             onChange={(e) =>
                                               updateTaskField(
@@ -1465,8 +1445,8 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             width: 'fit-content',
                             padding: '0.35rem 0.85rem',
                             fontSize: '0.8rem',
-                            borderColor: 'var(--primary)',
-                            color: '#a5b4fc',
+                            borderColor: 'var(--border-medium)',
+                            color: 'var(--primary)',
                           }}
                         >
                           ⚙️ Đi tới trang Cài đặt (Settings)
@@ -1492,7 +1472,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                     </div>
                     <div className="jira-members-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Mã Jira:</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>Mã Jira:</span>
                         {availableJiraProjects.length > 0 ? (
                           <select
                             className="form-control jira-key-input"
@@ -1649,8 +1629,8 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                         padding: '0.65rem 1.15rem',
                         fontSize: '0.9rem',
                         fontWeight: 600,
-                        borderColor: '#8b5cf6',
-                        color: '#8b5cf6',
+                        borderColor: 'var(--border-medium)',
+                        color: 'var(--text-primary)',
                       }}
                     >
                       <Download size={18} />
@@ -1701,7 +1681,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                           <span className="jira-stat-label">Sub-tasks</span>
                         </div>
                         <div className="jira-stat-item">
-                          <span className="jira-stat-num" style={{ color: '#4ade80' }}>
+                          <span className="jira-stat-num" style={{ color: 'var(--success)' }}>
                             {jiraResult.summary.totalIssues || 0}
                           </span>
                           <span className="jira-stat-label">Tổng Issues</span>
@@ -1721,7 +1701,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             gap: '0.5rem',
                           }}
                         >
-                          <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8', margin: 0 }}>
+                          <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                             DANH SÁCH ISSUES ĐÃ TẠO TRÊN JIRA ({jiraResult.createdIssues.length}):
                           </p>
                           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
