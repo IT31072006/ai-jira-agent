@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth-context';
-import { Sparkles, LayoutDashboard, FolderGit2, Settings, LogOut } from 'lucide-react';
+import { Kanban, LayoutDashboard, FolderGit2, Settings, LogOut } from 'lucide-react';
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
@@ -16,7 +16,7 @@ export const Navbar = () => {
         <div className="navbar-left">
           <Link to="/dashboard" className="navbar-brand">
             <div className="brand-badge">
-              <Sparkles size={20} className="icon-sparkle" />
+              <Kanban size={20} className="icon-brand" />
             </div>
             <div>
               <h2 className="brand-title">AI Requirement-to-Jira</h2>

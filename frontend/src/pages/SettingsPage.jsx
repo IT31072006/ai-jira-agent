@@ -15,7 +15,7 @@ import {
   Save,
   Globe,
   Mail,
-  Sparkles,
+  Cpu,
   Info,
   Bell,
   Send,
@@ -414,7 +414,7 @@ export const SettingsPage = () => {
               <div className="card settings-card">
                 <div className="card-header settings-card-header">
                   <div className="card-title-group">
-                    <Sparkles className="card-icon text-accent" size={20} />
+                    <Cpu className="card-icon text-primary" size={20} />
                     <h3>2. Tích hợp AI (Google Gemini API)</h3>
                   </div>
                   {config?.gemini_api_key_configured && (

@@ -198,7 +198,7 @@ export const ProjectsPage = () => {
           ) : filteredProjects.length === 0 ? (
             <div className="empty-state-card">
               <div className="empty-icon-badge">
-                <Sparkles size={32} />
+                <FolderPlus size={32} />
               </div>
               <h3>
                 {searchQuery ? 'Không tìm thấy dự án phù hợp' : 'Chưa có dự án nào'}

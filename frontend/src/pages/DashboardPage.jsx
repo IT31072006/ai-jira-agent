@@ -426,7 +426,7 @@ export const DashboardPage = () => {
               {summary?.totalIssues === 0 ? (
                 <div className="dashboard-empty-card">
                   <div className="empty-icon-wrap">
-                    <Sparkles size={32} />
+                    <BarChart3 size={32} />
                   </div>
                   <h3>Chưa ghi nhận Issue nào trong hệ thống</h3>
                   <p>

@@ -892,7 +892,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
       {/* Header */}
       <div className="card-header">
         <div className="card-title-group">
-          <Sparkles className="card-icon text-primary" size={20} />
+          <Layers className="card-icon text-primary" size={20} />
           <h3>Phân tích Yêu cầu Phần mềm bằng AI</h3>
         </div>
       </div>
@@ -965,7 +965,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                 </span>
               ) : (
                 <span className="btn-content">
-                  <Sparkles size={16} />
+                  <Layers size={16} />
                   <span>Phân tích bằng AI</span>
                 </span>
               )}
