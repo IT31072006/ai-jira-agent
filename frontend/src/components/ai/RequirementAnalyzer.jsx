@@ -1424,9 +1424,9 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                   <div className="jira-title-group">
                     <CloudUpload className="text-primary" size={24} />
                     <div>
-                      <h4>Tích hợp Jira (Luồng 7: Push to Jira)</h4>
+                      <h4>Đẩy dữ liệu lên Jira Cloud</h4>
                       <span className="text-muted" style={{ fontSize: '0.85rem' }}>
-                        Cỗ máy n8n sẽ tự động chạy vòng lặp tạo <strong>Epic ➔ Story ➔ Sub-task</strong> trên Jira
+                        Tự động khởi tạo cây phân cấp <strong>Epic ➔ Story ➔ Sub-task</strong> trên Jira Cloud
                       </span>
                     </div>
                   </div>
@@ -1456,17 +1456,17 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                   </div>
                 )}
 
-                {/* ── Flow 8: Danh sách thành viên Jira (Team Members / Assignees) ── */}
+                {/* ── Danh sách thành viên Jira (Team Members / Assignees) ── */}
                 <div className="jira-members-section">
                   <div className="jira-members-header">
                     <div className="jira-members-title-group">
                       <Users className="text-primary" size={20} />
                       <div>
                         <h5 className="jira-members-title-heading">
-                          Thành viên dự án Jira (Luồng 8: Lấy danh sách & Phân công)
+                          Thành viên dự án Jira (Phân công người thực hiện)
                         </h5>
                         <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                          Gọi Jira API để lấy danh sách Lập trình viên / Tester trong team và giao việc trực tiếp
+                          Lấy danh sách thành viên dự án từ Jira Cloud và phân công trực tiếp cho từng Task
                         </span>
                       </div>
                     </div>

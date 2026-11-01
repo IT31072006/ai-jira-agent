@@ -164,7 +164,7 @@ export const SettingsPage = () => {
 
   const handleRemoveJira = async () => {
     const confirmed = window.confirm(
-      'Bạn có chắc chắn muốn xóa thông tin xác thực Jira?\nCác luồng sau này sẽ không thể tương tác với Jira cho đến khi bạn cấu hình lại.'
+      'Bạn có chắc chắn muốn xóa thông tin xác thực Jira?\nHệ thống sẽ không thể tương tác với Jira cho đến khi bạn cấu hình lại.'
     );
     if (!confirmed) return;
 
@@ -184,7 +184,7 @@ export const SettingsPage = () => {
 
   const handleRemoveGemini = async () => {
     const confirmed = window.confirm(
-      'Bạn có chắc chắn muốn xóa Gemini API Key?\nCác tính năng phân tích AI trong luồng tiếp theo sẽ tạm ngưng hoạt động.'
+      'Bạn có chắc chắn muốn xóa Gemini API Key?\nCác tính năng phân tích AI sẽ tạm ngưng hoạt động.'
     );
     if (!confirmed) return;
 
@@ -230,7 +230,7 @@ export const SettingsPage = () => {
                 <Settings size={18} className="text-primary" />
                 <span>Thiết lập môi trường & Dịch vụ ngoài</span>
               </div>
-              <h1 className="projects-title">Cấu hình Tích hợp (Flow 3)</h1>
+              <h1 className="projects-title">Cấu hình Tích hợp</h1>
               <p className="text-muted">
                 Quản lý khóa xác thực kết nối đến Jira REST API và Google Gemini API. Dữ liệu được mã hóa chuẩn quân sự AES-256-GCM.
               </p>
@@ -492,7 +492,7 @@ export const SettingsPage = () => {
                 <div className="card-header settings-card-header">
                   <div className="card-title-group">
                     <Bell className="card-icon text-primary" size={20} />
-                    <h3>3. Tự động Gửi Thông báo (Flow 11 — n8n Automated Notification)</h3>
+                    <h3>3. Cấu hình Thông báo Tự động</h3>
                   </div>
                 </div>
 
@@ -502,7 +502,7 @@ export const SettingsPage = () => {
                     <div className="notification-toggle-info">
                       <span className="notification-toggle-title">Kích hoạt thông báo tự động khi tạo Epic thành công</span>
                       <span className="notification-toggle-desc">
-                        Khi Flow 7 tạo Epic thành công trên Jira Cloud, hệ thống tự động phát sự kiện qua n8n để thông báo ngay lập tức.
+                        Khi tạo Epic thành công trên Jira Cloud, hệ thống tự động phát sự kiện qua n8n để thông báo ngay lập tức.
                       </span>
                     </div>
                     <label className="toggle-switch-label" htmlFor="notification-toggle">

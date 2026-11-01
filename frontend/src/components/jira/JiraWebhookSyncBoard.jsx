@@ -175,18 +175,17 @@ export const JiraWebhookSyncBoard = ({ project }) => {
 
   // Xác định URL Webhook công khai hiệu lực
   const getEffectiveWebhookUrl = () => {
+    let raw = '';
     if (customTunnelUrl && customTunnelUrl.trim()) {
-      const clean = customTunnelUrl.trim().replace(/\/+$/, '');
-      return `${clean}/api/jira/webhook-sync`;
+      raw = customTunnelUrl.trim().replace(/\/+$/, '');
+    } else if (backendWebhookUrl && backendWebhookUrl.trim()) {
+      raw = backendWebhookUrl.trim().replace(/\/+$/, '');
+    } else if (import.meta.env.VITE_PUBLIC_WEBHOOK_BASE_URL) {
+      raw = import.meta.env.VITE_PUBLIC_WEBHOOK_BASE_URL.trim().replace(/\/+$/, '');
     }
-    if (backendWebhookUrl && backendWebhookUrl.trim()) {
-      return backendWebhookUrl.trim();
-    }
-    const envUrl = import.meta.env.VITE_PUBLIC_WEBHOOK_BASE_URL;
-    if (envUrl && envUrl.trim()) {
-      return `${envUrl.trim().replace(/\/+$/, '')}/api/jira/webhook-sync`;
-    }
-    return '';
+    if (!raw) return '';
+    const cleanBase = raw.replace(/(\/api\/jira\/webhook-sync)+$/i, '');
+    return `${cleanBase}/api/jira/webhook-sync`;
   };
 
   const effectiveWebhookUrl = getEffectiveWebhookUrl();
@@ -297,9 +296,9 @@ export const JiraWebhookSyncBoard = ({ project }) => {
         <div className="card-title-group">
           <Activity className="card-icon text-accent" size={22} />
           <div>
-            <h3>Đồng bộ Trạng thái Ngược từ Jira (Luồng 9: Webhook Sync)</h3>
+            <h3>Đồng bộ Trạng thái từ Jira</h3>
             <p className="text-muted" style={{ fontSize: '0.825rem', margin: 0 }}>
-              Express.js API tự động lắng nghe Webhook khi task trên Jira chuyển trạng thái và cập nhật tức thì vào website
+              Tự động cập nhật trạng thái công việc từ Jira Cloud về hệ thống theo thời gian thực
             </p>
           </div>
         </div>
@@ -340,47 +339,32 @@ export const JiraWebhookSyncBoard = ({ project }) => {
       </div>
 
       <div className="card-body">
-        {/* Phần 1: Cấu hình Webhook Thực tế từ Atlassian Jira Cloud */}
+        {/* Cấu hình Webhook Atlassian Jira Cloud */}
         {showGuide && (
           <div className="webhook-guide-banner">
             <div className="webhook-guide-header" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Globe size={18} className="text-primary" />
-                <strong>Cấu hình Webhook Thực tế trên Atlassian Jira Cloud (Production / Live Demo):</strong>
+                <strong>Cấu hình Webhook Jira Cloud:</strong>
               </div>
               {effectiveWebhookUrl && isHttps ? (
                 <span className="tunnel-status-badge tunnel-badge-valid">
                   <ShieldCheck size={13} />
-                  HTTPS Sẵn sàng cho Jira Cloud
+                  HTTPS Sẵn sàng
                 </span>
               ) : (
                 <span className="tunnel-status-badge tunnel-badge-warning">
                   <AlertTriangle size={13} />
-                  Cần URL HTTPS (Cloudflare Tunnel)
+                  Cần URL HTTPS
                 </span>
               )}
-            </div>
-
-            {/* Phân biệt rõ Local Backend vs Public Webhook */}
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', margin: '0.65rem 0', fontSize: '0.78rem' }}>
-              <span className="network-route-tag">
-                🖥️ <strong>Local Backend:</strong> <code>http://localhost:5000</code> (Chỉ truy cập nội bộ máy này)
-              </span>
-              <span className="network-route-tag">
-                🌐 <strong>Public HTTPS Webhook:</strong>{' '}
-                {effectiveWebhookUrl && isHttps ? (
-                  <code style={{ color: 'var(--success)', fontWeight: 600 }}>{effectiveWebhookUrl}</code>
-                ) : (
-                  <span style={{ color: 'var(--warning)', fontWeight: 600 }}>Chưa mở Cloudflare Tunnel</span>
-                )}
-              </span>
             </div>
 
             {/* Trường hợp A: Đã có HTTPS Webhook URL hợp lệ */}
             {effectiveWebhookUrl && isHttps ? (
               <>
-                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '0.4rem 0' }}>
-                  Vào Jira Cloud: <strong>Jira Settings ➔ System ➔ WebHooks ➔ Create a WebHook</strong>, sau đó điền thông tin:
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '0.35rem 0' }}>
+                  Đường dẫn trên Jira Cloud: <strong>Jira Settings ➔ System ➔ WebHooks ➔ Create a WebHook</strong>
                 </p>
 
                 <div className="webhook-url-box">
@@ -399,20 +383,16 @@ export const JiraWebhookSyncBoard = ({ project }) => {
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.5rem 0' }}>
+                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.4rem 0' }}>
                   <div>
-                    ✓ Sự kiện cần tick: <strong style={{ color: 'var(--text-primary)' }}>Issue ➔ updated</strong> (Khi ai đó chuyển trạng thái task trên Jira Board, Webhook sẽ tự bắn về API Express).
+                    ✓ Sự kiện: <strong style={{ color: 'var(--text-primary)' }}>Issue ➔ updated</strong>
                   </div>
                   <div>
-                    🔒 Secret: {isSecretConfigured ? (
-                      <span style={{ color: 'var(--primary)', fontWeight: 500 }}>Backend đang kích hoạt kiểm tra chữ ký HMAC (X-Hub-Signature). Hãy nhập secret khớp với biến JIRA_WEBHOOK_SECRET.</span>
-                    ) : (
-                      <span>Để trống trường Secret (Leave blank for no secret) theo mặc định Jira Cloud.</span>
-                    )}
+                    🔒 Secret: <span style={{ color: 'var(--text-primary)' }}>Để trống</span> (mặc định)
                   </div>
                 </div>
 
-                <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ marginTop: '0.4rem' }}>
                   <button
                     type="button"
                     className="btn btn-outline"
@@ -420,7 +400,7 @@ export const JiraWebhookSyncBoard = ({ project }) => {
                     onClick={() => setShowTunnelInput(!showTunnelInput)}
                   >
                     <Sliders size={12} />
-                    <span>{showTunnelInput ? 'Đóng cấu hình Tunnel' : 'Đổi / Cập nhật URL Cloudflare Tunnel'}</span>
+                    <span>{showTunnelInput ? 'Đóng cấu hình' : 'Đổi URL Cloudflare Tunnel'}</span>
                   </button>
                 </div>
               </>
@@ -649,7 +629,7 @@ export const JiraWebhookSyncBoard = ({ project }) => {
                 Chưa có issue nào thuộc Workspace này trong cơ sở dữ liệu
               </p>
               <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', margin: 0 }}>
-                Bạn có thể bấm <strong>"Đẩy dữ liệu lên Jira"</strong> ở Luồng 7 ở trên, hoặc dùng khung <strong>"Bắn Webhook giả lập"</strong> để thử nghiệm ngay!
+                Bạn có thể bấm <strong>"Đẩy dữ liệu lên Jira"</strong> ở trên, hoặc dùng khung <strong>"Bắn Webhook giả lập"</strong> để thử nghiệm ngay!
               </p>
             </div>
           ) : (

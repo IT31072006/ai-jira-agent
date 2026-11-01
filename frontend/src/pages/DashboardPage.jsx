@@ -34,6 +34,7 @@ import {
   Database,
   Sparkles,
   Activity,
+  Server,
 } from 'lucide-react';
 
 // Custom Tooltip cho Recharts tương thích dark mode, memoized để tránh re-render thừa
@@ -393,11 +394,6 @@ export const DashboardPage = () => {
                       <span>Tiến độ thực hiện dự án</span>
                     </div>
                     <h3>Tỷ lệ hoàn thành công việc tổng thể</h3>
-                    <p className="completion-formula-note">
-                      Công thức: <code>(Số issue Done ÷ Tổng số issue) × 100%</code>. Mẫu số
-                      được tính trên toàn bộ <strong>{summary?.totalIssues ?? 0}</strong> issue
-                      thuộc phạm vi dự án hiện tại (bao gồm cả To Do, In Progress và Done).
-                    </p>
                   </div>
 
                   <div className="completion-stats-right">
@@ -431,7 +427,7 @@ export const DashboardPage = () => {
                   <h3>Chưa ghi nhận Issue nào trong hệ thống</h3>
                   <p>
                     Hệ thống chưa có Epic, Story hoặc Task nào được đồng bộ. Bạn hãy vào mục{' '}
-                    <strong>Dự án</strong> để phân tích yêu cầu bằng AI (Flow 5) hoặc đẩy lên Jira (Flow 7)!
+                    <strong>Dự án</strong> để phân tích yêu cầu bằng AI hoặc đẩy lên Jira!
                   </p>
                   <div className="empty-actions">
                     <Link to="/projects" className="btn btn-primary">
@@ -703,41 +699,159 @@ export const DashboardPage = () => {
                 <div className="card">
                   <div className="card-header">
                     <div className="card-title-group">
-                      <Database className="card-icon text-accent" size={20} />
-                      <h3>Hạ tầng & Tiến độ các luồng</h3>
+                      <Server className="card-icon text-accent" size={20} />
+                      <h3>Trạng thái Dịch vụ & Kết nối</h3>
                     </div>
+                    <Link to="/settings" className="btn btn-sm btn-outline">
+                      Cài đặt tích hợp
+                    </Link>
                   </div>
                   <div className="card-body">
-                    <ul className="status-checklist">
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 1: Xác thực JWT & PostgreSQL <code>users</code> table</span>
-                      </li>
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 2: Workspace Management & <code>projects</code> table</span>
-                      </li>
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 3: Cấu hình tích hợp & Mã hóa AES-256</span>
-                      </li>
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 4–6: n8n AI Requirement Analyzer (Gemini)</span>
-                      </li>
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 7–8: Push to Jira Cloud & Phân công thành viên</span>
-                      </li>
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 9: 2-Way Webhook Sync & Kanban Board</span>
-                      </li>
-                      <li className="status-item done">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span>Flow 10: Dashboard Thống kê & Báo cáo số liệu hoàn tất</span>
-                      </li>
-                    </ul>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.65rem 0.85rem',
+                          background: 'var(--bg-secondary)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              display: 'inline-block',
+                              boxShadow: '0 0 8px #10b981',
+                            }}
+                          ></span>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                              Jira Cloud REST API
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              Đồng bộ 2 chiều (Epics, Stories, Tasks)
+                            </div>
+                          </div>
+                        </div>
+                        <span className="badge badge-success" style={{ fontSize: '0.725rem' }}>
+                          Sẵn sàng
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.65rem 0.85rem',
+                          background: 'var(--bg-secondary)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              display: 'inline-block',
+                              boxShadow: '0 0 8px #10b981',
+                            }}
+                          ></span>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                              Google Gemini AI
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              Phân tích yêu cầu phần mềm chuẩn Agile
+                            </div>
+                          </div>
+                        </div>
+                        <span className="badge badge-success" style={{ fontSize: '0.725rem' }}>
+                          Hoạt động
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.65rem 0.85rem',
+                          background: 'var(--bg-secondary)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              display: 'inline-block',
+                              boxShadow: '0 0 8px #10b981',
+                            }}
+                          ></span>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                              Webhook Jira Cloud
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              Lắng nghe cập nhật trạng thái thời gian thực
+                            </div>
+                          </div>
+                        </div>
+                        <span className="badge badge-success" style={{ fontSize: '0.725rem' }}>
+                          Đang lắng nghe
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.65rem 0.85rem',
+                          background: 'var(--bg-secondary)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              display: 'inline-block',
+                              boxShadow: '0 0 8px #10b981',
+                            }}
+                          ></span>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                              Cơ sở dữ liệu PostgreSQL
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              Mã hóa bảo mật chuẩn AES-256-GCM
+                            </div>
+                          </div>
+                        </div>
+                        <span className="badge badge-success" style={{ fontSize: '0.725rem' }}>
+                          Bảo mật
+                        </span>
+                      </div>
+                    </div>
 
                     {lastUpdated && (
                       <div
