@@ -93,12 +93,18 @@ class JiraService {
     }
 
     // 2. Giải mã bí mật Jira API Token bằng AES-256
-    let jiraApiToken;
+    let jiraApiToken = null;
     try {
       jiraApiToken = CryptoService.decrypt(config.jira_api_token_encrypted);
     } catch (e) {
-      const err = new Error('Không thể giải mã Jira API Token trong cơ sở dữ liệu.');
-      err.statusCode = 500;
+      jiraApiToken = null;
+    }
+
+    if (!jiraApiToken) {
+      const err = new Error(
+        'Jira API Token của bạn chưa được thiết lập hoặc đã hết hạn trong cơ sở dữ liệu. Vui lòng vào trang Cài đặt (Settings) để nhập lại Jira API Token hợp lệ trước khi đẩy dữ liệu lên Jira Cloud!'
+      );
+      err.statusCode = 400;
       throw err;
     }
 
@@ -150,8 +156,22 @@ class JiraService {
             epics,
           });
         } catch (jiraDirectErr) {
+          if (jiraDirectErr.response?.status === 401) {
+            const err = new Error(
+              `Jira Cloud (${cleanDomain}) từ chối xác thực (401 Unauthorized). Jira Email hoặc API Token của bạn không chính xác. Vui lòng vào mục Cài đặt (Settings) để cập nhật lại Jira API Token!`
+            );
+            err.statusCode = 401;
+            throw err;
+          }
+          if (jiraDirectErr.response?.status === 403) {
+            const err = new Error(
+              `Tài khoản Jira của bạn không có quyền tạo issue trong dự án '${projectKey}' trên Jira Cloud (${cleanDomain}). Vui lòng kiểm tra quyền hạn của tài khoản!`
+            );
+            err.statusCode = 403;
+            throw err;
+          }
           console.warn(
-            `[JiraService] Jira REST API trực tiếp gặp lỗi (${jiraDirectErr.message}). Kích hoạt Local Simulation Engine an toàn 100%...`
+            `[JiraService] Jira REST API trực tiếp gặp lỗi (${jiraDirectErr.message}). Kích hoạt Local Simulation Engine an toàn...`
           );
           resultData = await JiraService.simulatePushIssues({
             projectKey: projectKey.trim().toUpperCase(),
