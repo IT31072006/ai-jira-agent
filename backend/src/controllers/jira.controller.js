@@ -62,6 +62,29 @@ class JiraController {
   }
 
   /**
+   * Endpoint tự động phân công thông minh (AI Smart Assignment)
+   * Phân bổ Story và Sub-task cho thành viên dựa trên thế mạnh đã học và chống xung đột merge code
+   * POST /api/jira/auto-assign
+   */
+  static async autoAssign(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { projectKey, epics, members } = req.body;
+
+      const result = await JiraService.autoAssignTree({
+        userId,
+        projectKey,
+        epics,
+        members,
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Endpoint lấy danh sách dự án Jira từ Jira Cloud
    * GET /api/jira/projects
    */

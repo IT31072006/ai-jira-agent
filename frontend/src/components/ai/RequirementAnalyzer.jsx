@@ -23,6 +23,7 @@ import {
   Download,
   ChevronDown,
   ChevronRight,
+  Zap,
 } from 'lucide-react';
 import ExportModal from '../project/ExportModal';
 
@@ -441,10 +442,44 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
     };
   }, [project]);
 
-  // ── Flow 8: Lấy danh sách thành viên Jira & Giao việc ────────────────────
+  // ── Flow 8: Lấy danh sách thành viên Jira & Tự động phân công thông minh (AI Smart Assignment) ──
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [memberError, setMemberError] = useState('');
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoAssignRationale, setAutoAssignRationale] = useState('');
+
+  /**
+   * Tự động phân công thông minh dựa trên thế mạnh và chống xung đột merge code
+   */
+  const triggerAutoAssign = async (membersList) => {
+    const membersToUse = membersList || members;
+    if (!membersToUse || membersToUse.length === 0) return;
+    if (!editableEpics || editableEpics.length === 0) return;
+
+    const keyToUse = (jiraProjectKey || '').trim().toUpperCase();
+
+    try {
+      setAutoAssigning(true);
+      const res = await jiraApi.autoAssign({
+        projectKey: keyToUse,
+        epics: editableEpics,
+        members: membersToUse,
+      });
+
+      if (res?.epics && Array.isArray(res.epics)) {
+        setEditableEpics(res.epics);
+        setAutoAssignRationale(
+          res.rationaleSummary ||
+          '✓ Đã tự động phân công thông minh cho toàn bộ Task/Story theo thế mạnh thành viên và gom nhóm chống xung đột khi merge code!'
+        );
+      }
+    } catch (assignErr) {
+      console.warn('Lỗi khi tự động phân công:', assignErr);
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
 
   const handleFetchMembers = async (customKey) => {
     const keyToUse = (customKey || jiraProjectKey || '').trim().toUpperCase();
@@ -456,9 +491,14 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
       setLoadingMembers(true);
       setMemberError('');
       const data = await jiraApi.getMembers(keyToUse);
-      setMembers(data.members || []);
-      if (!data.members || data.members.length === 0) {
+      const fetchedMembers = data.members || [];
+      setMembers(fetchedMembers);
+
+      if (!fetchedMembers || fetchedMembers.length === 0) {
         setMemberError('Không tìm thấy thành viên nào được cấp quyền trong dự án Jira này.');
+      } else if (editableEpics && editableEpics.length > 0) {
+        // TỰ ĐỘNG GÁN VIỆC CHO TỪNG STORY VÀ TASK THEO THẾ MẠNH & CHỐNG XUNG ĐỘT MERGE CODE
+        await triggerAutoAssign(fetchedMembers);
       }
     } catch (err) {
       const msg =
@@ -1144,7 +1184,10 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                       {story.tasks.length} {story.tasks.length === 1 ? 'Task' : 'Tasks'}
                                     </span>
                                   {members.length > 0 && (
-                                    <div className="story-assignee-select-wrap" title="Gán thành viên Jira cho Story này">
+                                    <div
+                                      className="story-assignee-select-wrap"
+                                      title={story.assignmentReason || "Gán thành viên Jira cho Story này (Hệ thống đã tự động gán theo thế mạnh)"}
+                                    >
                                       <User size={12} className="text-muted" />
                                       <select
                                         className="story-assignee-select"
@@ -1157,7 +1200,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                         <option value="">👤 Giao Story (Tùy chọn)</option>
                                         {members.map((m) => (
                                           <option key={m.accountId} value={m.accountId}>
-                                            {m.displayName}
+                                            {m.displayName} {m.primaryStrength ? `(${m.primaryStrength})` : ''}
                                           </option>
                                         ))}
                                       </select>
@@ -1307,9 +1350,12 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     </div>
 
                                     <div className="task-right-actions">
-                                      {/* Luồng 8: Assignee Selector cho Task */}
+                                      {/* Luồng 8: Assignee Selector cho Task (Tự động gán thông minh) */}
                                       {members.length > 0 ? (
-                                        <div className="task-assignee-select-wrap" title="Gán thành viên Jira cho Task này">
+                                        <div
+                                          className="task-assignee-select-wrap"
+                                          title={task.assignmentReason || "Thành viên phụ trách Task (Tự động gán theo thế mạnh & gom nhóm chống conflict code)"}
+                                        >
                                           <User size={12} className="text-muted" />
                                           <select
                                             className="task-assignee-select"
@@ -1322,7 +1368,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                             <option value="">👤 Chưa giao</option>
                                             {members.map((m) => (
                                               <option key={m.accountId} value={m.accountId}>
-                                                {m.displayName}
+                                                {m.displayName} {m.primaryStrength ? `(${m.primaryStrength})` : ''}
                                               </option>
                                             ))}
                                           </select>
@@ -1532,8 +1578,66 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                           </>
                         )}
                       </button>
+
+                      {members.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-auto-assign"
+                          onClick={() => triggerAutoAssign()}
+                          disabled={autoAssigning || loadingMembers}
+                          id="btn-auto-assign-members"
+                          title="Tự động phân công lại toàn bộ công việc theo thế mạnh và gom nhóm tính năng chống xung đột khi merge code"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.35rem 0.75rem',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: '#6366f1',
+                            borderColor: '#818cf8',
+                            backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                          }}
+                        >
+                          {autoAssigning ? (
+                            <>
+                              <span className="btn-spinner" style={{ width: 13, height: 13 }}></span>
+                              <span>Đang phân công AI...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Zap size={14} />
+                              <span>⚡ Tự động phân công AI</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {autoAssignRationale && (
+                    <div
+                      className="alert alert-success"
+                      style={{
+                        margin: '0.65rem 0',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.65rem',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderColor: '#10b981',
+                        borderRadius: '8px',
+                        padding: '0.65rem 0.9rem',
+                      }}
+                    >
+                      <Sparkles size={18} className="text-success" style={{ flexShrink: 0, marginTop: '2px', color: '#10b981' }} />
+                      <div style={{ fontSize: '0.84rem', lineHeight: 1.45, color: 'var(--text-primary)' }}>
+                        <strong>Phân công thông minh thành công:</strong> {autoAssignRationale}
+                        <div style={{ marginTop: '0.25rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          💡 <em>Các chức năng liên quan đã được gom cho cùng 1 Developer để tránh conflict code khi merge. Bạn có thể bấm dropdown để đổi thủ công nếu cần.</em>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {memberError && (
                     <div className="alert alert-error" style={{ margin: '0.5rem 0' }}>
@@ -1557,6 +1661,24 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             )}
                             <div className="jira-member-details">
                               <span className="jira-member-name">{m.displayName}</span>
+                              {m.primaryStrength && (
+                                <span
+                                  className="badge badge-accent-subtle"
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    padding: '1px 6px',
+                                    width: 'fit-content',
+                                    marginTop: '2px',
+                                    fontWeight: 600,
+                                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                                    color: '#6366f1',
+                                    borderRadius: '4px',
+                                  }}
+                                  title={m.aiSmartRecommendation || `Thế mạnh: ${m.primaryStrength}`}
+                                >
+                                  🎯 {m.primaryStrength}
+                                </span>
+                              )}
                               {m.emailAddress && (
                                 <span className="jira-member-email">{m.emailAddress}</span>
                               )}
