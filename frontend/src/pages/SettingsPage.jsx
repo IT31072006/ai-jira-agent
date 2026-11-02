@@ -20,6 +20,11 @@ import {
   Bell,
   Send,
   MessageSquare,
+  Clock,
+  Calendar,
+  Zap,
+  RefreshCw,
+  Play,
 } from 'lucide-react';
 
 export const SettingsPage = () => {
@@ -37,6 +42,18 @@ export const SettingsPage = () => {
   const [isTestingNotif, setIsTestingNotif] = useState(false);
   const [testNotifSuccess, setTestNotifSuccess] = useState('');
   const [testNotifError, setTestNotifError] = useState('');
+
+  // Flow 13: Automation Scheduler state
+  const [standupEnabled, setStandupEnabled] = useState(false);
+  const [standupTime, setStandupTime] = useState('08:00');
+  const [standupDays, setStandupDays] = useState('mon-fri');
+  const [standupTimezone, setStandupTimezone] = useState('Asia/Ho_Chi_Minh');
+  const [standupChannel, setStandupChannel] = useState('discord');
+  const [isTestingStandup, setIsTestingStandup] = useState(false);
+  const [testStandupSuccess, setTestStandupSuccess] = useState('');
+  const [testStandupError, setTestStandupError] = useState('');
+  const [automationLogs, setAutomationLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const [showJiraToken, setShowJiraToken] = useState(false);
   const [showGeminiKey, setShowGeminiKey] = useState(false);
@@ -59,11 +76,30 @@ export const SettingsPage = () => {
         setNotificationEnabled(res.data.notification_enabled !== false);
         setNotificationChannel(res.data.notification_channel || 'discord');
         setNotificationEmail(res.data.notification_email || '');
+        setStandupEnabled(Boolean(res.data.standup_enabled));
+        setStandupTime(res.data.standup_time || '08:00');
+        setStandupDays(res.data.standup_days || 'mon-fri');
+        setStandupTimezone(res.data.standup_timezone || 'Asia/Ho_Chi_Minh');
+        setStandupChannel(res.data.standup_channel || 'discord');
       }
     } catch (err) {
       setErrorMsg(err?.response?.data?.message || 'Không thể tải cấu hình tích hợp.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAutomationLogs = async () => {
+    try {
+      setLoadingLogs(true);
+      const res = await configApi.getAutomationLogs(5);
+      if (res && res.data) {
+        setAutomationLogs(res.data);
+      }
+    } catch (err) {
+      console.warn('Lỗi tải nhật ký tự động hóa:', err);
+    } finally {
+      setLoadingLogs(false);
     }
   };
 
@@ -79,6 +115,11 @@ export const SettingsPage = () => {
           setNotificationEnabled(res.data.notification_enabled !== false);
           setNotificationChannel(res.data.notification_channel || 'discord');
           setNotificationEmail(res.data.notification_email || '');
+          setStandupEnabled(Boolean(res.data.standup_enabled));
+          setStandupTime(res.data.standup_time || '08:00');
+          setStandupDays(res.data.standup_days || 'mon-fri');
+          setStandupTimezone(res.data.standup_timezone || 'Asia/Ho_Chi_Minh');
+          setStandupChannel(res.data.standup_channel || 'discord');
         }
       })
       .catch((err) => {
@@ -91,6 +132,8 @@ export const SettingsPage = () => {
           setLoading(false);
         }
       });
+
+    loadAutomationLogs();
 
     return () => {
       isMounted = false;
@@ -131,6 +174,13 @@ export const SettingsPage = () => {
       payload.slack_webhook_url = slackWebhookUrl.trim();
     }
 
+    // Flow 13: Cấu hình Lịch Báo cáo Tự động (Automation Scheduler)
+    payload.standup_enabled = standupEnabled;
+    payload.standup_time = standupTime;
+    payload.standup_days = standupDays;
+    payload.standup_timezone = standupTimezone;
+    payload.standup_channel = standupChannel;
+
     setIsSaving(true);
     try {
       const res = await configApi.updateConfig(payload);
@@ -141,6 +191,11 @@ export const SettingsPage = () => {
         setNotificationEnabled(res.data.notification_enabled !== false);
         setNotificationChannel(res.data.notification_channel || 'discord');
         setNotificationEmail(res.data.notification_email || '');
+        setStandupEnabled(Boolean(res.data.standup_enabled));
+        setStandupTime(res.data.standup_time || '08:00');
+        setStandupDays(res.data.standup_days || 'mon-fri');
+        setStandupTimezone(res.data.standup_timezone || 'Asia/Ho_Chi_Minh');
+        setStandupChannel(res.data.standup_channel || 'discord');
       }
       // Reset ô nhập secret về rỗng để bảo mật
       setJiraApiToken('');
@@ -214,6 +269,32 @@ export const SettingsPage = () => {
       setTimeout(() => setTestNotifError(''), 6000);
     } finally {
       setIsTestingNotif(false);
+    }
+  };
+
+  const handleTestStandup = async () => {
+    setTestStandupSuccess('');
+    setTestStandupError('');
+    setIsTestingStandup(true);
+    try {
+      const res = await configApi.testStandup(standupChannel);
+      await loadAutomationLogs();
+      if (res && res.success) {
+        setTestStandupSuccess(
+          res.message || '✓ Đã kích hoạt và gửi báo cáo Daily Standup thành công qua kênh đã chọn!'
+        );
+        setTimeout(() => setTestStandupSuccess(''), 7000);
+      } else {
+        setTestStandupError(res?.message || 'Không thể kích hoạt báo cáo Standup.');
+        setTimeout(() => setTestStandupError(''), 10000);
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Lỗi khi kích hoạt báo cáo Standup.';
+      setTestStandupError(msg);
+      await loadAutomationLogs();
+      setTimeout(() => setTestStandupError(''), 10000);
+    } finally {
+      setIsTestingStandup(false);
     }
   };
 
@@ -707,6 +788,230 @@ export const SettingsPage = () => {
                       )}
                     </>
                   )}
+                </div>
+              </div>
+
+              {/* Section 4: Automation Scheduler (Flow 13) */}
+              <div className="card settings-card">
+                <div className="card-header settings-card-header">
+                  <div className="card-title-group">
+                    <Clock className="card-icon text-primary" size={20} />
+                    <h3>4. Lịch Tự Động Hóa & Giám Sát Tiến Độ (Daily Standup Watchdog)</h3>
+                  </div>
+                </div>
+
+                <div className="card-body">
+                  {/* Bật/Tắt lịch tự động */}
+                  <div className="notification-toggle-wrapper">
+                    <div className="notification-toggle-info">
+                      <span className="notification-toggle-title">
+                        Tự động quét Jira và gửi báo cáo Daily Standup buổi sáng
+                      </span>
+                      <span className="notification-toggle-desc">
+                        Cỗ máy n8n sẽ tự động thức dậy theo lịch Cron, dùng AI Gemini phân tích các task In Progress / Overdue và gửi bản tin tóm tắt vào kênh chat của team.
+                      </span>
+                    </div>
+                    <label className="toggle-switch-label" htmlFor="standup-toggle">
+                      <input
+                        id="standup-toggle"
+                        type="checkbox"
+                        checked={standupEnabled}
+                        onChange={(e) => setStandupEnabled(e.target.checked)}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  {/* Chi tiết thiết lập lịch */}
+                  <div className="scheduler-grid">
+                    <div className="form-group">
+                      <label htmlFor="standup-time">
+                        <Clock size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                        Giờ gửi báo cáo
+                      </label>
+                      <select
+                        id="standup-time"
+                        className="scheduler-select"
+                        value={standupTime}
+                        onChange={(e) => setStandupTime(e.target.value)}
+                        disabled={isSaving}
+                      >
+                        <option value="08:00">08:00 (Sáng sớm - Khuyến nghị)</option>
+                        <option value="08:30">08:30 (Trước giờ Standup)</option>
+                        <option value="09:00">09:00 (Đầu giờ làm việc)</option>
+                        <option value="09:30">09:30 (Giờ họp buổi sáng)</option>
+                        <option value="17:30">17:30 (Cuối ngày làm việc)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="standup-days">
+                        <Calendar size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                        Ngày chạy trong tuần
+                      </label>
+                      <select
+                        id="standup-days"
+                        className="scheduler-select"
+                        value={standupDays}
+                        onChange={(e) => setStandupDays(e.target.value)}
+                        disabled={isSaving}
+                      >
+                        <option value="mon-fri">Thứ 2 đến Thứ 6 (Ngày làm việc)</option>
+                        <option value="daily">Hàng ngày (Cả tuần)</option>
+                        <option value="mon">Chỉ Thứ 2 (Đầu tuần)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="standup-timezone">
+                        <Globe size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                        Múi giờ hệ thống
+                      </label>
+                      <select
+                        id="standup-timezone"
+                        className="scheduler-select"
+                        value={standupTimezone}
+                        onChange={(e) => setStandupTimezone(e.target.value)}
+                        disabled={isSaving}
+                      >
+                        <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7 Việt Nam)</option>
+                        <option value="UTC">UTC (Universal Time)</option>
+                        <option value="Asia/Tokyo">Asia/Tokyo (GMT+9 Nhật Bản)</option>
+                        <option value="America/New_York">America/New_York (EST)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="standup-channel">
+                        <Bell size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                        Kênh nhận báo cáo
+                      </label>
+                      <select
+                        id="standup-channel"
+                        className="scheduler-select"
+                        value={standupChannel}
+                        onChange={(e) => setStandupChannel(e.target.value)}
+                        disabled={isSaving}
+                      >
+                        <option value="discord">Discord Webhook (Kênh Chat Dev)</option>
+                        <option value="slack">Slack Incoming Webhook</option>
+                        <option value="email">Email Hộp thư Nhóm</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Thanh kích hoạt thử nghiệm tức thì (Demo Trigger) */}
+                  <div className="test-notification-bar" style={{ marginTop: '1.5rem' }}>
+                    <div className="test-notification-info">
+                      <Zap size={20} className="text-primary" />
+                      <div>
+                        <strong>Kích hoạt chạy thử Standup ngay (Demo Mode)</strong>
+                        <p>
+                          Quét ngay các Issue trên Jira, dùng AI phân tích rủi ro và gửi báo cáo mẫu vào {standupChannel.toUpperCase()} để demo cho Giảng viên xem trực tiếp.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-trigger-standup"
+                      onClick={handleTestStandup}
+                      disabled={isTestingStandup || isSaving}
+                      id="btn-test-standup"
+                    >
+                      {isTestingStandup ? (
+                        <>
+                          <span className="btn-spinner"></span>
+                          <span>AI đang phân tích & gửi...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={15} />
+                          <span>Chạy thử báo cáo Standup ngay</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {testStandupSuccess && (
+                    <div className="test-notif-feedback success">
+                      <CheckCircle2 size={16} />
+                      <span>{testStandupSuccess}</span>
+                    </div>
+                  )}
+
+                  {testStandupError && (
+                    <div className="test-notif-feedback error">
+                      <AlertCircle size={16} />
+                      <span>{testStandupError}</span>
+                    </div>
+                  )}
+
+                  {/* Bảng Nhật ký Tự động hóa gần đây (Audit Trail) */}
+                  <div className="automation-logs-container">
+                    <div className="automation-logs-header">
+                      <h4>📋 Nhật ký Tự động hóa Gần đây (Execution Audit Trail)</h4>
+                      <button
+                        type="button"
+                        className="btn-refresh-logs"
+                        onClick={loadAutomationLogs}
+                        disabled={loadingLogs}
+                      >
+                        <RefreshCw size={12} className={loadingLogs ? 'spin' : ''} />
+                        <span>{loadingLogs ? 'Đang tải...' : 'Làm mới'}</span>
+                      </button>
+                    </div>
+
+                    {automationLogs.length === 0 ? (
+                      <p className="text-muted" style={{ fontSize: '0.8125rem', margin: '0.5rem 0' }}>
+                        Chưa có lịch sử chạy tự động. Nhấn <strong>"Chạy thử báo cáo Standup ngay"</strong> để kích hoạt phiên chạy đầu tiên.
+                      </p>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="automation-logs-table">
+                          <thead>
+                            <tr>
+                              <th>Thời gian</th>
+                              <th>Workflow</th>
+                              <th>Kiểu chạy</th>
+                              <th>Trạng thái</th>
+                              <th>Số Task</th>
+                              <th>Rủi ro</th>
+                              <th>Độ trễ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {automationLogs.map((log) => (
+                              <tr key={log.id}>
+                                <td>{new Date(log.created_at).toLocaleString('vi-VN')}</td>
+                                <td><code>{log.workflow_id}</code></td>
+                                <td>
+                                  {log.trigger_type === 'SCHEDULE' ? '⏰ Lịch Cron' : '⚡ Chạy thử'}
+                                </td>
+                                <td>
+                                  {log.status === 'SUCCESS' ? (
+                                    <span className="badge-success-subtle">✓ Thành công</span>
+                                  ) : (
+                                    <span className="badge-failed-subtle">✗ Thất bại</span>
+                                  )}
+                                </td>
+                                <td>{log.issues_scanned} tasks</td>
+                                <td>
+                                  {log.issues_at_risk > 0 ? (
+                                    <span style={{ color: '#f59e0b', fontWeight: 600 }}>
+                                      {log.issues_at_risk} tasks
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: '#10b981' }}>0</span>
+                                  )}
+                                </td>
+                                <td>{log.execution_ms} ms</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

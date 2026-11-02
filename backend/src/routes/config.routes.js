@@ -13,5 +13,7 @@ router.delete('/', ConfigController.delete);
 router.post('/test-connection', ConfigController.testConnection);
 router.post('/test-notification', ConfigController.testNotification);
 router.get('/notifications/history', ConfigController.getNotificationHistory);
+router.post('/test-standup', ConfigController.testStandup);
+router.get('/automation-logs', ConfigController.getAutomationLogs);
 
 module.exports = router;
