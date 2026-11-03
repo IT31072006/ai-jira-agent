@@ -8,7 +8,7 @@ import {
   AlertCircle,
   X,
   Database,
-  Sparkles,
+  Layers,
   Loader2,
 } from 'lucide-react';
 
@@ -209,8 +209,8 @@ export const ExportModal = ({
                   transition: 'all 0.2s ease',
                 }}
               >
-                <div style={{ color: '#8b5cf6' }}>
-                  <Sparkles size={24} />
+                <div style={{ color: '#0052cc' }}>
+                  <Layers size={24} />
                 </div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#0f172a' }}>Bản nháp AI hiện tại</div>

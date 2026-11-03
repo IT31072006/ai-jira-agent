@@ -5,6 +5,7 @@ class ConfigModel {
     const query = `
       SELECT id, user_id, jira_domain, jira_email, jira_api_token_encrypted, gemini_api_key_encrypted,
              notification_enabled, notification_channel, discord_webhook_url, slack_webhook_url, notification_email,
+             standup_enabled, standup_time, standup_days, standup_timezone, standup_channel,
              created_at, updated_at
       FROM configurations
       WHERE user_id = $1
@@ -24,6 +25,11 @@ class ConfigModel {
     discordWebhookUrl = null,
     slackWebhookUrl = null,
     notificationEmail = null,
+    standupEnabled = false,
+    standupTime = '08:00',
+    standupDays = 'mon-fri',
+    standupTimezone = 'Asia/Ho_Chi_Minh',
+    standupChannel = 'discord',
   }) {
     const query = `
       INSERT INTO configurations (
@@ -37,9 +43,14 @@ class ConfigModel {
         discord_webhook_url,
         slack_webhook_url,
         notification_email,
+        standup_enabled,
+        standup_time,
+        standup_days,
+        standup_timezone,
+        standup_channel,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
       ON CONFLICT (user_id) DO UPDATE SET
         jira_domain = EXCLUDED.jira_domain,
         jira_email = EXCLUDED.jira_email,
@@ -50,6 +61,11 @@ class ConfigModel {
         discord_webhook_url = EXCLUDED.discord_webhook_url,
         slack_webhook_url = EXCLUDED.slack_webhook_url,
         notification_email = EXCLUDED.notification_email,
+        standup_enabled = EXCLUDED.standup_enabled,
+        standup_time = EXCLUDED.standup_time,
+        standup_days = EXCLUDED.standup_days,
+        standup_timezone = EXCLUDED.standup_timezone,
+        standup_channel = EXCLUDED.standup_channel,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
     `;
@@ -64,6 +80,11 @@ class ConfigModel {
       discordWebhookUrl,
       slackWebhookUrl,
       notificationEmail,
+      standupEnabled,
+      standupTime,
+      standupDays,
+      standupTimezone,
+      standupChannel,
     ]);
     return rows[0];
   }

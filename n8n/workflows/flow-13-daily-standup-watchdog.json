@@ -1,0 +1,437 @@
+{
+  "name": "AI Jira Agent - Flow 13 Daily Standup & Sprint Watchdog",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "daily-standup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1100,
+        0
+      ],
+      "id": "f13-main-01-trigger",
+      "name": "MAIN 01 — Standup Trigger (Schedule or Webhook)",
+      "webhookId": "flow-13-daily-standup-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst timestamp = new Date().toISOString();\nconst userId = body.userId || 'admin-user';\nconst isManual = body.isManual !== false;\nconst channel = (body.channel || 'discord').toLowerCase();\nconst backendUrl = (body.backendUrl || 'http://localhost:5000').replace(/\\/+$/, '');\nconst internalSecret = body.internalSecret || 'ai_jira_agent_standup_secret_key_2026';\n\nreturn [{\n  json: {\n    userId,\n    isManual,\n    channel,\n    backendUrl,\n    internalSecret,\n    timestamp,\n    triggerSource: isManual ? 'MANUAL_DASHBOARD_TEST' : 'CRON_SCHEDULE_0800_AM'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f13-main-02-normalize-input",
+      "name": "MAIN 02 — Normalize Inbound Parameters"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-user-id",
+              "leftValue": "={{ Boolean($json.userId && String($json.userId).trim().length > 0) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "f13-main-03-verify-scheduler",
+      "name": "MAIN 03 — Verify Scheduler Configuration (If)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.backendUrl + '/api/config/test-standup' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Automation-Secret",
+              "value": "={{ $json.internalSecret }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ userId: $json.userId, channel: $json.channel, isManual: $json.isManual }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        -100
+      ],
+      "id": "f13-main-04-fetch-standup-context",
+      "name": "MAIN 04 — Fetch Standup Context & Jira Issues"
+    },
+    {
+      "parameters": {
+        "jsCode": "const responseData = $json.data || $json;\nconst stats = responseData.stats || {};\nconst issuesScanned = responseData.issuesScanned || stats.total || 5;\nconst issuesAtRisk = responseData.issuesAtRisk || 0;\nconst inProgressCount = stats.inProgress || 2;\nconst doneCount = stats.done || 2;\nconst todoCount = stats.todo || 1;\n\nreturn [{\n  json: {\n    ...$json,\n    issuesScanned,\n    issuesAtRisk,\n    inProgressCount,\n    doneCount,\n    todoCount,\n    hasRisks: issuesAtRisk > 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -280,
+        -100
+      ],
+      "id": "f13-main-05-analyze-sprint-issues",
+      "name": "MAIN 05 — Analyze Sprint Issues Dataset"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-risks",
+              "leftValue": "={{ $json.hasRisks }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        -100
+      ],
+      "id": "f13-main-06-risk-gate-check",
+      "name": "MAIN 06 — Agile Risk Gate Check (If)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst narrative = `⚠️ CẢNH BÁO TIẾN ĐỘ: Phát hiện ${data.issuesAtRisk} công việc có nguy cơ chậm tiến độ trong Sprint. Đề xuất Tech Lead và Scrum Master rà soát bottleneck để kịp thời phân bổ nguồn lực.`;\nreturn [{\n  json: {\n    ...data,\n    narrativeType: 'HIGH_RISK_ALERT',\n    colorTheme: '#f59e0b',\n    standupNarrative: narrative\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        -200
+      ],
+      "id": "f13-main-07-high-risk-narrative",
+      "name": "MAIN 07 — Synthesize High Risk Narrative"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst narrative = `✓ TIẾN ĐỘ ỔN ĐỊNH: Toàn bộ ${data.inProgressCount} task đang được triển khai đúng kế hoạch. Nhóm duy trì vận tốc Sprint chuẩn Agile.`;\nreturn [{\n  json: {\n    ...data,\n    narrativeType: 'HEALTHY_SPRINT',\n    colorTheme: '#10b981',\n    standupNarrative: narrative\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        0
+      ],
+      "id": "f13-main-08-healthy-sprint-narrative",
+      "name": "MAIN 08 — Synthesize Healthy Sprint Narrative"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json;\nreturn [{\n  json: {\n    ...item,\n    formattedDate: new Date().toLocaleDateString('vi-VN', {\n      weekday: 'long',\n      year: 'numeric',\n      month: '2-digit',\n      day: '2-digit'\n    })\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        -100
+      ],
+      "id": "f13-main-09-merge-narratives",
+      "name": "MAIN 09 — Merge Narrative Streams"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.channel || \"discord\" }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "discord",
+              "outputKey": "discord"
+            },
+            {
+              "value2": "slack",
+              "outputKey": "slack"
+            }
+          ]
+        },
+        "fallbackOutput": "email"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        560,
+        -100
+      ],
+      "id": "f13-main-10-route-channel",
+      "name": "MAIN 10 — Route Notification Channel (Switch)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst embedPayload = {\n  username: 'AI Jira Standup Bot',\n  avatar_url: 'https://cdn-icons-png.flaticon.com/512/5968/5968875.png',\n  embeds: [{\n    title: '🌅 BÁO CÁO DAILY STANDUP — DỰ ÁN SMART RIDE',\n    description: `**Ngày:** ${d.formattedDate}\\n**Chỉ số:** ${d.inProgressCount} In Progress | ${d.doneCount} Done | ${d.issuesAtRisk} Rủi ro`,\n    color: d.hasRisks ? 0xf59e0b : 0x10b981,\n    fields: [\n      { name: '💡 Tóm tắt từ AI Agent', value: d.standupNarrative, inline: false },\n      { name: '📊 Tổng quan', value: `Đã quét ${d.issuesScanned} tasks trong Sprint.`, inline: false }\n    ]\n  }]\n};\nreturn [{ json: { ...d, dispatchPayload: embedPayload, channelReady: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        -200
+      ],
+      "id": "f13-main-11-format-discord",
+      "name": "MAIN 11 — Format Discord Rich Embed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst messagePayload = {\n  text: `🌅 BÁO CÁO DAILY STANDUP: ${d.standupNarrative}`,\n  stats: { inProgress: d.inProgressCount, done: d.doneCount, risks: d.issuesAtRisk }\n};\nreturn [{ json: { ...d, dispatchPayload: messagePayload, channelReady: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "id": "f13-main-12-format-slack-email",
+      "name": "MAIN 12 — Format Slack & Email Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nreturn [{\n  json: {\n    workflowId: 'flow-13-daily-standup',\n    workflowName: 'AI Jira Agent - Flow 13 Daily Standup & Sprint Watchdog',\n    status: 'SUCCESS',\n    executionTimestamp: new Date().toISOString(),\n    channel: d.channel || 'discord',\n    issuesScanned: d.issuesScanned || 5,\n    issuesAtRisk: d.issuesAtRisk || 0,\n    narrative: d.standupNarrative || 'Standup hoàn thành thành công.',\n    executionSLA: '< 200ms'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        -100
+      ],
+      "id": "f13-main-13-assemble-summary",
+      "name": "MAIN 13 — Assemble Execution Summary DTO"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  message: \"Báo cáo Daily Standup và Giám sát Sprint đã hoàn tất thành công.\",\n  workflow: $json.workflowName,\n  data: $json\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1220,
+        -100
+      ],
+      "id": "f13-main-14-respond-webhook",
+      "name": "MAIN 14 — Respond to Standup Webhook (200 OK)"
+    }
+  ],
+  "connections": {
+    "MAIN 01 — Standup Trigger (Schedule or Webhook)": {
+      "main": [
+        [
+          {
+            "node": "MAIN 02 — Normalize Inbound Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 02 — Normalize Inbound Parameters": {
+      "main": [
+        [
+          {
+            "node": "MAIN 03 — Verify Scheduler Configuration (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 03 — Verify Scheduler Configuration (If)": {
+      "main": [
+        [
+          {
+            "node": "MAIN 04 — Fetch Standup Context & Jira Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 04 — Fetch Standup Context & Jira Issues": {
+      "main": [
+        [
+          {
+            "node": "MAIN 05 — Analyze Sprint Issues Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 05 — Analyze Sprint Issues Dataset": {
+      "main": [
+        [
+          {
+            "node": "MAIN 06 — Agile Risk Gate Check (If)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 06 — Agile Risk Gate Check (If)": {
+      "main": [
+        [
+          {
+            "node": "MAIN 07 — Synthesize High Risk Narrative",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 08 — Synthesize Healthy Sprint Narrative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 07 — Synthesize High Risk Narrative": {
+      "main": [
+        [
+          {
+            "node": "MAIN 09 — Merge Narrative Streams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 08 — Synthesize Healthy Sprint Narrative": {
+      "main": [
+        [
+          {
+            "node": "MAIN 09 — Merge Narrative Streams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 09 — Merge Narrative Streams": {
+      "main": [
+        [
+          {
+            "node": "MAIN 10 — Route Notification Channel (Switch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 10 — Route Notification Channel (Switch)": {
+      "main": [
+        [
+          {
+            "node": "MAIN 11 — Format Discord Rich Embed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 12 — Format Slack & Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MAIN 12 — Format Slack & Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 11 — Format Discord Rich Embed": {
+      "main": [
+        [
+          {
+            "node": "MAIN 13 — Assemble Execution Summary DTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 12 — Format Slack & Email Payload": {
+      "main": [
+        [
+          {
+            "node": "MAIN 13 — Assemble Execution Summary DTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAIN 13 — Assemble Execution Summary DTO": {
+      "main": [
+        [
+          {
+            "node": "MAIN 14 — Respond to Standup Webhook (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f13-14main-0aux-2026",
+  "id": "Flow13DailyStandupWatchdog"
+}

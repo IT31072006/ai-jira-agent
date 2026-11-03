@@ -30,6 +30,23 @@ export const jiraApi = {
   },
 
   /**
+   * Tự động phân công thông minh (AI Smart Assignment)
+   * @param {Object} data
+   * @param {string} data.projectKey
+   * @param {Array} data.epics
+   * @param {Array} [data.members]
+   * @returns {Promise<{success: boolean, epics: Array, stats: Object, rationaleSummary: string}>}
+   */
+  autoAssign: async ({ projectKey, epics, members }) => {
+    const response = await apiClient.post('/jira/auto-assign', {
+      projectKey,
+      epics,
+      members,
+    });
+    return response.data;
+  },
+
+  /**
    * Gọi backend Express để lấy danh sách các dự án trên Jira Cloud
    * @returns {Promise<{success: boolean, count: number, projects: Array}>}
    */

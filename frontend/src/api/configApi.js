@@ -31,6 +31,16 @@ export const configApi = {
     const response = await apiClient.get(`/config/notifications/history?limit=${limit}`);
     return response.data;
   },
+
+  testStandup: async (channel = null) => {
+    const response = await apiClient.post('/config/test-standup', { channel });
+    return response.data;
+  },
+
+  getAutomationLogs: async (limit = 10) => {
+    const response = await apiClient.get(`/config/automation-logs?limit=${limit}`);
+    return response.data;
+  },
 };
 
 export default configApi;

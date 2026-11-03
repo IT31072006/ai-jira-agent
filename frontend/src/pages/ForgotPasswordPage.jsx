@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   AlertCircle,
   CheckCircle2,
-  Sparkles,
+  Kanban,
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
@@ -193,9 +193,9 @@ export const ForgotPasswordPage = () => {
         <div className="auth-brand">
           <div className="auth-logo-badge">
             {step === 3 ? (
-              <ShieldCheck className="icon-sparkle" size={24} />
+              <ShieldCheck className="icon-brand" size={24} />
             ) : (
-              <Sparkles className="icon-sparkle" size={24} />
+              <Kanban className="icon-brand" size={24} />
             )}
           </div>
           <h1 className="auth-title">

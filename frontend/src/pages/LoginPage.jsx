@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Kanban } from 'lucide-react';
 
 export const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -61,7 +61,7 @@ export const LoginPage = () => {
       <div className="auth-card">
         <div className="auth-brand">
           <div className="auth-logo-badge">
-            <Sparkles className="icon-sparkle" size={24} />
+            <Kanban className="icon-brand" size={24} />
           </div>
           <h1 className="auth-title">AI Requirement-to-Jira</h1>
           <p className="auth-subtitle">Đăng nhập để quản lý và phân tách yêu cầu phần mềm</p>

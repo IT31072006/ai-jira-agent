@@ -163,6 +163,45 @@ class ConfigController {
       next(error);
     }
   }
+
+  /**
+   * Endpoint kích hoạt chạy thử báo cáo Standup (Flow 13)
+   * POST /api/config/test-standup
+   */
+  static async testStandup(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { channel } = req.body || {};
+      const AutomationService = require('../services/automation.service');
+      const result = await AutomationService.triggerStandup(userId, {
+        isManual: true,
+        customChannel: channel,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Endpoint lấy lịch sử thực thi tự động hóa (Automation Logs)
+   * GET /api/config/automation-logs
+   */
+  static async getAutomationLogs(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const limit = parseInt(req.query.limit, 10) || 10;
+      const AutomationService = require('../services/automation.service');
+      const logs = await AutomationService.getLogs(userId, limit);
+      return res.status(200).json({
+        success: true,
+        count: logs.length,
+        data: logs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = ConfigController;

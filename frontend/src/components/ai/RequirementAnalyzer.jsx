@@ -23,6 +23,7 @@ import {
   Download,
   ChevronDown,
   ChevronRight,
+  Zap,
 } from 'lucide-react';
 import ExportModal from '../project/ExportModal';
 
@@ -441,10 +442,44 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
     };
   }, [project]);
 
-  // ── Flow 8: Lấy danh sách thành viên Jira & Giao việc ────────────────────
+  // ── Flow 8: Lấy danh sách thành viên Jira & Tự động phân công thông minh (AI Smart Assignment) ──
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [memberError, setMemberError] = useState('');
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoAssignRationale, setAutoAssignRationale] = useState('');
+
+  /**
+   * Tự động phân công thông minh dựa trên thế mạnh và chống xung đột merge code
+   */
+  const triggerAutoAssign = async (membersList) => {
+    const membersToUse = membersList || members;
+    if (!membersToUse || membersToUse.length === 0) return;
+    if (!editableEpics || editableEpics.length === 0) return;
+
+    const keyToUse = (jiraProjectKey || '').trim().toUpperCase();
+
+    try {
+      setAutoAssigning(true);
+      const res = await jiraApi.autoAssign({
+        projectKey: keyToUse,
+        epics: editableEpics,
+        members: membersToUse,
+      });
+
+      if (res?.epics && Array.isArray(res.epics)) {
+        setEditableEpics(res.epics);
+        setAutoAssignRationale(
+          res.rationaleSummary ||
+          '✓ Đã tự động phân công thông minh cho toàn bộ Task/Story theo thế mạnh thành viên và gom nhóm chống xung đột khi merge code!'
+        );
+      }
+    } catch (assignErr) {
+      console.warn('Lỗi khi tự động phân công:', assignErr);
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
 
   const handleFetchMembers = async (customKey) => {
     const keyToUse = (customKey || jiraProjectKey || '').trim().toUpperCase();
@@ -456,9 +491,14 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
       setLoadingMembers(true);
       setMemberError('');
       const data = await jiraApi.getMembers(keyToUse);
-      setMembers(data.members || []);
-      if (!data.members || data.members.length === 0) {
+      const fetchedMembers = data.members || [];
+      setMembers(fetchedMembers);
+
+      if (!fetchedMembers || fetchedMembers.length === 0) {
         setMemberError('Không tìm thấy thành viên nào được cấp quyền trong dự án Jira này.');
+      } else if (editableEpics && editableEpics.length > 0) {
+        // TỰ ĐỘNG GÁN VIỆC CHO TỪNG STORY VÀ TASK THEO THẾ MẠNH & CHỐNG XUNG ĐỘT MERGE CODE
+        await triggerAutoAssign(fetchedMembers);
       }
     } catch (err) {
       const msg =
@@ -892,7 +932,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
       {/* Header */}
       <div className="card-header">
         <div className="card-title-group">
-          <Sparkles className="card-icon text-primary" size={20} />
+          <Layers className="card-icon text-primary" size={20} />
           <h3>Phân tích Yêu cầu Phần mềm bằng AI</h3>
         </div>
       </div>
@@ -965,7 +1005,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                 </span>
               ) : (
                 <span className="btn-content">
-                  <Sparkles size={16} />
+                  <Layers size={16} />
                   <span>Phân tích bằng AI</span>
                 </span>
               )}
@@ -1055,7 +1095,9 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                     {/* ── Epic header ─────────────────────────────────────── */}
                     <div className="epic-header">
                       <div className="epic-title-container">
-                        <Layers size={22} className="epic-icon" />
+                        <div className="epic-icon-wrapper">
+                          <Layers size={20} className="epic-icon" />
+                        </div>
                         <div className="epic-fields">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                             <span className="badge badge-primary-subtle">EPIC</span>
@@ -1074,20 +1116,20 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             <>
                               <input
                                 type="text"
-                                className="form-control edit-field-title"
+                                className="form-control edit-field-title edit-field-epic-title"
                                 value={epic.title}
                                 onChange={(e) =>
                                   updateEpicField(epicIdx, 'title', e.target.value)
                                 }
-                                placeholder="Tên Epic"
+                                placeholder="Tên Epic (VD: Quản lý Bảo mật & Phiên làm việc)"
                               />
                               <textarea
-                                className="form-control edit-field-desc"
+                                className="form-control edit-field-desc edit-field-epic-desc"
                                 value={epic.description}
                                 onChange={(e) =>
                                   updateEpicField(epicIdx, 'description', e.target.value)
                                 }
-                                placeholder="Mô tả Epic (tuỳ chọn)"
+                                placeholder="Mô tả mục tiêu của Epic (tuỳ chọn)"
                                 rows={2}
                               />
                             </>
@@ -1101,19 +1143,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                         </span>
                         <button
                           type="button"
-                          className="btn-icon"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '4px',
-                            background: 'var(--bg-tertiary)',
-                            color: 'var(--text-secondary)',
-                            border: '1px solid var(--border-subtle)',
-                            cursor: 'pointer',
-                          }}
+                          className="btn-toggle-expand"
                           onClick={() => toggleEpicExpand(epic.id, epicIdx)}
                           title={isEpicExpanded(epic.id, epicIdx) ? 'Thu gọn Epic' : 'Mở rộng Epic'}
                         >
@@ -1132,25 +1162,15 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                           >
                             {/* Story header */}
                             <div className="story-header">
-                              <Bookmark size={18} className="story-icon" />
+                              <div className="story-icon-wrapper">
+                                <Bookmark size={16} className="story-icon" />
+                              </div>
                               <div className="story-fields">
                                 <div className="story-badge-row">
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     <button
                                       type="button"
-                                      className="btn-icon"
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: '24px',
-                                        height: '24px',
-                                        borderRadius: '4px',
-                                        background: 'var(--bg-tertiary)',
-                                        color: 'var(--text-secondary)',
-                                        border: '1px solid var(--border-subtle)',
-                                        cursor: 'pointer',
-                                      }}
+                                      className="btn-toggle-expand btn-toggle-expand-sm"
                                       onClick={() => toggleStoryExpand(story.id, storyIdx)}
                                       title={isStoryExpanded(story.id, storyIdx) ? 'Thu gọn Tasks' : 'Mở rộng Tasks'}
                                     >
@@ -1164,7 +1184,10 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                       {story.tasks.length} {story.tasks.length === 1 ? 'Task' : 'Tasks'}
                                     </span>
                                   {members.length > 0 && (
-                                    <div className="story-assignee-select-wrap" title="Gán thành viên Jira cho Story này">
+                                    <div
+                                      className="story-assignee-select-wrap"
+                                      title={story.assignmentReason || "Gán thành viên Jira cho Story này (Hệ thống đã tự động gán theo thế mạnh)"}
+                                    >
                                       <User size={12} className="text-muted" />
                                       <select
                                         className="story-assignee-select"
@@ -1177,7 +1200,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                         <option value="">👤 Giao Story (Tùy chọn)</option>
                                         {members.map((m) => (
                                           <option key={m.accountId} value={m.accountId}>
-                                            {m.displayName}
+                                            {m.displayName} {m.primaryStrength ? `(${m.primaryStrength})` : ''}
                                           </option>
                                         ))}
                                       </select>
@@ -1212,7 +1235,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                 <>
                                   <input
                                     type="text"
-                                    className="form-control edit-field-title"
+                                    className="form-control edit-field-title edit-field-story-title"
                                     value={story.title}
                                     onChange={(e) =>
                                       updateStoryField(epicIdx, storyIdx, 'title', e.target.value)
@@ -1223,7 +1246,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     placeholder="Tên User Story"
                                   />
                                   <textarea
-                                    className="form-control edit-field-desc"
+                                    className="form-control edit-field-desc edit-field-story-desc"
                                     value={story.description}
                                     onChange={(e) =>
                                       updateStoryField(
@@ -1276,7 +1299,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                         <div className="task-edit-fields">
                                           <input
                                             type="text"
-                                            className="form-control edit-field-title"
+                                            className="form-control edit-field-title edit-field-task-title"
                                             value={task.title}
                                             onChange={(e) =>
                                               updateTaskField(
@@ -1327,9 +1350,12 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     </div>
 
                                     <div className="task-right-actions">
-                                      {/* Luồng 8: Assignee Selector cho Task */}
+                                      {/* Luồng 8: Assignee Selector cho Task (Tự động gán thông minh) */}
                                       {members.length > 0 ? (
-                                        <div className="task-assignee-select-wrap" title="Gán thành viên Jira cho Task này">
+                                        <div
+                                          className="task-assignee-select-wrap"
+                                          title={task.assignmentReason || "Thành viên phụ trách Task (Tự động gán theo thế mạnh & gom nhóm chống conflict code)"}
+                                        >
                                           <User size={12} className="text-muted" />
                                           <select
                                             className="task-assignee-select"
@@ -1342,7 +1368,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                             <option value="">👤 Chưa giao</option>
                                             {members.map((m) => (
                                               <option key={m.accountId} value={m.accountId}>
-                                                {m.displayName}
+                                                {m.displayName} {m.primaryStrength ? `(${m.primaryStrength})` : ''}
                                               </option>
                                             ))}
                                           </select>
@@ -1444,9 +1470,9 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                   <div className="jira-title-group">
                     <CloudUpload className="text-primary" size={24} />
                     <div>
-                      <h4>Tích hợp Jira (Luồng 7: Push to Jira)</h4>
+                      <h4>Đẩy dữ liệu lên Jira Cloud</h4>
                       <span className="text-muted" style={{ fontSize: '0.85rem' }}>
-                        Cỗ máy n8n sẽ tự động chạy vòng lặp tạo <strong>Epic ➔ Story ➔ Sub-task</strong> trên Jira
+                        Tự động khởi tạo cây phân cấp <strong>Epic ➔ Story ➔ Sub-task</strong> trên Jira Cloud
                       </span>
                     </div>
                   </div>
@@ -1465,8 +1491,8 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             width: 'fit-content',
                             padding: '0.35rem 0.85rem',
                             fontSize: '0.8rem',
-                            borderColor: 'var(--primary)',
-                            color: '#a5b4fc',
+                            borderColor: 'var(--border-medium)',
+                            color: 'var(--primary)',
                           }}
                         >
                           ⚙️ Đi tới trang Cài đặt (Settings)
@@ -1476,23 +1502,23 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                   </div>
                 )}
 
-                {/* ── Flow 8: Danh sách thành viên Jira (Team Members / Assignees) ── */}
+                {/* ── Danh sách thành viên Jira (Team Members / Assignees) ── */}
                 <div className="jira-members-section">
                   <div className="jira-members-header">
                     <div className="jira-members-title-group">
                       <Users className="text-primary" size={20} />
                       <div>
                         <h5 className="jira-members-title-heading">
-                          Thành viên dự án Jira (Luồng 8: Lấy danh sách & Phân công)
+                          Thành viên dự án Jira (Phân công người thực hiện)
                         </h5>
                         <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                          Gọi Jira API để lấy danh sách Lập trình viên / Tester trong team và giao việc trực tiếp
+                          Lấy danh sách thành viên dự án từ Jira Cloud và phân công trực tiếp cho từng Task
                         </span>
                       </div>
                     </div>
                     <div className="jira-members-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Mã Jira:</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>Mã Jira:</span>
                         {availableJiraProjects.length > 0 ? (
                           <select
                             className="form-control jira-key-input"
@@ -1552,8 +1578,66 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                           </>
                         )}
                       </button>
+
+                      {members.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-auto-assign"
+                          onClick={() => triggerAutoAssign()}
+                          disabled={autoAssigning || loadingMembers}
+                          id="btn-auto-assign-members"
+                          title="Tự động phân công lại toàn bộ công việc theo thế mạnh và gom nhóm tính năng chống xung đột khi merge code"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.35rem 0.75rem',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: '#6366f1',
+                            borderColor: '#818cf8',
+                            backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                          }}
+                        >
+                          {autoAssigning ? (
+                            <>
+                              <span className="btn-spinner" style={{ width: 13, height: 13 }}></span>
+                              <span>Đang phân công AI...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Zap size={14} />
+                              <span>⚡ Tự động phân công AI</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {autoAssignRationale && (
+                    <div
+                      className="alert alert-success"
+                      style={{
+                        margin: '0.65rem 0',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.65rem',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderColor: '#10b981',
+                        borderRadius: '8px',
+                        padding: '0.65rem 0.9rem',
+                      }}
+                    >
+                      <Sparkles size={18} className="text-success" style={{ flexShrink: 0, marginTop: '2px', color: '#10b981' }} />
+                      <div style={{ fontSize: '0.84rem', lineHeight: 1.45, color: 'var(--text-primary)' }}>
+                        <strong>Phân công thông minh thành công:</strong> {autoAssignRationale}
+                        <div style={{ marginTop: '0.25rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          💡 <em>Các chức năng liên quan đã được gom cho cùng 1 Developer để tránh conflict code khi merge. Bạn có thể bấm dropdown để đổi thủ công nếu cần.</em>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {memberError && (
                     <div className="alert alert-error" style={{ margin: '0.5rem 0' }}>
@@ -1577,6 +1661,24 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             )}
                             <div className="jira-member-details">
                               <span className="jira-member-name">{m.displayName}</span>
+                              {m.primaryStrength && (
+                                <span
+                                  className="badge badge-accent-subtle"
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    padding: '1px 6px',
+                                    width: 'fit-content',
+                                    marginTop: '2px',
+                                    fontWeight: 600,
+                                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                                    color: '#6366f1',
+                                    borderRadius: '4px',
+                                  }}
+                                  title={m.aiSmartRecommendation || `Thế mạnh: ${m.primaryStrength}`}
+                                >
+                                  🎯 {m.primaryStrength}
+                                </span>
+                              )}
                               {m.emailAddress && (
                                 <span className="jira-member-email">{m.emailAddress}</span>
                               )}
@@ -1649,8 +1751,8 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                         padding: '0.65rem 1.15rem',
                         fontSize: '0.9rem',
                         fontWeight: 600,
-                        borderColor: '#8b5cf6',
-                        color: '#8b5cf6',
+                        borderColor: 'var(--border-medium)',
+                        color: 'var(--text-primary)',
                       }}
                     >
                       <Download size={18} />
@@ -1701,7 +1803,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                           <span className="jira-stat-label">Sub-tasks</span>
                         </div>
                         <div className="jira-stat-item">
-                          <span className="jira-stat-num" style={{ color: '#4ade80' }}>
+                          <span className="jira-stat-num" style={{ color: 'var(--success)' }}>
                             {jiraResult.summary.totalIssues || 0}
                           </span>
                           <span className="jira-stat-label">Tổng Issues</span>
@@ -1721,7 +1823,7 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             gap: '0.5rem',
                           }}
                         >
-                          <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8', margin: 0 }}>
+                          <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                             DANH SÁCH ISSUES ĐÃ TẠO TRÊN JIRA ({jiraResult.createdIssues.length}):
                           </p>
                           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

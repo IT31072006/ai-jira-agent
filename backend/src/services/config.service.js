@@ -65,6 +65,11 @@ class ConfigService {
         slack_webhook_configured: false,
         slack_webhook_masked: null,
         notification_email: '',
+        standup_enabled: false,
+        standup_time: '08:00',
+        standup_days: 'mon-fri',
+        standup_timezone: 'Asia/Ho_Chi_Minh',
+        standup_channel: 'discord',
         public_webhook_base_url: publicBaseUrl,
         public_jira_webhook_url: publicJiraWebhookUrl,
         jira_webhook_secret_configured: isJiraWebhookSecretConfigured,
@@ -127,6 +132,11 @@ class ConfigService {
       slack_webhook_masked: maskedSlack,
       slack_webhook_url_masked: maskedSlack,
       notification_email: config.notification_email || '',
+      standup_enabled: Boolean(config.standup_enabled),
+      standup_time: config.standup_time || '08:00',
+      standup_days: config.standup_days || 'mon-fri',
+      standup_timezone: config.standup_timezone || 'Asia/Ho_Chi_Minh',
+      standup_channel: config.standup_channel || 'discord',
       public_webhook_base_url: publicBaseUrl,
       public_jira_webhook_url: publicJiraWebhookUrl,
       jira_webhook_secret_configured: isJiraWebhookSecretConfigured,
@@ -204,6 +214,32 @@ class ConfigService {
       notificationEmail = payload.notification_email.trim() || null;
     }
 
+    // 5. Automation Scheduler Settings (Flow 13)
+    let standupEnabled = existing ? Boolean(existing.standup_enabled) : false;
+    if (payload.standup_enabled !== undefined) {
+      standupEnabled = Boolean(payload.standup_enabled);
+    }
+
+    let standupTime = existing ? (existing.standup_time || '08:00') : '08:00';
+    if (payload.standup_time !== undefined && typeof payload.standup_time === 'string') {
+      standupTime = payload.standup_time.trim() || '08:00';
+    }
+
+    let standupDays = existing ? (existing.standup_days || 'mon-fri') : 'mon-fri';
+    if (payload.standup_days !== undefined && typeof payload.standup_days === 'string') {
+      standupDays = payload.standup_days.trim() || 'mon-fri';
+    }
+
+    let standupTimezone = existing ? (existing.standup_timezone || 'Asia/Ho_Chi_Minh') : 'Asia/Ho_Chi_Minh';
+    if (payload.standup_timezone !== undefined && typeof payload.standup_timezone === 'string') {
+      standupTimezone = payload.standup_timezone.trim() || 'Asia/Ho_Chi_Minh';
+    }
+
+    let standupChannel = existing ? (existing.standup_channel || 'discord') : 'discord';
+    if (payload.standup_channel !== undefined && ['discord', 'slack', 'email'].includes(payload.standup_channel)) {
+      standupChannel = payload.standup_channel;
+    }
+
     const saved = await ConfigModel.upsert(userId, {
       jiraDomain,
       jiraEmail,
@@ -214,6 +250,11 @@ class ConfigService {
       discordWebhookUrl,
       slackWebhookUrl,
       notificationEmail,
+      standupEnabled,
+      standupTime,
+      standupDays,
+      standupTimezone,
+      standupChannel,
     });
 
     return this.formatMaskedResponse(saved);

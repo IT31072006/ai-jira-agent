@@ -38,19 +38,33 @@ class CryptoService {
     }
     const parts = encryptedPayload.split(':');
     if (parts.length !== 3) {
-      throw new Error('Dữ liệu mã hóa không đúng định dạng.');
+      return null;
     }
     const [ivHex, authTagHex, encryptedHex] = parts;
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
-    const key = this.getKey();
 
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
+    // Danh sách các key thử giải mã (ưu tiên key hiện tại)
+    const candidateKeys = [
+      this.getKey(),
+      crypto.createHash('sha256').update(String(process.env.JWT_SECRET || '')).digest(),
+      crypto.createHash('sha256').update('ai_jira_agent_default_secret_encryption_key_32').digest(),
+      crypto.createHash('sha256').update('ai_jira_agent_default_secret_key').digest(),
+    ];
 
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    for (const key of candidateKeys) {
+      try {
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+      } catch (err) {
+        // Thử key tiếp theo
+      }
+    }
+
+    return null;
   }
 
   /**
