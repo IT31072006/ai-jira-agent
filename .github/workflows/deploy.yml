@@ -1,0 +1,42 @@
+name: Auto Deploy to VPS
+
+# Chỉ kích hoạt khi có commit mới được PUSH hoặc MERGE vào nhánh main
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executing remote SSH commands to deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 [1/4] Kéo mã nguồn mới nhất từ nhánh main..."
+            cd /root/ai-jira-agent
+            git checkout main
+            git pull origin main
+
+            echo "📦 [2/4] Cập nhật Backend & chạy Database Migrations..."
+            cd /root/ai-jira-agent/backend
+            npm install
+            npm run migrate
+            pm2 restart jira-backend
+
+            echo "🎨 [3/4] Cài đặt & Build lại Frontend..."
+            cd /root/ai-jira-agent/frontend
+            npm install
+            npm run build
+
+            echo "🔄 [4/4] Khởi động lại dịch vụ Web Nginx..."
+            systemctl reload nginx
+
+            echo "✅ Web đã được cập nhật thành công lên phiên bản mới nhất!"
