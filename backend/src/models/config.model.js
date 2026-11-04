@@ -120,6 +120,17 @@ class ConfigModel {
     const { rows } = await db.query(query, [userId]);
     return rows[0] || null;
   }
+
+  static async findAllActiveStandups() {
+    const query = `
+      SELECT id, user_id, standup_enabled, standup_time, standup_days, standup_timezone, standup_channel,
+             discord_webhook_url, slack_webhook_url, notification_email
+      FROM configurations
+      WHERE standup_enabled = true;
+    `;
+    const { rows } = await db.query(query);
+    return rows;
+  }
 }
 
 module.exports = ConfigModel;
