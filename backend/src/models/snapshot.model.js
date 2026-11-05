@@ -173,6 +173,82 @@ class SnapshotModel {
     const { rows } = await db.query(query, [projectId, snapshotDate]);
     return rows[0] || null;
   }
+
+  /**
+   * Lấy lịch sử snapshots của tất cả dự án thuộc về người dùng, gom nhóm theo snapshot_date
+   */
+  static async findByUserId(userId, { limit = 30 } = {}) {
+    const query = `
+      SELECT 
+        snapshot_date,
+        MAX(calculated_at) as calculated_at,
+        SUM(total_issues)::int as total_issues,
+        SUM(to_do_issues)::int as to_do_issues,
+        SUM(in_progress_issues)::int as in_progress_issues,
+        SUM(done_issues)::int as done_issues,
+        ROUND(
+          CASE WHEN SUM(total_issues) > 0 
+               THEN (SUM(done_issues)::numeric / SUM(total_issues)::numeric) * 100 
+               ELSE 0 
+          END, 2
+        )::numeric as completion_rate,
+        SUM(story_points) as story_points,
+        SUM(completed_story_points) as completed_story_points,
+        COUNT(DISTINCT project_id)::int as projects_count
+      FROM project_analytics_snapshots
+      WHERE user_id = $1
+      GROUP BY snapshot_date
+      ORDER BY snapshot_date DESC
+      LIMIT $2;
+    `;
+    const { rows } = await db.query(query, [userId, limit]);
+    return rows;
+  }
+
+  /**
+   * Lấy snapshot mới nhất kèm phân tích biến động cho toàn bộ dự án của người dùng
+   */
+  static async findLatestByUserId(userId) {
+    const snapshots = await this.findByUserId(userId, { limit: 2 });
+    if (!snapshots || snapshots.length === 0) return null;
+    const latest = snapshots[0];
+    const previous = snapshots.length > 1 ? snapshots[1] : null;
+
+    let narrative = 'Đây là bản snapshot đầu tiên của toàn bộ dự án.';
+    let fluctuations = {
+      hasPreviousSnapshot: false,
+      baselineDate: null,
+      totalIssuesChange: 0,
+      doneIssuesChange: 0,
+      inProgressIssuesChange: 0,
+      toDoIssuesChange: 0,
+      completionRateChange: 0,
+      narrative,
+    };
+
+    if (previous) {
+      const totalChange = latest.total_issues - previous.total_issues;
+      const doneChange = latest.done_issues - previous.done_issues;
+      const inProgressChange = latest.in_progress_issues - previous.in_progress_issues;
+      const toDoChange = latest.to_do_issues - previous.to_do_issues;
+      const rateChange = parseFloat((Number(latest.completion_rate) - Number(previous.completion_rate)).toFixed(2));
+      fluctuations = {
+        hasPreviousSnapshot: true,
+        baselineDate: previous.snapshot_date,
+        totalIssuesChange: totalChange,
+        doneIssuesChange: doneChange,
+        inProgressIssuesChange: inProgressChange,
+        toDoIssuesChange: toDoChange,
+        completionRateChange: rateChange,
+        narrative: `Tổng số công việc: ${totalChange > 0 ? '+' : ''}${totalChange}; Số công việc hoàn thành: ${doneChange > 0 ? '+' : ''}${doneChange}; Tỷ lệ hoàn thành: ${rateChange > 0 ? '+' : ''}${rateChange}%`,
+      };
+    }
+
+    return {
+      ...latest,
+      fluctuations,
+    };
+  }
 }
 
 module.exports = SnapshotModel;

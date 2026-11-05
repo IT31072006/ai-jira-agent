@@ -43,7 +43,7 @@ async function runTests() {
   let passedTests = 0;
   let totalTests = 0;
   let testServer = null;
-  const TEST_PORT = 5002;
+  const TEST_PORT = parseInt(process.env.TEST_PORT || '5000', 10);
   const TEST_SERVER_URL = `http://localhost:${TEST_PORT}`;
 
   function testAssert(condition, testName) {
@@ -435,13 +435,14 @@ async function runTests() {
 
     if (passedTests === totalTests) {
       console.log('🎉 TẤT CẢ TIÊU CHÍ CỦA FLOW 10 DAILY AUTOMATION ĐÃ ĐẠT 100%!\n');
+      process.exit(0);
     } else {
       console.error(`⚠️ CÓ ${totalTests - passedTests} BÀI TEST CHƯA ĐẠT.`);
-      process.exitCode = 1;
+      process.exit(1);
     }
   } catch (err) {
     console.error('❌ Lỗi ngoại lệ trong quá trình chạy kiểm thử:', err);
-    process.exitCode = 1;
+    process.exit(1);
   } finally {
     if (testServer) {
       testServer.close();

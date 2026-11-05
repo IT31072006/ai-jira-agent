@@ -1,0 +1,409 @@
+<USER_REQUEST>
+# FULL SYSTEM AUDIT — AI REQUIREMENT-TO-JIRA AGENT
+
+## VAI TRÒ
+
+Hãy đóng vai Senior Software Architect, Backend Engineer, QA Automation Engineer, Security Engineer và n8n Workflow Specialist.
+
+Tôi yêu cầu bạn thực hiện **kiểm toán kỹ thuật toàn diện (Full System Audit)** đối với toàn bộ dự án AI Requirement-to-Jira Agent hiện tại.
+
+**Đây là nhiệm vụ kiểm tra, xác minh và phát hiện lỗi thực tế, không phải nhiệm vụ viết tài liệu mô tả dự án.**
+
+Không được giả định rằng một chức năng hoạt động chỉ vì mã nguồn của nó tồn tại.
+
+Phải phân biệt rõ:
+- PASS: Đã kiểm thử thực tế và thành công.
+- FAIL: Đã kiểm thử và phát hiện lỗi.
+- WARNING: Phát hiện rủi ro hoặc vấn đề tiềm ẩn.
+- NOT TESTED: Chưa thể kiểm thử.
+- NOT IMPLEMENTED: Chức năng chưa được triển khai.
+
+Không được báo PASS cho những chức năng chỉ được kiểm tra bằng cách đọc code.
+
+---
+
+## PHẦN 1 — KIỂM TRA KIẾN TRÚC TOÀN HỆ THỐNG
+
+Kiểm tra toàn bộ kiến trúc:
+
+- React Frontend.
+- Node.js / Express Backend.
+- PostgreSQL Database.
+- n8n Workflow Automation.
+- Google Gemini AI Integration.
+- Jira Cloud Integration.
+- Webhook và các dịch vụ thông báo.
+
+Yêu cầu:
+
+1. Xác định cấu trúc thư mục thực tế.
+2. Xác định các service và API hiện có.
+3. Kiểm tra đường đi dữ liệu giữa các thành phần.
+4. Phát hiện API không được sử dụng.
+5. Phát hiện chức năng Frontend chưa kết nối Backend.
+6. Phát hiện Backend có API nhưng chưa triển khai nghiệp vụ.
+7. Kiểm tra xử lý lỗi, timeout và các trường hợp service ngừng hoạt động.
+8. Kiểm tra cấu hình môi trường phát triển và triển khai.
+
+Không đưa ra nhận định dựa trên tên file hoặc tên hàm mà chưa đọc phần triển khai.
+
+## PHẦN 2 — KIỂM TRA FRONTEND
+
+Kiểm tra toàn bộ chức năng giao diện:
+
+- Đăng ký, đăng nhập và đăng xuất.
+- Quản lý Workspace.
+- Quản lý Project.
+- Phân tích yêu cầu bằng AI.
+- Tạo Epic, Story, Task và Sub-task.
+- Đồng bộ dữ liệu Jira.
+- Dashboard Analytics.
+- Xuất tài liệu.
+- Thông báo tự động.
+- Lịch sử thực thi và đồng bộ.
+
+Đặc biệt kiểm tra:
+
+- Khi chọn Project A, có xuất hiện dữ liệu Project B không?
+- Khi chuyển Project, Dashboard có cập nhật đúng không?
+- Có component bị render trùng không?
+- Có request API bị gọi lặp vô hạn không?
+- Có dữ liệu giả bị hiển thị như dữ liệu thật không?
+- Có lỗi React runtime hoặc console không?
+- Giao diện có bị vỡ trên các độ phân giải thông dụng không?
+- Các nút có thực sự thực hiện đúng hành động không?
+
+Không tự ý thiết kế lại giao diện.
+
+## PHẦN 3 — KIỂM TRA BACKEND
+
+Kiểm tra:
+
+1. API routing và controller.
+2. Authentication JWT.
+3. Authorization theo User, Workspace và Project.
+4. Validation dữ liệu đầu vào.
+5. Error handling.
+6. Xử lý bất đồng bộ.
+7. Database transactions.
+8. API kết nối Gemini và Jira.
+9. API kết nối n8n.
+10. Cơ chế retry, timeout và chống request trùng.
+
+Phát hiện:
+
+- API trả HTTP 200 nhưng nghiệp vụ thực tế thất bại.
+- API trả success khi chưa lưu dữ liệu.
+- Endpoint tồn tại nhưng chỉ trả mock response.
+- Lỗi làm rò rỉ thông tin giữa các Project.
+- Trường hợp exception bị bỏ qua.
+- Race condition khi nhiều request chạy đồng thời.
+
+Không thay đổi API contract đang được sử dụng nếu chưa đánh giá ảnh hưởng.
+
+## PHẦN 4 — KIỂM TRA POSTGRESQL
+
+Đối chiếu entity, schema, migration, repository và các truy vấn thực tế.
+
+Kiểm tra:
+
+- Các bảng cần thiết có tồn tại không?
+- Khóa chính, khóa ngoại và quan hệ có đúng không?
+- Dữ liệu User, Workspace, Project có được phân tách chính xác không?
+- Có nguy cơ dữ liệu trùng lặp không?
+- Các thao tác ghi có transaction khi cần thiết không?
+- Có truy vấn N+1 hoặc truy vấn quá chậm không?
+- Có dữ liệu thống kê hoặc báo cáo giả không?
+
+Không được xóa bảng, reset database hoặc làm mất dữ liệu hiện có.
+
+## PHẦN 5 — KIỂM TRA TOÀN BỘ N8N WORKFLOWS
+
+Kiểm tra tất cả các Flow đã triển khai.
+
+Đối với mỗi Flow, xác minh:
+
+- Số Node thực tế.
+- Số MAIN Node và AUX Node.
+- Trigger.
+- Đường kết nối giữa các Node.
+- Input và output.
+- Biểu thức tham chiếu dữ liệu.
+- Các nhánh IF/Switch.
+- Error handling.
+- Webhook Test URL và Production URL.
+- Cấu hình Authentication.
+- API Backend được gọi.
+- Khả năng hoạt động End-to-End.
+- Workflow có được Published hay chưa, nếu có quyền truy cập n8n.
+
+**RÀNG BUỘC QUAN TRỌNG:**
+
+- Không sửa Flow 1–9.
+- Không sửa Flow 11, 12, 13.
+- Không thêm hoặc xóa Node tùy tiện.
+- Không tự tạo workflow mới.
+- Chỉ báo cáo vấn đề phát hiện ở các Flow ngoài Flow 10.
+
+## PHẦN 6 — KIỂM TOÁN CHUYÊN SÂU FLOW 10
+
+Đây là phần ưu tiên cao nhất.
+
+Flow 10 hiện có yêu cầu:
+
+- 12 MAIN Node.
+- 4 AUX Node.
+- Tổng cộng 16 Node.
+- Webhook Trigger cho Dashboard.
+- Schedule Trigger lúc 08:00 hằng ngày.
+- Timezone: Asia/Ho_Chi_Minh.
+
+### A. Kiểm tra cơ chế tự động
+
+Xác minh chuỗi xử lý:
+
+Schedule Trigger 08:00
+→ Backend Daily Analytics Job
+→ Xác định Project cần thống kê
+→ Gọi Flow 10 lấy KPI
+→ Xử lý kết quả
+→ Lưu Daily Snapshot
+→ Ghi nhận trạng thái chạy
+→ Dashboard truy vấn lịch sử.
+
+Không được mặc định rằng toàn bộ chuỗi hoạt động chỉ vì hai Node AUX 03 và AUX 04 được nối với nhau.
+
+### B. Kiểm tra Backend Daily Analytics
+
+Kiểm tra endpoint:
+
+`POST /api/internal/dashboard/daily-analytics/run`
+
+Xác minh:
+
+1. Endpoint có thật và được đăng ký đúng không?
+2. Xác thực service-to-service có hoạt động không?
+3. Backend có xác định đúng phạm vi Project không?
+4. Backend có gọi Webhook Flow 10 chính xác không?
+5. Có tạo vòng lặp Backend ↔ n8n không?
+6. Có xử lý lỗi ở từng Project không?
+7. Một Project lỗi có làm hỏng toàn bộ batch không?
+8. Có lưu trạng thái thành công và thất bại không?
+9. Có chống chạy trùng khi cùng một ngày được kích hoạt nhiều lần không?
+10. Có giới hạn số lần retry và timeout hợp lý không?
+
+### C. Kiểm tra dữ liệu thống kê
+
+Xác minh các KPI:
+
+- Total Issues.
+- To Do Issues.
+- In Progress Issues.
+- Done Issues.
+- Completion Rate.
+- Total Story Points.
+- Completed Story Points.
+- Issue Creation Trend.
+- Epic/Story/Task Breakdown.
+
+Không được tự tạo Story Points bằng hệ số giả định.
+
+Completed Story Points phải được tính từ Story Points thực tế của các Issue hoàn thành, nếu dữ liệu đó tồn tại.
+
+Kiểm tra tỷ lệ hoàn thành, dữ liệu rỗng, chia cho 0 và tính nhất quán giữa các API.
+
+### D. Kiểm tra Daily Snapshot
+
+Xác minh:
+
+- Snapshot được lưu thật trong PostgreSQL.
+- Có định danh Project chính xác.
+- Có ngày thống kê theo múi giờ Việt Nam.
+- Có thời điểm thực thi.
+- Có đầy đủ KPI.
+- Có trạng thái thực thi.
+- Không ghi trùng khi job chạy lại.
+- Có thể truy vấn lịch sử 7 ngày và 30 ngày.
+- Có thể so sánh với snapshot thành công gần nhất.
+
+Không suy diễn rằng tính năng đã hoàn thành nếu chỉ có bảng database mà chưa có dữ liệu được tạo qua luồng thực tế.
+
+### E. Kiểm tra Dashboard Analytics
+
+Xác minh:
+
+- Dashboard hiện tại vẫn hoạt động.
+- Bộ lọc Project/Workspace chính xác.
+- Có hiển thị lịch sử 7 ngày và 30 ngày.
+- Biểu đồ sử dụng dữ liệu PostgreSQL thật.
+- Có hiển thị thời điểm snapshot gần nhất.
+- Dữ liệu realtime không bị thay thế bởi snapshot cũ.
+- Người dùng không thể xem lịch sử của Project mà mình không có quyền.
+
+### F. Kiểm tra Schedule
+
+Xác minh:
+
+- Scheduler thực sự được kích hoạt.
+- Workflow đã Published đúng phiên bản.
+- Chỉ có một Scheduler chạy cho cùng một tác vụ.
+- Không còn workflow scheduler cũ gây chạy trùng.
+- Timezone thực tế đúng Asia/Ho_Chi_Minh.
+- Cấu hình môi trường có thể kết nối Backend.
+
+Lưu ý: Không cần chờ đến 08:00 để kiểm thử nghiệp vụ. Có thể kích hoạt job kiểm thử thủ công với dữ liệu an toàn, nhưng phải ghi rõ đó là kiểm thử thủ công, không được coi là bằng chứng Scheduler đã tự chạy đúng giờ.
+
+## PHẦN 7 — KIỂM TRA BẢO MẬT
+
+Tìm và phân loại các vấn đề:
+
+- Hardcoded API Keys hoặc Secrets.
+- Truyền Secret không an toàn.
+- JWT validation.
+- API authorization.
+- Webhook authentication.
+- SSRF.
+- SQL Injection.
+- XSS.
+- CORS.
+- Lộ dữ liệu Project.
+- Secrets trong log.
+- Biến môi trường chưa được cấu hình.
+
+Không in giá trị Secret vào báo cáo.
+
+Không tự thay Secret hoặc Credential trong hệ thống đang chạy.
+
+## PHẦN 8 — KIỂM THỬ END-TO-END
+
+Nếu môi trường hỗ trợ, thực hiện kiểm thử tích hợp có kiểm soát cho các kịch bản:
+
+**Scenario 1:** Người dùng đăng nhập → chọn Project → mở Dashboard.
+
+**Scenario 2:** Chọn Project A → kiểm tra không xuất hiện Issue của Project B.
+
+**Scenario 3:** Nhập requirement → AI phân tích → tạo Epic/Story/Task trên Jira.
+
+**Scenario 4:** Tạo Epic thành công → Flow 11 tự nhận sự kiện → gửi thông báo.
+
+**Scenario 5:** Yêu cầu xuất tài liệu → Flow 12 → tạo PDF/Markdown.
+
+**Scenario 6:** Kích hoạt Daily Analytics Job → Flow 10 thống kê → PostgreSQL lưu snapshot.
+
+**Scenario 7:** Kích hoạt Daily Analytics Job lần thứ hai trong cùng ngày → kiểm tra chống trùng.
+
+**Scenario 8:** Truy cập Dashboard → xem lịch sử 7/30 ngày.
+
+**Scenario 9:** Backend, n8n hoặc Jira tạm thời không phản hồi → kiểm tra xử lý lỗi.
+
+**Scenario 10:** User không có quyền truy cập Project → xác minh bị từ chối.
+
+Chỉ chạy thao tác ghi dữ liệu thật lên Jira hoặc gửi thông báo thật khi có môi trường kiểm thử và quyền phù hợp. Không tự ý tạo Issue hoặc gửi email hàng loạt trên môi trường production.
+
+Nếu không thể thực hiện một Scenario, đánh dấu NOT TESTED, nêu rõ lý do và cách kiểm thử thủ công.
+
+## PHẦN 9 — KIỂM TRA HIỆU NĂNG VÀ TÍNH ỔN ĐỊNH
+
+Kiểm tra:
+
+- Request bị gọi lặp.
+- Query chậm.
+- Memory leak hoặc resource leak.
+- Các lỗi timeout.
+- Race condition.
+- Retry không giới hạn.
+- Workflow chạy đồng thời.
+- Khả năng xử lý nhiều Project.
+- Cơ chế ghi log và truy vết lỗi.
+- Cách hệ thống hoạt động khi một dịch vụ bị gián đoạn.
+
+Phân biệt lỗi có thể tái hiện và rủi ro suy luận từ mã nguồn.
+
+## PHẦN 10 — BÁO CÁO KIỂM TOÁN
+
+Sau khi kiểm tra, tạo file:
+
+`FULL_SYSTEM_AUDIT_REPORT.md`
+
+Báo cáo bắt buộc gồm:
+
+### 1. Executive Summary
+- Đánh giá tổng thể.
+- Những thành phần đã xác minh hoạt động.
+- Những thành phần chưa hoàn chỉnh.
+- Rủi ro lớn nhất.
+
+### 2. Test Matrix
+Với mỗi chức năng, ghi:
+- Tên chức năng.
+- Kết quả PASS/FAIL/WARNING/NOT TESTED/NOT IMPLEMENTED.
+- Bằng chứng kiểm tra.
+- Mức độ ảnh hưởng.
+- Vị trí mã nguồn liên quan.
+
+### 3. Flow Audit
+Bảng kết quả kiểm tra từng Flow, đặc biệt Flow 10, 11 và 12.
+
+### 4. Flow 10 End-to-End Audit
+Phân tích riêng toàn bộ chuỗi tự động lúc 08:00 và trạng thái từng giai đoạn.
+
+### 5. Bug Report
+Với mỗi lỗi:
+- ID lỗi.
+- Mức độ: Critical / High / Medium / Low.
+- File và dòng code liên quan.
+- Nguyên nhân.
+- Cách tái hiện.
+- Kết quả thực tế.
+- Kết quả mong muốn.
+- Đề xuất sửa.
+
+### 6. Security Findings
+Danh sách lỗ hổng bảo mật và hướng khắc phục.
+
+### 7. Improvement Plan
+Kế hoạch sửa lỗi theo thứ tự ưu tiên, có đánh giá tác động đến các chức năng khác.
+
+### 8. Final Verdict
+Trả lời rõ ràng:
+
+- Dự án đã sẵn sàng Demo chưa?
+- Flow 10 có thực sự tự động thống kê lúc 08:00 không?
+- Snapshot có thực sự được lưu không?
+- Dashboard có sử dụng được lịch sử thống kê không?
+- Flow 11 có thực sự tự gửi thông báo khi tạo Epic không?
+- Flow 12 có thực sự xuất file thành công không?
+- Có lỗi nghiêm trọng nào chưa xử lý không?
+
+---
+
+## QUY TẮC BẮT BUỘC
+
+1. Trong lượt này, chỉ kiểm tra và viết báo cáo; không tự ý sửa mã nguồn nghiệp vụ.
+2. Không xóa dữ liệu hoặc thay đổi cấu trúc database.
+3. Không sửa các n8n Flow đã hoàn thành.
+4. Không chạy migration phá hủy dữ liệu.
+5. Không sửa cấu hình production.
+6. Không tự động Publish hoặc Unpublish workflow.
+7. Không tự động commit hoặc push Git.
+8. Không coi mock data là kết quả kiểm thử thành công.
+9. Không tuyên bố PASS nếu không có bằng chứng.
+10. Đối với phần không có quyền truy cập, phải ghi NOT TESTED thay vì suy đoán.
+
+**Sau khi hoàn thành kiểm toán, hãy trình bày tóm tắt lỗi theo mức độ ưu tiên và đề xuất kế hoạch sửa. Chờ tôi xác nhận trước khi thực hiện các thay đổi.**
+
+Mục tiêu cuối cùng không phải là có một báo cáo đẹp mà là xác định chính xác hệ thống đã hoạt động đến đâu, lỗi nằm ở đâu và những gì còn thiếu để đạt trạng thái sẵn sàng Demo và nghiệm thu.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-05T10:45:27+07:00.
+
+The user's current state is as follows:
+Active Document: /home/tmthang/Downloads/ai-jira-agent/n8n/workflows/flow-10-dashboard-analytics.json (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 712
+Other open documents:
+- /home/tmthang/Downloads/ai-jira-agent/frontend/src/pages/DashboardPage.jsx (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/backend/package-lock.json (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/n8n/workflows/flow-12-export-documentation.json (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/n8n/workflows/flow-11-epic-notification.json (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/backend/src/tests/test_flow_10_daily_automation.js (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

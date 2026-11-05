@@ -78,6 +78,7 @@ class DashboardFlowService {
 
       const headers = {
         'Content-Type': 'application/json',
+        'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
       };
 
       try {

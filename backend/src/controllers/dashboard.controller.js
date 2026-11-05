@@ -2,6 +2,7 @@ const DashboardFlowService = require('../services/dashboard-flow.service');
 const DashboardService = require('../services/dashboard.service');
 const DailyAnalyticsService = require('../services/daily-analytics.service');
 const ProjectModel = require('../models/project.model');
+const SnapshotModel = require('../models/snapshot.model');
 
 class DashboardController {
   /**
@@ -106,47 +107,54 @@ class DashboardController {
 
   /**
    * GET /api/dashboard/snapshots
-   * Lấy lịch sử snapshots thống kê hằng ngày của một dự án (phục vụ biểu đồ tiến độ)
+   * Lấy lịch sử snapshots thống kê hằng ngày (theo dự án cụ thể hoặc tổng hợp tất cả dự án của người dùng)
    */
   static async getSnapshots(req, res, next) {
     try {
       const userId = req.user.id;
       const { projectId, limit = 30, startDate, endDate } = req.query;
+      const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 30));
 
-      if (!projectId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Vui lòng cung cấp projectId để xem lịch sử snapshot.',
+      if (projectId) {
+        // Xác minh quyền sở hữu dự án
+        const project = await ProjectModel.findByIdAndUserId(projectId, userId);
+        if (!project) {
+          return res.status(404).json({
+            success: false,
+            error: 'Dự án không tồn tại hoặc bạn không có quyền truy cập.',
+          });
+        }
+
+        const snapshots = await DailyAnalyticsService.getProjectSnapshots(projectId, {
+          limit: parsedLimit,
+          startDate,
+          endDate,
         });
-      }
 
-      // Xác minh quyền sở hữu dự án
-      const project = await ProjectModel.findByIdAndUserId(projectId, userId);
-      if (!project) {
-        return res.status(404).json({
-          success: false,
-          error: 'Dự án không tồn tại hoặc bạn không có quyền truy cập.',
-        });
-      }
-
-      const snapshots = await DailyAnalyticsService.getProjectSnapshots(projectId, {
-        limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 30)),
-        startDate,
-        endDate,
-      });
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          project: {
-            id: project.id,
-            name: project.name,
-            projectKey: project.project_key,
+        return res.status(200).json({
+          success: true,
+          data: {
+            project: {
+              id: project.id,
+              name: project.name,
+              projectKey: project.project_key,
+            },
+            snapshots,
+            total: snapshots.length,
           },
-          snapshots,
-          total: snapshots.length,
-        },
-      });
+        });
+      } else {
+        // Lấy lịch sử tổng hợp tất cả dự án thuộc về người dùng
+        const snapshots = await SnapshotModel.findByUserId(userId, { limit: parsedLimit });
+        return res.status(200).json({
+          success: true,
+          data: {
+            project: null,
+            snapshots,
+            total: snapshots.length,
+          },
+        });
+      }
     } catch (error) {
       next(error);
     }
@@ -161,34 +169,38 @@ class DashboardController {
       const userId = req.user.id;
       const { projectId } = req.query;
 
-      if (!projectId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Vui lòng cung cấp projectId.',
-        });
-      }
+      if (projectId) {
+        const project = await ProjectModel.findByIdAndUserId(projectId, userId);
+        if (!project) {
+          return res.status(404).json({
+            success: false,
+            error: 'Dự án không tồn tại hoặc bạn không có quyền truy cập.',
+          });
+        }
 
-      const project = await ProjectModel.findByIdAndUserId(projectId, userId);
-      if (!project) {
-        return res.status(404).json({
-          success: false,
-          error: 'Dự án không tồn tại hoặc bạn không có quyền truy cập.',
-        });
-      }
+        const snapshot = await DailyAnalyticsService.getLatestSnapshotWithFluctuation(projectId);
 
-      const snapshot = await DailyAnalyticsService.getLatestSnapshotWithFluctuation(projectId);
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          project: {
-            id: project.id,
-            name: project.name,
-            projectKey: project.project_key,
+        return res.status(200).json({
+          success: true,
+          data: {
+            project: {
+              id: project.id,
+              name: project.name,
+              projectKey: project.project_key,
+            },
+            snapshot,
           },
-          snapshot,
-        },
-      });
+        });
+      } else {
+        const snapshot = await SnapshotModel.findLatestByUserId(userId);
+        return res.status(200).json({
+          success: true,
+          data: {
+            project: null,
+            snapshot,
+          },
+        });
+      }
     } catch (error) {
       next(error);
     }

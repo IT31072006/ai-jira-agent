@@ -189,11 +189,13 @@ class InternalDashboardController {
    */
   static async runDailyAnalytics(req, res) {
     try {
-      const { triggerSource, timezone, forceRefresh } = req.body || {};
+      const { triggerSource, timezone, forceRefresh, reportDate, runId } = req.body || {};
       const result = await DailyAnalyticsService.runDailyAnalytics({
-        triggerSource: triggerSource || 'N8N_SCHEDULER_0800',
+        triggerSource: triggerSource || 'N8N_FLOW_10_DAILY_SCHEDULE',
         timezone: timezone || 'Asia/Ho_Chi_Minh',
-        forceRefresh: forceRefresh !== false,
+        forceRefresh: forceRefresh === true,
+        reportDate,
+        runId,
       });
 
       return res.status(200).json({

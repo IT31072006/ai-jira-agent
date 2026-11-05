@@ -56,6 +56,12 @@ const env = {
     process.env.INTERNAL_SERVICE_KEY ||
     process.env.N8N_WEBHOOK_SECRET ||
     'ai_jira_agent_internal_secret_2026',
+  FLOW10_WEBHOOK_KEY:
+    process.env.FLOW10_WEBHOOK_KEY ||
+    'ai_jira_agent_flow10_webhook_secret_key_2026',
+  BACKEND_INTERNAL_URL:
+    process.env.BACKEND_INTERNAL_URL ||
+    'http://localhost:5000',
 
   // Luồng 12: Export Documentation Webhook
   N8N_EXPORT_WEBHOOK_URL:

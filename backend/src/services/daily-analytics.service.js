@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const env = require('../config/env');
 const SnapshotModel = require('../models/snapshot.model');
+const DailyJobModel = require('../models/daily-job.model');
 const DashboardFlowService = require('./dashboard-flow.service');
 
 class DailyAnalyticsService {
@@ -217,30 +218,67 @@ class DailyAnalyticsService {
   /**
    * Kích hoạt toàn bộ luồng Daily Analytics (được gọi từ n8n Scheduler hoặc cron nội bộ)
    */
-  static async runDailyAnalytics({ triggerSource = 'SCHEDULED_AUTOMATION_0800', timezone = 'Asia/Ho_Chi_Minh', forceRefresh = true } = {}) {
+  static async runDailyAnalytics({
+    triggerSource = 'N8N_FLOW_10_DAILY_SCHEDULE',
+    timezone = 'Asia/Ho_Chi_Minh',
+    reportDate = null,
+    runId = null,
+    forceRefresh = false,
+  } = {}) {
     const startTime = Date.now();
-    const snapshotDate = this.getVietnamDate();
-    const jobId = `job-daily-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const snapshotDate = reportDate || this.getVietnamDate();
+    const effectiveRunId = runId || `flow10-daily-${snapshotDate}-${Date.now()}`;
 
-    console.log(`[DailyAnalyticsService] Bắt đầu chạy Daily Project Analytics lúc 08:00 (${timezone}) - Ngày: ${snapshotDate} (Job: ${jobId})`);
+    // 0. Kiểm tra chống chạy trùng lặp phiên (Idempotency) nếu không forceRefresh
+    if (!forceRefresh) {
+      const existingJob = await DailyJobModel.findByRunId(effectiveRunId);
+      if (existingJob && existingJob.status === 'completed') {
+        console.log(`[DailyAnalyticsService] Job ${effectiveRunId} đã hoàn tất trước đó, bỏ qua chạy lại (Idempotency check).`);
+        return {
+          success: true,
+          jobId: effectiveRunId,
+          snapshotDate,
+          skipped: true,
+          message: 'Job đã hoàn thành trước đó cho ngày hôm nay, bỏ qua chạy lại.',
+          job: existingJob,
+        };
+      }
+    }
+
+    console.log(`[DailyAnalyticsService] Bắt đầu chạy Daily Project Analytics lúc 08:00 (${timezone}) - Ngày: ${snapshotDate} (Job: ${effectiveRunId})`);
 
     // 1. Xác định các dự án hợp lệ
     const projects = await this.getEligibleProjects();
     console.log(`[DailyAnalyticsService] Tìm thấy ${projects.length} dự án hợp lệ cần xử lý thống kê.`);
 
+    // 2. Ghi nhận job vào dashboard_daily_jobs với trạng thái running
+    await DailyJobModel.create({
+      reportDate: snapshotDate,
+      runId: effectiveRunId,
+      triggerSource,
+      projectsTotal: projects.length,
+      status: 'running',
+    });
+
     const results = [];
     let succeededCount = 0;
     let failedCount = 0;
+    const errors = [];
 
-    // 2. Xử lý từng dự án một cách độc lập (Fault-tolerant: dự án này lỗi không ảnh hưởng dự án khác)
+    // 3. Xử lý từng dự án một cách độc lập (Fault-tolerant: dự án này lỗi không ảnh hưởng dự án khác)
     for (const project of projects) {
       try {
-        const res = await this.processProjectDailyAnalytics(project, { snapshotDate, jobId, forceRefresh });
+        const res = await this.processProjectDailyAnalytics(project, {
+          snapshotDate,
+          jobId: effectiveRunId,
+          forceRefresh,
+        });
         results.push(res);
         succeededCount++;
       } catch (err) {
         console.error(`[DailyAnalyticsService] Thất bại khi xử lý dự án "${project.name}" (ID: ${project.id}):`, err.message);
         failedCount++;
+        errors.push(`${project.name}: ${err.message}`);
 
         // Ghi nhận bản ghi lỗi cho dự án này
         try {
@@ -255,7 +293,7 @@ class DailyAnalyticsService {
             doneIssues: 0,
             completionRate: 0,
             executionStatus: 'FAILED',
-            jobId,
+            jobId: effectiveRunId,
             summaryData: { error: err.message },
           });
         } catch (dbErr) {
@@ -272,14 +310,26 @@ class DailyAnalyticsService {
     }
 
     const executionMs = Date.now() - startTime;
-    console.log(`[DailyAnalyticsService] Hoàn thành Daily Analytics: ${succeededCount} thành công, ${failedCount} thất bại trong ${executionMs}ms.`);
+    const finalStatus = failedCount === 0 ? 'completed' : (succeededCount > 0 ? 'partial_failed' : 'failed');
+    const errorSummary = errors.length > 0 ? errors.slice(0, 5).join('; ') : null;
+
+    // 4. Cập nhật kết quả phiên chạy vào dashboard_daily_jobs
+    await DailyJobModel.updateCompletion(effectiveRunId, {
+      status: finalStatus,
+      projectsSucceeded: succeededCount,
+      projectsFailed: failedCount,
+      errorSummary,
+    });
+
+    console.log(`[DailyAnalyticsService] Hoàn thành Daily Analytics: ${succeededCount} thành công, ${failedCount} thất bại trong ${executionMs}ms (Trạng thái: ${finalStatus}).`);
 
     return {
-      success: true,
-      jobId,
+      success: finalStatus !== 'failed',
+      jobId: effectiveRunId,
       snapshotDate,
       triggerSource,
       timezone,
+      status: finalStatus,
       totalProjects: projects.length,
       succeeded: succeededCount,
       failed: failedCount,

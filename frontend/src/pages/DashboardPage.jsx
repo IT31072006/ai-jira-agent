@@ -8,6 +8,7 @@ import {
   BarChart,
   Bar,
   Line,
+  LineChart,
   PieChart,
   Pie,
   Cell,
@@ -30,11 +31,12 @@ import {
   ChevronDown,
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
-  Database,
   Sparkles,
   Activity,
   Server,
+  History,
+  Clock,
+  Play,
 } from 'lucide-react';
 
 // Custom Tooltip cho Recharts tương thích dark mode, memoized để tránh re-render thừa
@@ -197,6 +199,101 @@ export const DashboardPage = () => {
   const trendChartData = useMemo(() => {
     return trend?.trend || [];
   }, [trend]);
+
+  // State quản lý Lịch sử thống kê tự động (08:00 AM)
+  const [historyDays, setHistoryDays] = useState(7);
+  const [snapshots, setSnapshots] = useState([]);
+  const [latestSnapshot, setLatestSnapshot] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [triggeringDaily, setTriggeringDaily] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+
+  // Tải dữ liệu lịch sử snapshot
+  const fetchHistoryData = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const [snapshotsRes, latestRes] = await Promise.all([
+        dashboardApi.getSnapshots({
+          projectId: selectedProjectId || undefined,
+          days: historyDays,
+        }),
+        dashboardApi.getLatestSnapshot(selectedProjectId || undefined),
+      ]);
+      setSnapshots(snapshotsRes.data?.snapshots || []);
+      setLatestSnapshot(latestRes.data?.snapshot || null);
+    } catch (err) {
+      console.error('Lỗi khi tải lịch sử snapshot:', err);
+      setHistoryError(err?.response?.data?.error || 'Không thể tải lịch sử thống kê.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [selectedProjectId, historyDays]);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      dashboardApi.getSnapshots({
+        projectId: selectedProjectId || undefined,
+        days: historyDays,
+      }),
+      dashboardApi.getLatestSnapshot(selectedProjectId || undefined),
+    ])
+      .then(([snapshotsRes, latestRes]) => {
+        if (isMounted) {
+          setSnapshots(snapshotsRes.data?.snapshots || []);
+          setLatestSnapshot(latestRes.data?.snapshot || null);
+          setHistoryError('');
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.error('Lỗi khi tải lịch sử snapshot:', err);
+          setHistoryError(err?.response?.data?.error || 'Không thể tải lịch sử thống kê.');
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProjectId, historyDays]);
+
+  // Kích hoạt chạy thống kê thủ công theo yêu cầu (Chạy thử)
+  const handleTriggerDaily = async () => {
+    setTriggeringDaily(true);
+    try {
+      await dashboardApi.triggerDailyAnalytics(selectedProjectId || undefined);
+      await fetchHistoryData();
+    } catch (err) {
+      console.error('Lỗi khi kích hoạt thống kê:', err);
+      alert(err?.response?.data?.error || 'Không thể kích hoạt thống kê tự động.');
+    } finally {
+      setTriggeringDaily(false);
+    }
+  };
+
+  // Memoize dữ liệu cho biểu đồ lịch sử snapshot theo ngày
+  const snapshotChartData = useMemo(() => {
+    if (!snapshots || snapshots.length === 0) return [];
+    return [...snapshots].reverse().map((s) => {
+      const dateParts = String(s.snapshot_date).split('-');
+      const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : s.snapshot_date;
+      return {
+        date: formattedDate,
+        fullDate: s.snapshot_date,
+        'To Do': Number(s.to_do_issues || 0),
+        'In Progress': Number(s.in_progress_issues || 0),
+        'Done': Number(s.done_issues || 0),
+        'Tỷ lệ hoàn thành (%)': Number(s.completion_rate || 0),
+        total: Number(s.total_issues || 0),
+      };
+    });
+  }, [snapshots]);
 
   // Định dạng ngày hiển thị
   const formatTime = (date) => {
@@ -642,6 +739,229 @@ export const DashboardPage = () => {
                   </div>
                 </>
               )}
+
+              {/* PHẦN LỊCH SỬ TIẾN ĐỘ THỐNG KÊ TỰ ĐỘNG (08:00 AM) */}
+              <div className="card" style={{ marginBottom: '2rem' }}>
+                <div className="card-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+                  <div className="card-title-group">
+                    <History className="card-icon text-primary" size={22} />
+                    <div>
+                      <h3>Lịch sử tiến độ & Thống kê tự động (08:00 AM)</h3>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Theo dõi biến động số lượng Issue và Tỷ lệ hoàn thành qua các bản snapshot định kỳ
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {/* Bộ chọn 7 ngày / 30 ngày */}
+                    <div style={{ display: 'inline-flex', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '3px', border: '1px solid var(--border-subtle)' }}>
+                      <button
+                        onClick={() => setHistoryDays(7)}
+                        className={`btn btn-sm ${historyDays === 7 ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem' }}
+                      >
+                        7 ngày qua
+                      </button>
+                      <button
+                        onClick={() => setHistoryDays(30)}
+                        className={`btn btn-sm ${historyDays === 30 ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem' }}
+                      >
+                        30 ngày qua
+                      </button>
+                    </div>
+
+                    {/* Nút chạy thử thống kê ngay */}
+                    <button
+                      onClick={handleTriggerDaily}
+                      disabled={triggeringDaily}
+                      className="btn btn-sm btn-outline"
+                      title="Kích hoạt thống kê và lưu snapshot ngay bây giờ (Chạy thử)"
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem' }}
+                    >
+                      <Play size={13} className={triggeringDaily ? 'spin-icon' : ''} />
+                      <span>{triggeringDaily ? 'Đang tạo snapshot...' : 'Chạy thống kê ngay'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card-body">
+                  {historyError && (
+                    <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#fee2e2', border: '1px solid #f87171', borderRadius: 'var(--radius-sm)', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+                      <AlertCircle size={16} />
+                      <span>{historyError}</span>
+                    </div>
+                  )}
+
+                  {historyLoading ? (
+                    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
+                      <div className="spinner" style={{ margin: '0 auto 0.75rem' }}></div>
+                      <p>Đang tải dữ liệu lịch sử snapshot...</p>
+                    </div>
+                  ) : snapshots.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '2.5rem 1rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
+                      <Clock size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
+                      <h4 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)' }}>Chưa có bản ghi thống kê tự động</h4>
+                      <p style={{ margin: '0 0 1.25rem', fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: '520px', marginLeft: 'auto', marginRight: 'auto' }}>
+                        Hệ thống sẽ tự động quét và lưu snapshot lúc <strong>08:00 AM (Asia/Ho_Chi_Minh)</strong> mỗi ngày. Bạn cũng có thể bấm nút bên dưới để tạo bản snapshot đầu tiên ngay bây giờ.
+                      </p>
+                      <button
+                        onClick={handleTriggerDaily}
+                        disabled={triggeringDaily}
+                        className="btn btn-primary btn-sm"
+                      >
+                        <Sparkles size={14} />
+                        <span>{triggeringDaily ? 'Đang phân tích...' : 'Tạo snapshot ngay'}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Banner thông tin Snapshot gần nhất & Nhận xét biến động tiếng Việt */}
+                      {latestSnapshot && (
+                        <div
+                          style={{
+                            padding: '0.85rem 1rem',
+                            marginBottom: '1.25rem',
+                            background: 'rgba(99, 102, 241, 0.08)',
+                            border: '1px solid rgba(99, 102, 241, 0.25)',
+                            borderRadius: 'var(--radius-md)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span className="badge badge-success" style={{ fontSize: '0.725rem' }}>
+                                Snapshot {latestSnapshot.snapshot_date}
+                              </span>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                Ghi nhận lúc: {latestSnapshot.calculated_at ? `${new Date(latestSnapshot.calculated_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} (${new Date(latestSnapshot.calculated_at).toLocaleDateString('vi-VN')})` : ''}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              Chu kỳ tự động: 08:00 AM (Asia/Ho_Chi_Minh)
+                            </span>
+                          </div>
+
+                          {latestSnapshot.fluctuations?.narrative && (
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <Activity size={15} style={{ color: '#6366f1', flexShrink: 0 }} />
+                              <span>
+                                <strong>Đánh giá biến động:</strong> {latestSnapshot.fluctuations.narrative}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 3 Thẻ biến động Delta Cards */}
+                      {latestSnapshot?.fluctuations && latestSnapshot.fluctuations.hasPreviousSnapshot && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                          <div style={{ padding: '0.85rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                              Biến động hoàn thành (Δ Done)
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: latestSnapshot.fluctuations.doneIssuesChange >= 0 ? '#10b981' : '#ef4444' }}>
+                                {latestSnapshot.fluctuations.doneIssuesChange > 0 ? `+${latestSnapshot.fluctuations.doneIssuesChange}` : latestSnapshot.fluctuations.doneIssuesChange}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>so với ngày trước</span>
+                            </div>
+                          </div>
+
+                          <div style={{ padding: '0.85rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                              Biến động tỷ lệ hoàn thành (Δ Rate)
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: latestSnapshot.fluctuations.completionRateChange >= 0 ? '#10b981' : '#ef4444' }}>
+                                {latestSnapshot.fluctuations.completionRateChange > 0 ? `+${latestSnapshot.fluctuations.completionRateChange}%` : `${latestSnapshot.fluctuations.completionRateChange}%`}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>điểm phần trăm</span>
+                            </div>
+                          </div>
+
+                          <div style={{ padding: '0.85rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                              Biến động phạm vi (Δ Total Issues)
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#3b82f6' }}>
+                                {latestSnapshot.fluctuations.totalIssuesChange > 0 ? `+${latestSnapshot.fluctuations.totalIssuesChange}` : latestSnapshot.fluctuations.totalIssuesChange}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                {latestSnapshot.fluctuations.totalIssuesChange > 0 ? 'công việc mới tạo' : 'công việc'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2 Biểu đồ lịch sử */}
+                      <div className="charts-grid-row">
+                        {/* Biểu đồ 1: Biến động To Do, In Progress, Done theo ngày */}
+                        <div className="chart-card" style={{ marginBottom: 0 }}>
+                          <div className="chart-card-header">
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: '0.95rem' }}>Cơ cấu công việc theo ngày</h4>
+                              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Phân bố trạng thái To Do, In Progress và Done qua các bản snapshot
+                              </p>
+                            </div>
+                          </div>
+                          <div className="chart-wrapper" style={{ height: '260px' }}>
+                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                              <BarChart data={snapshotChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} allowDecimals={false} />
+                                <Tooltip content={<CustomChartTooltip />} />
+                                <Legend wrapperStyle={{ paddingTop: '8px', fontSize: '11px' }} />
+                                <Bar dataKey="To Do" fill="#64748b" stackId="status" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="In Progress" fill="#3b82f6" stackId="status" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="Done" fill="#10b981" stackId="status" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Biểu đồ 2: Diễn tiến Tỷ lệ hoàn thành qua các ngày */}
+                        <div className="chart-card" style={{ marginBottom: 0 }}>
+                          <div className="chart-card-header">
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: '0.95rem' }}>Diễn tiến Tỷ lệ hoàn thành (%)</h4>
+                              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Xu hướng hoàn thành dự án qua các ngày thống kê
+                              </p>
+                            </div>
+                          </div>
+                          <div className="chart-wrapper" style={{ height: '260px' }}>
+                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                              <LineChart data={snapshotChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} domain={[0, 100]} unit="%" />
+                                <Tooltip content={<CustomChartTooltip />} />
+                                <Legend wrapperStyle={{ paddingTop: '8px', fontSize: '11px' }} />
+                                <Line
+                                  type="monotone"
+                                  dataKey="Tỷ lệ hoàn thành (%)"
+                                  stroke="#6366f1"
+                                  strokeWidth={2.5}
+                                  dot={{ r: 4, fill: '#6366f1' }}
+                                  activeDot={{ r: 6 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
 
               {/* KHÔNG GIAN DỰ ÁN & BẢO MẬT HỆ THỐNG */}
               <div className="grid-2-col">

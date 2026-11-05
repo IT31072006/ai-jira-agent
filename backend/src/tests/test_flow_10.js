@@ -28,7 +28,7 @@ async function runTests() {
   let passedTests = 0;
   let totalTests = 0;
   let testServer = null;
-  const TEST_PORT = 5001;
+  const TEST_PORT = parseInt(process.env.TEST_PORT || '5000', 10);
   const TEST_SERVER_URL = `http://localhost:${TEST_PORT}`;
 
   function testAssert(condition, testName) {
@@ -255,7 +255,7 @@ async function runTests() {
     // ─────────────────────────────────────────────────────────────────
     console.log('\n--- PHẦN 5: KIỂM THỬ WORKFLOW N8N FLOW 10 TRỰC TIẾP QUA WEBHOOK ---');
 
-    // Gọi webhook n8n Flow 10 với payload đầy đủ
+    // Gọi webhook n8n Flow 10 với payload đầy đủ và header xác thực tin cậy X-Flow10-Webhook-Key
     const n8nWebhookUrl = 'http://localhost:5678/webhook/dashboard-analytics';
     const flow10Payload = {
       userId: user.id,
@@ -265,8 +265,23 @@ async function runTests() {
       internalSecret: env.INTERNAL_SERVICE_KEY,
     };
 
+    // Kiểm tra bảo mật: request thiếu header X-Flow10-Webhook-Key bị MAIN 02 từ chối 401
+    try {
+      await axios.post(n8nWebhookUrl, flow10Payload, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 8000,
+      });
+      testAssert(false, 'MAIN 02 phải chặn request thiếu X-Flow10-Webhook-Key');
+    } catch (err) {
+      testAssert(err.response?.status === 401, 'MAIN 02 chặn thành công request thiếu X-Flow10-Webhook-Key và trả về HTTP 401');
+      testAssert(err.response?.data?.errorCode === 'INVALID_DASHBOARD_REQUEST_OR_AUTH', 'Mã lỗi đúng chuẩn INVALID_DASHBOARD_REQUEST_OR_AUTH');
+    }
+
     const flow10Res = await axios.post(n8nWebhookUrl, flow10Payload, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+      },
       timeout: 8000,
     });
 
@@ -311,7 +326,13 @@ async function runTests() {
         backendUrl: TEST_SERVER_URL,
         internalSecret: env.INTERNAL_SERVICE_KEY,
       },
-      { headers: { 'Content-Type': 'application/json' }, timeout: 8000 }
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+        },
+        timeout: 8000,
+      }
     );
 
     testAssert(emptyFlowRes.data.success === true, 'Xử lý dự án trống (0 issue) thành công không lỗi');
@@ -323,7 +344,12 @@ async function runTests() {
       await axios.post(
         n8nWebhookUrl,
         { userId: '', projectId: sampleProject.id },
-        { headers: { 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+          },
+        }
       );
       testAssert(false, 'MAIN 02 phải chặn request thiếu userId');
     } catch (err) {
@@ -341,7 +367,12 @@ async function runTests() {
           backendUrl: TEST_SERVER_URL,
           internalSecret: env.INTERNAL_SERVICE_KEY,
         },
-        { headers: { 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+          },
+        }
       );
       testAssert(false, 'MAIN 03 phải chặn truy cập trái phép');
     } catch (err) {
@@ -422,6 +453,7 @@ async function runTests() {
 
     if (passedTests === totalTests) {
       console.log('🎉 TẤT CẢ CÁC BÀI TEST CỦA LUỒNG 10 ĐÃ ĐẠT 100%!');
+      process.exit(0);
     } else {
       console.error(`⚠️ Có ${totalTests - passedTests} bài kiểm thử thất bại.`);
       process.exit(1);
