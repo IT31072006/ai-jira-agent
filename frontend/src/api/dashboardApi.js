@@ -40,6 +40,38 @@ export const dashboardApi = {
     const response = await apiClient.get('/dashboard/creation-trend', { params });
     return response.data;
   },
+
+  /**
+   * Lấy lịch sử snapshot thống kê tự động hằng ngày (7 ngày, 30 ngày)
+   * @param {Object} options
+   * @param {string} [options.projectId] - ID dự án (tùy chọn)
+   * @param {number} [options.days=30] - Số ngày lịch sử (7 hoặc 30)
+   */
+  getSnapshots: async ({ projectId, days = 30 } = {}) => {
+    const params = { limit: days };
+    if (projectId) params.projectId = projectId;
+    const response = await apiClient.get('/dashboard/snapshots', { params });
+    return response.data;
+  },
+
+  /**
+   * Lấy snapshot mới nhất kèm phân tích biến động tiến độ so với ngày trước
+   * @param {string} [projectId] - ID dự án (tùy chọn)
+   */
+  getLatestSnapshot: async (projectId) => {
+    const params = projectId ? { projectId } : {};
+    const response = await apiClient.get('/dashboard/snapshots/latest', { params });
+    return response.data;
+  },
+
+  /**
+   * Kích hoạt chạy thống kê snapshot tự động theo yêu cầu (Chạy thử thủ công)
+   * @param {string} [projectId] - ID dự án (tùy chọn)
+   */
+  triggerDailyAnalytics: async (projectId) => {
+    const response = await apiClient.post('/dashboard/daily-analytics/trigger', { projectId });
+    return response.data;
+  },
 };
 
 export default dashboardApi;

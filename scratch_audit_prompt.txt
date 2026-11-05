@@ -1,0 +1,87 @@
+<USER_REQUEST>
+# FULL SYSTEM AUDIT — AI REQUIREMENT-TO-JIRA AGENT
+
+## VAI TRÒ
+
+Hãy đóng vai Senior Software Architect, Backend Engineer, QA Automation Engineer, Security Engineer và n8n Workflow Specialist.
+
+Tôi yêu cầu bạn thực hiện **kiểm toán kỹ thuật toàn diện (Full System Audit)** đối với toàn bộ dự án AI Requirement-to-Jira Agent hiện tại.
+
+**Đây là nhiệm vụ kiểm tra, xác minh và phát hiện lỗi thực tế, không phải nhiệm vụ viết tài liệu mô tả dự án.**
+
+Không được giả định rằng một chức năng hoạt động chỉ vì mã nguồn của nó tồn tại.
+
+Phải phân biệt rõ:
+- PASS: Đã kiểm thử thực tế và thành công.
+- FAIL: Đã kiểm thử và phát hiện lỗi.
+- WARNING: Phát hiện rủi ro hoặc vấn đề tiềm ẩn.
+- NOT TESTED: Chưa thể kiểm thử.
+- NOT IMPLEMENTED: Chức năng chưa được triển khai.
+
+Không được báo PASS cho những chức năng chỉ được kiểm tra bằng cách đọc code.
+
+---
+
+## PHẦN 1 — KIỂM TRA KIẾN TRÚC TOÀN HỆ THỐNG
+
+Kiểm tra toàn bộ kiến trúc:
+
+- React Frontend.
+- Node.js / Express Backend.
+- PostgreSQL Database.
+- n8n Workflow Automation.
+- Google Gemini AI Integration.
+- Jira Cloud Integration.
+- Webhook và các dịch vụ thông báo.
+
+Yêu cầu:
+
+1. Xác định cấu trúc thư mục thực tế.
+2. Xác định các service và API hiện có.
+3. Kiểm tra đường đi dữ liệu giữa các thành phần.
+4. Phát hiện API không được sử dụng.
+5. Phát hiện chức năng Frontend chưa kết nối Backend.
+6. Phát hiện Backend có API nhưng chưa triển khai nghiệp vụ.
+7. Kiểm tra xử lý lỗi, timeout và các trường hợp service ngừng hoạt động.
+8. Kiểm tra cấu hình môi trường phát triển và triển khai.
+
+Không đưa ra nhận định dựa trên tên file hoặc tên hàm mà chưa đọc phần triển khai.
+
+## PHẦN 2 — KIỂM TRA FRONTEND
+
+Ki
+<truncated 11163 bytes>
+lỗi nghiêm trọng nào chưa xử lý không?
+
+---
+
+## QUY TẮC BẮT BUỘC
+
+1. Trong lượt này, chỉ kiểm tra và viết báo cáo; không tự ý sửa mã nguồn nghiệp vụ.
+2. Không xóa dữ liệu hoặc thay đổi cấu trúc database.
+3. Không sửa các n8n Flow đã hoàn thành.
+4. Không chạy migration phá hủy dữ liệu.
+5. Không sửa cấu hình production.
+6. Không tự động Publish hoặc Unpublish workflow.
+7. Không tự động commit hoặc push Git.
+8. Không coi mock data là kết quả kiểm thử thành công.
+9. Không tuyên bố PASS nếu không có bằng chứng.
+10. Đối với phần không có quyền truy cập, phải ghi NOT TESTED thay vì suy đoán.
+
+**Sau khi hoàn thành kiểm toán, hãy trình bày tóm tắt lỗi theo mức độ ưu tiên và đề xuất kế hoạch sửa. Chờ tôi xác nhận trước khi thực hiện các thay đổi.**
+
+Mục tiêu cuối cùng không phải là có một báo cáo đẹp mà là xác định chính xác hệ thống đã hoạt động đến đâu, lỗi nằm ở đâu và những gì còn thiếu để đạt trạng thái sẵn sàng Demo và nghiệm thu.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-05T10:45:27+07:00.
+
+The user's current state is as follows:
+Active Document: /home/tmthang/Downloads/ai-jira-agent/n8n/workflows/flow-10-dashboard-analytics.json (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 712
+Other open documents:
+- /home/tmthang/Downloads/ai-jira-agent/frontend/src/pages/DashboardPage.jsx (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/backend/package-lock.json (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/n8n/workflows/flow-12-export-documentation.json (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/n8n/workflows/flow-11-epic-notification.json (LANGUAGE_UNSPECIFIED)
+- /home/tmthang/Downloads/ai-jira-agent/backend/src/tests/test_flow_10_daily_automation.js (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

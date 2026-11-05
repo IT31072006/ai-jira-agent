@@ -28,7 +28,7 @@ async function runTests() {
   let passedTests = 0;
   let totalTests = 0;
   let testServer = null;
-  const TEST_PORT = 5001;
+  const TEST_PORT = parseInt(process.env.TEST_PORT || '5000', 10);
   const TEST_SERVER_URL = `http://localhost:${TEST_PORT}`;
 
   function testAssert(condition, testName) {
@@ -93,8 +93,8 @@ async function runTests() {
     const otherNodes = workflow.nodes.filter((n) => !n.name.startsWith('MAIN ') && !n.name.startsWith('AUX '));
 
     testAssert(mainNodes.length === 12, `Workflow có CHÍNH XÁC 12 MAIN Nodes (hiện có: ${mainNodes.length})`);
-    testAssert(auxNodes.length === 2, `Workflow có CHÍNH XÁC 2 AUX Nodes (hiện có: ${auxNodes.length} nodes)`);
-    testAssert(workflow.nodes.length === 14, `Tổng số Node vật lý CHÍNH XÁC 14 Node (hiện có: ${workflow.nodes.length} nodes)`);
+    testAssert(auxNodes.length === 4, `Workflow có CHÍNH XÁC 4 AUX Nodes (hiện có: ${auxNodes.length} nodes)`);
+    testAssert(workflow.nodes.length === 16, `Tổng số Node vật lý CHÍNH XÁC 16 Node (hiện có: ${workflow.nodes.length} nodes)`);
     testAssert(otherNodes.length === 0, `Không có node không xác định ngoài MAIN và AUX (hiện có: ${otherNodes.length})`);
 
     const expectedMainNames = [
@@ -115,6 +115,16 @@ async function runTests() {
     const actualMainNames = mainNodes.map((n) => n.name);
     const allExpectedPresent = expectedMainNames.every((name) => actualMainNames.includes(name));
     testAssert(allExpectedPresent, 'Tất cả 12 MAIN Nodes đều có tên chuẩn xác theo đặc tả');
+
+    const expectedAuxNames = [
+      'AUX 01 — Verify Access Result',
+      'AUX 02 — Shared Error Formatter',
+      'AUX 03 — Daily Schedule Trigger (08:00)',
+      'AUX 04 — Trigger Backend Daily Analytics',
+    ];
+    const actualAuxNames = auxNodes.map((n) => n.name);
+    const allExpectedAuxPresent = expectedAuxNames.every((name) => actualAuxNames.includes(name));
+    testAssert(allExpectedAuxPresent, 'Tất cả 4 AUX Nodes đều có tên chuẩn xác theo đặc tả (gồm 2 node nền tảng + 2 node Scheduler)');
 
     // Kiểm tra ràng buộc kỹ thuật tuyệt đối
     const hasPostgresNode = workflow.nodes.some((n) => (n.type || '').toLowerCase().includes('postgres'));
@@ -245,7 +255,7 @@ async function runTests() {
     // ─────────────────────────────────────────────────────────────────
     console.log('\n--- PHẦN 5: KIỂM THỬ WORKFLOW N8N FLOW 10 TRỰC TIẾP QUA WEBHOOK ---');
 
-    // Gọi webhook n8n Flow 10 với payload đầy đủ
+    // Gọi webhook n8n Flow 10 với payload đầy đủ và header xác thực tin cậy X-Flow10-Webhook-Key
     const n8nWebhookUrl = 'http://localhost:5678/webhook/dashboard-analytics';
     const flow10Payload = {
       userId: user.id,
@@ -255,8 +265,23 @@ async function runTests() {
       internalSecret: env.INTERNAL_SERVICE_KEY,
     };
 
+    // Kiểm tra bảo mật: request thiếu header X-Flow10-Webhook-Key bị MAIN 02 từ chối 401
+    try {
+      await axios.post(n8nWebhookUrl, flow10Payload, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 8000,
+      });
+      testAssert(false, 'MAIN 02 phải chặn request thiếu X-Flow10-Webhook-Key');
+    } catch (err) {
+      testAssert(err.response?.status === 401, 'MAIN 02 chặn thành công request thiếu X-Flow10-Webhook-Key và trả về HTTP 401');
+      testAssert(err.response?.data?.errorCode === 'INVALID_DASHBOARD_REQUEST_OR_AUTH', 'Mã lỗi đúng chuẩn INVALID_DASHBOARD_REQUEST_OR_AUTH');
+    }
+
     const flow10Res = await axios.post(n8nWebhookUrl, flow10Payload, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+      },
       timeout: 8000,
     });
 
@@ -301,7 +326,13 @@ async function runTests() {
         backendUrl: TEST_SERVER_URL,
         internalSecret: env.INTERNAL_SERVICE_KEY,
       },
-      { headers: { 'Content-Type': 'application/json' }, timeout: 8000 }
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+        },
+        timeout: 8000,
+      }
     );
 
     testAssert(emptyFlowRes.data.success === true, 'Xử lý dự án trống (0 issue) thành công không lỗi');
@@ -313,7 +344,12 @@ async function runTests() {
       await axios.post(
         n8nWebhookUrl,
         { userId: '', projectId: sampleProject.id },
-        { headers: { 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+          },
+        }
       );
       testAssert(false, 'MAIN 02 phải chặn request thiếu userId');
     } catch (err) {
@@ -331,7 +367,12 @@ async function runTests() {
           backendUrl: TEST_SERVER_URL,
           internalSecret: env.INTERNAL_SERVICE_KEY,
         },
-        { headers: { 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Flow10-Webhook-Key': env.FLOW10_WEBHOOK_KEY,
+          },
+        }
       );
       testAssert(false, 'MAIN 03 phải chặn truy cập trái phép');
     } catch (err) {
@@ -412,6 +453,7 @@ async function runTests() {
 
     if (passedTests === totalTests) {
       console.log('🎉 TẤT CẢ CÁC BÀI TEST CỦA LUỒNG 10 ĐÃ ĐẠT 100%!');
+      process.exit(0);
     } else {
       console.error(`⚠️ Có ${totalTests - passedTests} bài kiểm thử thất bại.`);
       process.exit(1);

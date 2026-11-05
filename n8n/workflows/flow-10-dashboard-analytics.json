@@ -35,6 +35,15 @@
                 "type": "boolean",
                 "operation": "equals"
               }
+            },
+            {
+              "id": "cond-trusted-backend-webhook",
+              "leftValue": "={{ Boolean($env.FLOW10_WEBHOOK_KEY && ($json.headers?.['x-flow10-webhook-key'] || $json.headers?.['X-Flow10-Webhook-Key'] || '') === $env.FLOW10_WEBHOOK_KEY) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -52,13 +61,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ String($json.body?.backendUrl || $json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/verify-access\" }}",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/verify-access\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $json.body?.internalSecret || $json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+              "value": "={{ $env.INTERNAL_SERVICE_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -117,18 +126,18 @@
         0
       ],
       "id": "f10-aux-main-03-verify-result",
-      "name": "AUX — MAIN 03 — Verify Access Result"
+      "name": "AUX 01 — Verify Access Result"
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/summary\" }}",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/summary\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+              "value": "={{ $env.INTERNAL_SERVICE_KEY }}"
             }
           ]
         },
@@ -167,13 +176,13 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/status-distribution\" }}",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/status-distribution\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+              "value": "={{ $env.INTERNAL_SERVICE_KEY }}"
             }
           ]
         },
@@ -212,13 +221,13 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/issue-breakdown\" }}",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/issue-breakdown\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+              "value": "={{ $env.INTERNAL_SERVICE_KEY }}"
             }
           ]
         },
@@ -257,13 +266,13 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ String($(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.backendUrl || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/creation-trend\" }}",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/creation-trend\" }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Internal-Service-Key",
-              "value": "={{ $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.body?.internalSecret || $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json.internalSecret || \"ai_jira_agent_internal_secret_2026\" }}"
+              "value": "={{ $env.INTERNAL_SERVICE_KEY }}"
             }
           ]
         },
@@ -332,7 +341,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json;\nconst body = webhookItem.body || webhookItem;\nconst userId = String(body.userId || \"\").trim();\nconst projectId = body.projectId ? String(body.projectId).trim() : null;\nconst requestId = String(body.requestId || (\"req-dash-\" + Date.now()));\nconst backendUrl = String(body.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\");\nconst internalSecret = String(body.internalSecret || \"ai_jira_agent_internal_secret_2026\");\n\nconst verifyRes = $(\"MAIN 03 — Project Access Verification\").item.json || {};\nconst verifiedProject = verifyRes.project || verifyRes.data?.project || null;\n\nconst summaryRes = $(\"MAIN 04 — Fetch Dashboard Summary\").item.json || {};\nconst statusRes = $(\"MAIN 05 — Fetch Status Distribution\").item.json || {};\nconst breakdownRes = $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json || {};\nconst trendRes = $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json || {};\n\nconst summary = summaryRes.data || summaryRes || {};\nconst status = statusRes.data || statusRes || {};\nconst breakdown = breakdownRes.data || breakdownRes || {};\nconst trend = trendRes.data || trendRes || {};\n\nconst totalIssues = summary.totalIssues !== undefined ? summary.totalIssues : (status.total || 0);\nconst doneIssues = status.done !== undefined ? status.done : (summary.statusDistribution?.done || 0);\nconst inProgressIssues = status.inProgress !== undefined ? status.inProgress : (summary.statusDistribution?.inProgress || 0);\nconst toDoIssues = status.toDo !== undefined ? status.toDo : (summary.statusDistribution?.toDo || 0);\n\n// Tính tỷ lệ hoàn thành chính xác tuyệt đối, tránh lỗi chia cho 0\nconst rawRate = totalIssues > 0 ? (doneIssues / totalIssues) * 100 : 0;\nconst completionRate = parseFloat(rawRate.toFixed(1));\n\n// Thống kê Story Points theo tiêu chuẩn Agile ước tính\nconst totalStoryPoints = summary.totalStoryPoints || ((summary.totalStories || 0) * 5 + (summary.totalTasks || 0) * 2);\nconst completedStoryPoints = Math.round((totalStoryPoints * completionRate) / 100);\n\nconst completionMetrics = {\n  totalIssues,\n  doneIssues,\n  inProgressIssues,\n  toDoIssues,\n  completionRate,\n  formattedPercentage: `${completionRate}%`,\n  totalStoryPoints,\n  completedStoryPoints,\n  formula: \"(Số issue Done ÷ Tổng số issue) × 100%\",\n  isZeroState: totalIssues === 0,\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    userId,\n    projectId,\n    requestId,\n    backendUrl,\n    internalSecret,\n    verifiedProject,\n    accessVerified: true,\n    summary,\n    status,\n    breakdown,\n    trend,\n    datasetValid: true,\n    completionMetrics,\n    stage: \"METRICS_CALCULATED\"\n  }\n}];"
+        "jsCode": "const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json;\nconst body = webhookItem.body || webhookItem;\nconst userId = String(body.userId || \"\").trim();\nconst projectId = body.projectId ? String(body.projectId).trim() : null;\nconst requestId = String(body.requestId || (\"req-dash-\" + Date.now()));\nconst rawBackendUrl = String(body.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\");\nconst isSafeUrl = /^https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?/i.test(rawBackendUrl);\nconst backendUrl = isSafeUrl ? rawBackendUrl : \"http://localhost:5000\";\n\nconst verifyRes = $(\"MAIN 03 — Project Access Verification\").item.json || {};\nconst verifiedProject = verifyRes.project || verifyRes.data?.project || null;\n\nconst summaryRes = $(\"MAIN 04 — Fetch Dashboard Summary\").item.json || {};\nconst statusRes = $(\"MAIN 05 — Fetch Status Distribution\").item.json || {};\nconst breakdownRes = $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json || {};\nconst trendRes = $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json || {};\n\nconst summary = summaryRes.data || summaryRes || {};\nconst status = statusRes.data || statusRes || {};\nconst breakdown = breakdownRes.data || breakdownRes || {};\nconst trend = trendRes.data || trendRes || {};\n\nconst totalIssues = summary.totalIssues !== undefined ? summary.totalIssues : (status.total || 0);\nconst doneIssues = status.done !== undefined ? status.done : (summary.statusDistribution?.done || 0);\nconst inProgressIssues = status.inProgress !== undefined ? status.inProgress : (summary.statusDistribution?.inProgress || 0);\nconst toDoIssues = status.toDo !== undefined ? status.toDo : (summary.statusDistribution?.toDo || 0);\n\n// Tính tỷ lệ hoàn thành chính xác tuyệt đối, tránh lỗi chia cho 0\nconst rawRate = totalIssues > 0 ? (doneIssues / totalIssues) * 100 : 0;\nconst completionRate = parseFloat(rawRate.toFixed(1));\n\n// Story Points thực tế: không suy đoán từ số lượng Issue hoặc tỷ lệ Done.\nconst toValidPoints = value => {\n  if (value === null || value === undefined || value === '') return null;\n  const number = Number(value);\n  return Number.isFinite(number) && number >= 0 ? number : null;\n};\nconst totalStoryPoints = toValidPoints(summary.totalStoryPoints);\n// Backend chỉ trả completedStoryPoints khi đã cộng Story Points của các Issue Done.\nconst completedStoryPoints = toValidPoints(\n  summary.completedStoryPoints ?? status.completedStoryPoints\n);\nconst hasStoryPoints = totalStoryPoints !== null;\nconst hasCompletedStoryPoints = completedStoryPoints !== null;\n\nconst completionMetrics = {\n  totalIssues,\n  doneIssues,\n  inProgressIssues,\n  toDoIssues,\n  completionRate,\n  formattedPercentage: String(completionRate) + \"%\",\n  totalStoryPoints,\n  completedStoryPoints,\n  hasStoryPointsData: hasStoryPoints,\n  hasCompletedStoryPointsData: hasCompletedStoryPoints,\n  formula: \"(Số issue Done ÷ Tổng số issue) × 100%\",\n  isZeroState: totalIssues === 0,\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    userId,\n    projectId,\n    requestId,\n    backendUrl,\n    verifiedProject,\n    accessVerified: true,\n    summary,\n    status,\n    breakdown,\n    trend,\n    datasetValid: true,\n    completionMetrics,\n    stage: \"METRICS_CALCULATED\"\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -429,7 +438,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json || {};\nlet webhookBody = {};\ntry {\n  const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json || {};\n  webhookBody = webhookItem.body || webhookItem;\n} catch (e) {}\n\nconst requestId = item.requestId || webhookBody.requestId || (\"req-dash-\" + Date.now());\nconst now = new Date().toISOString();\n\n// 1. Phân loại Access Denied (từ AUX 03 IF False)\nconst isAccessDenied = item.allowed === false || item.statusCode === 403 || item.error === \"ACCESS_DENIED\" || item.data?.allowed === false;\nif (isAccessDenied) {\n  const errRes = {\n    success: false,\n    statusCode: 403,\n    errorCode: \"PROJECT_ACCESS_DENIED\",\n    message: \"Dự án không tồn tại hoặc người dùng không có quyền truy cập vào Workspace này.\",\n    requestId,\n    timestamp: now\n  };\n  return [{ json: errRes }];\n}\n\n// 2. Phân loại Validation Error (từ MAIN 02 False)\nconst isValidationError = !webhookBody.userId || String(webhookBody.userId).trim().length === 0;\nif (isValidationError) {\n  const errRes = {\n    success: false,\n    statusCode: 400,\n    errorCode: \"INVALID_DASHBOARD_REQUEST\",\n    message: \"Yêu cầu phân tích Dashboard không hợp lệ: Thiếu userId hoặc thông tin phiên làm việc.\",\n    requestId,\n    timestamp: now\n  };\n  return [{ json: errRes }];\n}\n\n// 3. Phân loại Dataset Error (từ MAIN 08 False)\nconst errRes = {\n  success: false,\n  statusCode: 502,\n  errorCode: \"INVALID_ANALYTICS_DATASET\",\n  message: \"Dữ liệu phân tích nhận được từ Backend bị thiếu hoặc không hợp lệ.\",\n  details: [\"Một hoặc nhiều tập dữ liệu thống kê từ Backend không hợp lệ hoặc rỗng.\"],\n  requestId,\n  timestamp: now\n};\nreturn [{ json: errRes }];"
+        "jsCode": "const item = $input.first().json || {};\nlet webhookBody = {};\nlet webhookHeaders = {};\ntry {\n  const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json || {};\n  webhookBody = webhookItem.body || webhookItem;\n  webhookHeaders = webhookItem.headers || {};\n} catch (e) {}\n\nconst requestId = item.requestId || webhookBody.requestId || (\"req-dash-\" + Date.now());\nconst now = new Date().toISOString();\n\n// 1. Phân loại lỗi xác thực Webhook Key (từ MAIN 02 False do thiếu hoặc sai X-Flow10-Webhook-Key)\nconst hasValidKey = Boolean($env.FLOW10_WEBHOOK_KEY && (webhookHeaders['x-flow10-webhook-key'] || webhookHeaders['X-Flow10-Webhook-Key'] || item.headers?.['x-flow10-webhook-key'] || item.headers?.['X-Flow10-Webhook-Key']) === $env.FLOW10_WEBHOOK_KEY);\nif (!hasValidKey && item.allowed === undefined && item.data === undefined) {\n  return [{ json: {\n    success: false, statusCode: 401,\n    errorCode: \"INVALID_DASHBOARD_REQUEST_OR_AUTH\",\n    message: \"Yêu cầu Dashboard thiếu xác thực nội bộ hoặc tham số bắt buộc.\",\n    requestId, timestamp: now\n  }}];\n}\n\n// 2. Phân loại Validation Error (từ MAIN 02 False do thiếu userId)\nconst isValidationError = !webhookBody.userId || String(webhookBody.userId).trim().length === 0;\nif (isValidationError && item.allowed === undefined && item.data === undefined) {\n  const errRes = {\n    success: false,\n    statusCode: 400,\n    errorCode: \"INVALID_DASHBOARD_REQUEST\",\n    message: \"Yêu cầu phân tích Dashboard không hợp lệ: Thiếu userId hoặc thông tin phiên làm việc.\",\n    requestId,\n    timestamp: now\n  };\n  return [{ json: errRes }];\n}\n\n// 3. Phân loại Access Denied (từ AUX 01 IF False)\nconst isAccessDenied = item.allowed === false || item.statusCode === 403 || item.error === \"ACCESS_DENIED\" || item.data?.allowed === false;\nif (isAccessDenied) {\n  const errRes = {\n    success: false,\n    statusCode: 403,\n    errorCode: \"PROJECT_ACCESS_DENIED\",\n    message: \"Dự án không tồn tại hoặc người dùng không có quyền truy cập vào Workspace này.\",\n    requestId,\n    timestamp: now\n  };\n  return [{ json: errRes }];\n}\n\n// 4. Phân loại Dataset Error (từ MAIN 08 False)\nconst errRes = {\n  success: false,\n  statusCode: 502,\n  errorCode: \"INVALID_ANALYTICS_DATASET\",\n  message: \"Dữ liệu phân tích nhận được từ Backend bị thiếu hoặc không hợp lệ.\",\n  details: [\"Một hoặc nhiều tập dữ liệu thống kê từ Backend không hợp lệ hoặc rỗng.\"],\n  requestId,\n  timestamp: now\n};\nreturn [{ json: errRes }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -438,7 +447,7 @@
         320
       ],
       "id": "f10-aux-shared-error-formatter",
-      "name": "AUX — Shared Error Formatter"
+      "name": "AUX 02 — Shared Error Formatter"
     },
     {
       "parameters": {
@@ -456,6 +465,61 @@
       ],
       "id": "f10-main-12-respond-backend",
       "name": "MAIN 12 — Respond to Backend"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "name": "AUX 03 — Daily Schedule Trigger (08:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -800,
+        650
+      ],
+      "id": "f10-aux-03-schedule-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/daily-analytics/run\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "={{ $env.INTERNAL_SERVICE_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  triggerSource: 'N8N_FLOW_10_DAILY_SCHEDULE',\n  timezone: 'Asia/Ho_Chi_Minh',\n  reportDate: $now.setZone('Asia/Ho_Chi_Minh').toFormat('yyyy-LL-dd'),\n  runId: 'flow10-daily-' + $now.setZone('Asia/Ho_Chi_Minh').toFormat('yyyy-LL-dd'),\n  triggeredAt: $now.toISO()\n}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "AUX 04 — Trigger Backend Daily Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -450,
+        650
+      ],
+      "id": "f10-aux-04-trigger-backend"
     }
   ],
   "connections": {
@@ -481,7 +545,7 @@
         ],
         [
           {
-            "node": "AUX — Shared Error Formatter",
+            "node": "AUX 02 — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -492,14 +556,14 @@
       "main": [
         [
           {
-            "node": "AUX — MAIN 03 — Verify Access Result",
+            "node": "AUX 01 — Verify Access Result",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "AUX — MAIN 03 — Verify Access Result": {
+    "AUX 01 — Verify Access Result": {
       "main": [
         [
           {
@@ -510,7 +574,7 @@
         ],
         [
           {
-            "node": "AUX — Shared Error Formatter",
+            "node": "AUX 02 — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -572,7 +636,7 @@
         ],
         [
           {
-            "node": "AUX — Shared Error Formatter",
+            "node": "AUX 02 — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -612,7 +676,7 @@
         ]
       ]
     },
-    "AUX — Shared Error Formatter": {
+    "AUX 02 — Shared Error Formatter": {
       "main": [
         [
           {
@@ -622,12 +686,26 @@
           }
         ]
       ]
+    },
+    "AUX 03 — Daily Schedule Trigger (08:00)": {
+      "main": [
+        [
+          {
+            "node": "AUX 04 — Trigger Backend Daily Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "f10-opt-14nodes-2026",
+  "versionId": "76a760ac-2ea6-5cfe-a5e3-8be1340427a6",
   "id": "Flow10DashboardAnalytics"
 }
