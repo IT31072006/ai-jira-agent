@@ -8,12 +8,26 @@ const DailyAnalyticsSchedulerService = require('./src/services/dailyAnalyticsSch
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
-// Test DB connection before listening
-pool.connect()
-  .then((client) => {
-    client.release();
-    console.log('✓ Kết nối cơ sở dữ liệu PostgreSQL thành công!');
+// Test DB connection with retry before listening
+const connectWithRetry = async (maxRetries = 5, delayMs = 2000) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const client = await pool.connect();
+      client.release();
+      console.log('✓ Kết nối cơ sở dữ liệu PostgreSQL thành công!');
+      return;
+    } catch (err) {
+      console.warn(`[DB] Đang thử kết nối lại PostgreSQL (lần ${attempt}/${maxRetries}):`, err.message);
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+};
 
+connectWithRetry()
+  .then(() => {
     const server = app.listen(PORT, () => {
       console.log(`✓ Server Express đang chạy tại http://localhost:${PORT} (PID: ${process.pid})`);
       StandupSchedulerService.start();
