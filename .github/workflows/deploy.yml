@@ -22,8 +22,9 @@ jobs:
             set -e
             echo "🚀 [1/4] Kéo mã nguồn mới nhất từ nhánh main..."
             cd /root/ai-jira-agent
-            git checkout main
-            git pull origin main
+            git fetch origin main
+            git checkout -f main
+            git reset --hard origin/main
 
             echo "📦 [2/4] Cập nhật Backend & chạy Database Migrations..."
             cd /root/ai-jira-agent/backend
