@@ -93,8 +93,8 @@ async function runTests() {
     const otherNodes = workflow.nodes.filter((n) => !n.name.startsWith('MAIN ') && !n.name.startsWith('AUX '));
 
     testAssert(mainNodes.length === 12, `Workflow có CHÍNH XÁC 12 MAIN Nodes (hiện có: ${mainNodes.length})`);
-    testAssert(auxNodes.length === 2, `Workflow có CHÍNH XÁC 2 AUX Nodes (hiện có: ${auxNodes.length} nodes)`);
-    testAssert(workflow.nodes.length === 14, `Tổng số Node vật lý CHÍNH XÁC 14 Node (hiện có: ${workflow.nodes.length} nodes)`);
+    testAssert(auxNodes.length === 4, `Workflow có CHÍNH XÁC 4 AUX Nodes (hiện có: ${auxNodes.length} nodes)`);
+    testAssert(workflow.nodes.length === 16, `Tổng số Node vật lý CHÍNH XÁC 16 Node (hiện có: ${workflow.nodes.length} nodes)`);
     testAssert(otherNodes.length === 0, `Không có node không xác định ngoài MAIN và AUX (hiện có: ${otherNodes.length})`);
 
     const expectedMainNames = [
@@ -115,6 +115,16 @@ async function runTests() {
     const actualMainNames = mainNodes.map((n) => n.name);
     const allExpectedPresent = expectedMainNames.every((name) => actualMainNames.includes(name));
     testAssert(allExpectedPresent, 'Tất cả 12 MAIN Nodes đều có tên chuẩn xác theo đặc tả');
+
+    const expectedAuxNames = [
+      'AUX 01 — Verify Access Result',
+      'AUX 02 — Shared Error Formatter',
+      'AUX 03 — Daily Schedule Trigger (08:00)',
+      'AUX 04 — Trigger Backend Daily Analytics',
+    ];
+    const actualAuxNames = auxNodes.map((n) => n.name);
+    const allExpectedAuxPresent = expectedAuxNames.every((name) => actualAuxNames.includes(name));
+    testAssert(allExpectedAuxPresent, 'Tất cả 4 AUX Nodes đều có tên chuẩn xác theo đặc tả (gồm 2 node nền tảng + 2 node Scheduler)');
 
     // Kiểm tra ràng buộc kỹ thuật tuyệt đối
     const hasPostgresNode = workflow.nodes.some((n) => (n.type || '').toLowerCase().includes('postgres'));

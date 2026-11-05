@@ -1,5 +1,6 @@
 const DashboardService = require('../services/dashboard.service');
 const ProjectModel = require('../models/project.model');
+const DailyAnalyticsService = require('../services/daily-analytics.service');
 
 class InternalDashboardController {
   /**
@@ -177,6 +178,35 @@ class InternalDashboardController {
       console.error('[InternalDashboardController] getCreationTrend error:', error);
       return res.status(error.statusCode || 500).json({
         success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * POST /api/internal/dashboard/daily-analytics/run
+   * Endpoint kích hoạt bởi n8n Scheduler (08:00 AM) để chạy thống kê tự động hằng ngày
+   */
+  static async runDailyAnalytics(req, res) {
+    try {
+      const { triggerSource, timezone, forceRefresh } = req.body || {};
+      const result = await DailyAnalyticsService.runDailyAnalytics({
+        triggerSource: triggerSource || 'N8N_SCHEDULER_0800',
+        timezone: timezone || 'Asia/Ho_Chi_Minh',
+        forceRefresh: forceRefresh !== false,
+      });
+
+      return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Hoàn thành tiến trình thống kê tự động dự án hàng ngày.',
+        data: result,
+      });
+    } catch (error) {
+      console.error('[InternalDashboardController] runDailyAnalytics error:', error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        statusCode: error.statusCode || 500,
         error: error.message,
       });
     }

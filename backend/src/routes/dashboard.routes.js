@@ -11,4 +11,9 @@ router.get('/status-distribution', authMiddleware, DashboardController.getStatus
 router.get('/creation-trend', authMiddleware, DashboardController.getCreationTrend);
 router.get('/analytics', authMiddleware, DashboardController.getAnalytics);
 
+// Lưu & Truy xuất Snapshots thống kê hàng ngày & Theo dõi biến động tiến độ
+router.get('/snapshots', authMiddleware, DashboardController.getSnapshots);
+router.get('/snapshots/latest', authMiddleware, DashboardController.getLatestSnapshot);
+router.post('/daily-analytics/trigger', authMiddleware, DashboardController.triggerDailyAnalytics);
+
 module.exports = router;

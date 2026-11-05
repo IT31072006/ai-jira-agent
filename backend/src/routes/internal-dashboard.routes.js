@@ -23,4 +23,7 @@ router.get('/issue-breakdown', InternalDashboardController.getIssueBreakdown);
 // MAIN 07: Lấy xu hướng tạo issue
 router.get('/creation-trend', InternalDashboardController.getCreationTrend);
 
+// SCHEDULED DAILY ANALYTICS: Kích hoạt thống kê định kỳ hằng ngày (08:00 AM)
+router.post('/daily-analytics/run', InternalDashboardController.runDailyAnalytics);
+
 module.exports = router;

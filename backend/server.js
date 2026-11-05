@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const app = require('./src/app');
 const { pool } = require('./src/config/db');
 const StandupSchedulerService = require('./src/services/standupScheduler.service');
+const DailyAnalyticsSchedulerService = require('./src/services/dailyAnalyticsScheduler.service');
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
@@ -16,6 +17,7 @@ pool.connect()
     const server = app.listen(PORT, () => {
       console.log(`✓ Server Express đang chạy tại http://localhost:${PORT} (PID: ${process.pid})`);
       StandupSchedulerService.start();
+      DailyAnalyticsSchedulerService.start();
     });
 
     server.on('error', (err) => {
@@ -31,6 +33,7 @@ pool.connect()
     const shutdown = (signal) => {
       console.log(`\n[Server] Nhận tín hiệu ${signal}, đang đóng kết nối an toàn...`);
       StandupSchedulerService.stop();
+      DailyAnalyticsSchedulerService.stop();
       server.close(() => {
         pool.end().then(() => {
           console.log('[Server] Đã giải phóng kết nối PostgreSQL. Tiến trình kết thúc an toàn.');

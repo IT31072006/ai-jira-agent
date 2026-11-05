@@ -117,7 +117,7 @@
         0
       ],
       "id": "f10-aux-main-03-verify-result",
-      "name": "AUX — MAIN 03 — Verify Access Result"
+      "name": "AUX 01 — Verify Access Result"
     },
     {
       "parameters": {
@@ -332,7 +332,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json;\nconst body = webhookItem.body || webhookItem;\nconst userId = String(body.userId || \"\").trim();\nconst projectId = body.projectId ? String(body.projectId).trim() : null;\nconst requestId = String(body.requestId || (\"req-dash-\" + Date.now()));\nconst backendUrl = String(body.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\");\nconst internalSecret = String(body.internalSecret || \"ai_jira_agent_internal_secret_2026\");\n\nconst verifyRes = $(\"MAIN 03 — Project Access Verification\").item.json || {};\nconst verifiedProject = verifyRes.project || verifyRes.data?.project || null;\n\nconst summaryRes = $(\"MAIN 04 — Fetch Dashboard Summary\").item.json || {};\nconst statusRes = $(\"MAIN 05 — Fetch Status Distribution\").item.json || {};\nconst breakdownRes = $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json || {};\nconst trendRes = $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json || {};\n\nconst summary = summaryRes.data || summaryRes || {};\nconst status = statusRes.data || statusRes || {};\nconst breakdown = breakdownRes.data || breakdownRes || {};\nconst trend = trendRes.data || trendRes || {};\n\nconst totalIssues = summary.totalIssues !== undefined ? summary.totalIssues : (status.total || 0);\nconst doneIssues = status.done !== undefined ? status.done : (summary.statusDistribution?.done || 0);\nconst inProgressIssues = status.inProgress !== undefined ? status.inProgress : (summary.statusDistribution?.inProgress || 0);\nconst toDoIssues = status.toDo !== undefined ? status.toDo : (summary.statusDistribution?.toDo || 0);\n\n// Tính tỷ lệ hoàn thành chính xác tuyệt đối, tránh lỗi chia cho 0\nconst rawRate = totalIssues > 0 ? (doneIssues / totalIssues) * 100 : 0;\nconst completionRate = parseFloat(rawRate.toFixed(1));\n\n// Thống kê Story Points theo tiêu chuẩn Agile ước tính\nconst totalStoryPoints = summary.totalStoryPoints || ((summary.totalStories || 0) * 5 + (summary.totalTasks || 0) * 2);\nconst completedStoryPoints = Math.round((totalStoryPoints * completionRate) / 100);\n\nconst completionMetrics = {\n  totalIssues,\n  doneIssues,\n  inProgressIssues,\n  toDoIssues,\n  completionRate,\n  formattedPercentage: `${completionRate}%`,\n  totalStoryPoints,\n  completedStoryPoints,\n  formula: \"(Số issue Done ÷ Tổng số issue) × 100%\",\n  isZeroState: totalIssues === 0,\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    userId,\n    projectId,\n    requestId,\n    backendUrl,\n    internalSecret,\n    verifiedProject,\n    accessVerified: true,\n    summary,\n    status,\n    breakdown,\n    trend,\n    datasetValid: true,\n    completionMetrics,\n    stage: \"METRICS_CALCULATED\"\n  }\n}];"
+        "jsCode": "const webhookItem = $(\"MAIN 01 — Dashboard Webhook Trigger\").item.json;\nconst body = webhookItem.body || webhookItem;\nconst userId = String(body.userId || \"\").trim();\nconst projectId = body.projectId ? String(body.projectId).trim() : null;\nconst requestId = String(body.requestId || (\"req-dash-\" + Date.now()));\nconst rawBackendUrl = String(body.backendUrl || \"http://localhost:5000\").replace(/\\/+$/, \"\");\nconst isSafeUrl = /^https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?/i.test(rawBackendUrl);\nconst backendUrl = isSafeUrl ? rawBackendUrl : \"http://localhost:5000\";\n\nconst verifyRes = $(\"MAIN 03 — Project Access Verification\").item.json || {};\nconst verifiedProject = verifyRes.project || verifyRes.data?.project || null;\n\nconst summaryRes = $(\"MAIN 04 — Fetch Dashboard Summary\").item.json || {};\nconst statusRes = $(\"MAIN 05 — Fetch Status Distribution\").item.json || {};\nconst breakdownRes = $(\"MAIN 06 — Fetch Issue Type Breakdown\").item.json || {};\nconst trendRes = $(\"MAIN 07 — Fetch Issue Creation Trend\").item.json || {};\n\nconst summary = summaryRes.data || summaryRes || {};\nconst status = statusRes.data || statusRes || {};\nconst breakdown = breakdownRes.data || breakdownRes || {};\nconst trend = trendRes.data || trendRes || {};\n\nconst totalIssues = summary.totalIssues !== undefined ? summary.totalIssues : (status.total || 0);\nconst doneIssues = status.done !== undefined ? status.done : (summary.statusDistribution?.done || 0);\nconst inProgressIssues = status.inProgress !== undefined ? status.inProgress : (summary.statusDistribution?.inProgress || 0);\nconst toDoIssues = status.toDo !== undefined ? status.toDo : (summary.statusDistribution?.toDo || 0);\n\n// Tính tỷ lệ hoàn thành chính xác tuyệt đối, tránh lỗi chia cho 0\nconst rawRate = totalIssues > 0 ? (doneIssues / totalIssues) * 100 : 0;\nconst completionRate = parseFloat(rawRate.toFixed(1));\n\n// Xác định Story Points thực tế (không tự suy diễn 5 SP/Story hay 2 SP/Task, bảo toàn giá trị 0)\nconst rawStoryPoints = (summary.totalStoryPoints !== undefined && summary.totalStoryPoints !== null)\n  ? Number(summary.totalStoryPoints)\n  : null;\nconst hasStoryPoints = typeof rawStoryPoints === 'number' && !isNaN(rawStoryPoints);\nconst totalStoryPoints = hasStoryPoints ? rawStoryPoints : null;\nconst completedStoryPoints = (hasStoryPoints && totalStoryPoints !== null)\n  ? Math.round((totalStoryPoints * completionRate) / 100)\n  : null;\n\nconst completionMetrics = {\n  totalIssues,\n  doneIssues,\n  inProgressIssues,\n  toDoIssues,\n  completionRate,\n  formattedPercentage: String(completionRate) + \"%\",\n  totalStoryPoints,\n  completedStoryPoints,\n  hasStoryPointsData: hasStoryPoints,\n  formula: \"(Số issue Done ÷ Tổng số issue) × 100%\",\n  isZeroState: totalIssues === 0,\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    userId,\n    projectId,\n    requestId,\n    backendUrl,\n    verifiedProject,\n    accessVerified: true,\n    summary,\n    status,\n    breakdown,\n    trend,\n    datasetValid: true,\n    completionMetrics,\n    stage: \"METRICS_CALCULATED\"\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -438,7 +438,7 @@
         320
       ],
       "id": "f10-aux-shared-error-formatter",
-      "name": "AUX — Shared Error Formatter"
+      "name": "AUX 02 — Shared Error Formatter"
     },
     {
       "parameters": {
@@ -456,6 +456,61 @@
       ],
       "id": "f10-main-12-respond-backend",
       "name": "MAIN 12 — Respond to Backend"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "name": "AUX 03 — Daily Schedule Trigger (08:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -800,
+        650
+      ],
+      "id": "f10-aux-03-schedule-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_INTERNAL_URL || \"http://localhost:5000\").replace(/\\/+$/, \"\") + \"/api/internal/dashboard/daily-analytics/run\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "={{ $env.INTERNAL_SERVICE_KEY || \"ai_jira_agent_internal_secret_2026\" }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  triggerSource: \"N8N_FLOW_10_AUX_03_SCHEDULE\",\n  timezone: \"Asia/Ho_Chi_Minh\",\n  scheduledHour: 8,\n  scheduledMinute: 0,\n  runId: \"run-f10-\" + $now.toMillis(),\n  timestamp: $now.toISO()\n}) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "AUX 04 — Trigger Backend Daily Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -450,
+        650
+      ],
+      "id": "f10-aux-04-trigger-backend"
     }
   ],
   "connections": {
@@ -481,7 +536,7 @@
         ],
         [
           {
-            "node": "AUX — Shared Error Formatter",
+            "node": "AUX 02 — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -492,14 +547,14 @@
       "main": [
         [
           {
-            "node": "AUX — MAIN 03 — Verify Access Result",
+            "node": "AUX 01 — Verify Access Result",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "AUX — MAIN 03 — Verify Access Result": {
+    "AUX 01 — Verify Access Result": {
       "main": [
         [
           {
@@ -510,7 +565,7 @@
         ],
         [
           {
-            "node": "AUX — Shared Error Formatter",
+            "node": "AUX 02 — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -572,7 +627,7 @@
         ],
         [
           {
-            "node": "AUX — Shared Error Formatter",
+            "node": "AUX 02 — Shared Error Formatter",
             "type": "main",
             "index": 0
           }
@@ -612,7 +667,7 @@
         ]
       ]
     },
-    "AUX — Shared Error Formatter": {
+    "AUX 02 — Shared Error Formatter": {
       "main": [
         [
           {
@@ -622,11 +677,25 @@
           }
         ]
       ]
+    },
+    "AUX 03 — Daily Schedule Trigger (08:00)": {
+      "main": [
+        [
+          {
+            "node": "AUX 04 — Trigger Backend Daily Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
   },
   "versionId": "f10-opt-14nodes-2026",
   "id": "Flow10DashboardAnalytics"
