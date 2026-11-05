@@ -26,18 +26,22 @@ jobs:
             git checkout -f main
             git reset --hard origin/main
 
-            echo "📦 [2/4] Cập nhật Backend & chạy Database Migrations..."
+            echo "🐳 [2/5] Đảm bảo container Database (PostgreSQL) và n8n luôn hoạt động..."
+            cd /root/ai-jira-agent
+            docker compose up -d
+
+            echo "📦 [3/5] Cập nhật Backend & chạy Database Migrations..."
             cd /root/ai-jira-agent/backend
             npm install
             npm run migrate
-            pm2 restart jira-backend
+            pm2 restart jira-backend --update-env
 
-            echo "🎨 [3/4] Cài đặt & Build lại Frontend..."
+            echo "🎨 [4/5] Cài đặt & Build lại Frontend..."
             cd /root/ai-jira-agent/frontend
             npm install
             npm run build
 
-            echo "🔄 [4/4] Khởi động lại dịch vụ Web Nginx..."
+            echo "🔄 [5/5] Khởi động lại dịch vụ Web Nginx..."
             systemctl reload nginx
 
             echo "✅ Web đã được cập nhật thành công lên phiên bản mới nhất!"
