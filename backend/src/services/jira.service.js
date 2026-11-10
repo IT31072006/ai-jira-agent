@@ -607,7 +607,15 @@ class JiraService {
       const stories = epic.stories || epic.user_stories || [];
       for (const story of stories) {
         const storyTitle = story.title || 'Untitled Story';
-        const storyDesc = story.description || storyTitle;
+        let storyDesc = story.description || storyTitle;
+
+        const acList = story.acceptanceCriteria || story.acceptance_criteria || [];
+        if (Array.isArray(acList) && acList.length > 0) {
+          const acFormatted = acList
+            .map((ac, idx) => `${idx + 1}. ${typeof ac === 'string' ? ac : (ac.text || JSON.stringify(ac))}`)
+            .join('\n');
+          storyDesc += `\n\n*Acceptance Criteria (Tiêu chí nghiệm thu BDD):*\n${acFormatted}`;
+        }
 
         const storyFields = {
           project: { key: projectKey },

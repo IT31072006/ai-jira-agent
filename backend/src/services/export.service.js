@@ -249,10 +249,18 @@ class ExportService {
           };
         });
 
+        const rawAc = story.acceptanceCriteria || story.acceptance_criteria || story.criteria || [];
+        const acceptanceCriteria = (Array.isArray(rawAc) ? rawAc : [rawAc])
+          .filter(Boolean)
+          .map((ac) => (typeof ac === 'string' ? ac.trim() : (ac.text || JSON.stringify(ac)).trim()))
+          .filter((text) => text.length > 0);
+
         return {
           key: story.key || null,
           title: story.title || story.name || story.user_story || story.summary || `User Story #${si + 1}`,
           description: story.description || story.desc || '',
+          acceptanceCriteria,
+          acceptance_criteria: acceptanceCriteria,
           status: story.status || 'Bản nháp',
           assignee: story.assigneeName || story.assignee || null,
           jiraUrl: null,
@@ -351,6 +359,15 @@ class ExportService {
         if (story.jiraUrl) md += `  - **Liên kết Jira:** [${story.key || 'Xem trên Jira'}](${story.jiraUrl})\n`;
         if (story.description) {
           md += `  - **Mô tả:** ${story.description.replace(/\n+/g, ' ')}\n`;
+        }
+
+        const acList = story.acceptanceCriteria || story.acceptance_criteria || [];
+        if (Array.isArray(acList) && acList.length > 0) {
+          md += `  - **Tiêu chí nghiệm thu (Acceptance Criteria - BDD):**\n`;
+          acList.forEach((ac, aci) => {
+            const acText = typeof ac === 'string' ? ac : (ac.text || JSON.stringify(ac));
+            md += `    ${aci + 1}. *${acText}*\n`;
+          });
         }
         md += `\n`;
 
@@ -544,6 +561,22 @@ class ExportService {
                 if (story.description) {
                   doc.fillColor('#475569').font('DejaVuSans').fontSize(8)
                     .text(`Mô tả: ${story.description}`, 75, doc.y, { width: 470 });
+                  doc.moveDown(0.3);
+                }
+
+                // Acceptance Criteria (BDD)
+                const acList = story.acceptanceCriteria || story.acceptance_criteria || [];
+                if (Array.isArray(acList) && acList.length > 0) {
+                  if (doc.y > 700) doc.addPage();
+                  doc.fillColor('#0284c7').font('DejaVuSans-Bold').fontSize(7.5)
+                    .text('Tiêu chí nghiệm thu (Acceptance Criteria - BDD):', 75, doc.y);
+                  doc.moveDown(0.15);
+                  acList.forEach((ac, acIdx) => {
+                    if (doc.y > 720) doc.addPage();
+                    const acText = typeof ac === 'string' ? ac : (ac.text || JSON.stringify(ac));
+                    doc.fillColor('#334155').font('DejaVuSans').fontSize(7.5)
+                      .text(`  ✓ [AC ${acIdx + 1}] ${acText}`, 85, doc.y, { width: 460 });
+                  });
                   doc.moveDown(0.3);
                 }
 

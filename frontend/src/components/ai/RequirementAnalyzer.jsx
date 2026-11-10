@@ -27,6 +27,30 @@ import {
 } from 'lucide-react';
 import ExportModal from '../project/ExportModal';
 
+// ─── Helper: Format BDD Given / When / Then badges ──────────────────────────
+const renderFormattedBdd = (text) => {
+  if (typeof text !== 'string') return text;
+  const parts = text.split(/(Given|When|Then)/gi);
+  if (parts.length <= 1) return <span>{text}</span>;
+  return (
+    <span>
+      {parts.map((part, idx) => {
+        const lower = part.toLowerCase();
+        if (lower === 'given') {
+          return <span key={idx} className="bdd-tag bdd-tag-given">Given</span>;
+        }
+        if (lower === 'when') {
+          return <span key={idx} className="bdd-tag bdd-tag-when">When</span>;
+        }
+        if (lower === 'then') {
+          return <span key={idx} className="bdd-tag bdd-tag-then">Then</span>;
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </span>
+  );
+};
+
 // ─── Helper: chuẩn hóa dữ liệu từ API thành cấu trúc phẳng để edit ───────────
 const normalizeEpics = (result) => {
   if (!result) return [];
@@ -43,30 +67,40 @@ const normalizeEpics = (result) => {
     id: `epic-${ei}`,
     title: epic.title || epic.name || epic.epic_name || epic.summary || `Epic #${ei + 1}`,
     description: epic.description || epic.details || epic.desc || '',
-    stories: (epic.stories || epic.user_stories || epic.userStories || []).map((story, si) => ({
-      id: `epic-${ei}-story-${si}`,
-      title:
-        story.title ||
-        story.name ||
-        story.user_story ||
-        story.summary ||
-        `User Story #${si + 1}`,
-      description: story.description || story.desc || '',
-      assigneeId: story.assigneeId || null,
-      assigneeName: story.assigneeName || '',
-      assigneeAvatar: story.assigneeAvatar || '',
-      tasks: (story.tasks || story.subtasks || []).map((task, ti) => ({
-        id: `epic-${ei}-story-${si}-task-${ti}`,
+    stories: (epic.stories || epic.user_stories || epic.userStories || []).map((story, si) => {
+      const rawAc = story.acceptanceCriteria || story.acceptance_criteria || story.criteria || [];
+      const acceptanceCriteria = (Array.isArray(rawAc) ? rawAc : [rawAc])
+        .filter(Boolean)
+        .map((ac) => (typeof ac === 'string' ? ac.trim() : String(ac.text || ac.title || JSON.stringify(ac)).trim()))
+        .filter((text) => text.length > 0);
+
+      return {
+        id: `epic-${ei}-story-${si}`,
         title:
-          typeof task === 'string'
-            ? task
-            : task.title || task.name || task.summary || `Task #${ti + 1}`,
-        description: typeof task === 'object' ? task.description || task.desc || '' : '',
-        assigneeId: typeof task === 'object' ? task.assigneeId || null : null,
-        assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',
-        assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : '',
-      })),
-    })),
+          story.title ||
+          story.name ||
+          story.user_story ||
+          story.summary ||
+          `User Story #${si + 1}`,
+        description: story.description || story.desc || '',
+        acceptanceCriteria,
+        acceptance_criteria: acceptanceCriteria,
+        assigneeId: story.assigneeId || null,
+        assigneeName: story.assigneeName || '',
+        assigneeAvatar: story.assigneeAvatar || '',
+        tasks: (story.tasks || story.subtasks || []).map((task, ti) => ({
+          id: `epic-${ei}-story-${si}-task-${ti}`,
+          title:
+            typeof task === 'string'
+              ? task
+              : task.title || task.name || task.summary || `Task #${ti + 1}`,
+          description: typeof task === 'object' ? task.description || task.desc || '' : '',
+          assigneeId: typeof task === 'object' ? task.assigneeId || null : null,
+          assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',
+          assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : '',
+        })),
+      };
+    }),
   }));
 };
 
@@ -798,6 +832,74 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
     }
   };
 
+  const addAcceptanceCriterion = (epicIdx, storyIdx) => {
+    if (confirmed) return;
+    setEditableEpics((prev) =>
+      prev.map((epic, ei) => {
+        if (ei !== epicIdx) return epic;
+        return {
+          ...epic,
+          stories: epic.stories.map((story, si) => {
+            if (si !== storyIdx) return story;
+            const currentAc = story.acceptanceCriteria || story.acceptance_criteria || [];
+            const newAc = [
+              ...currentAc,
+              'Given [điều kiện tiền đề], When [thao tác thực hiện], Then [kết quả kiểm thử mong đợi]'
+            ];
+            return {
+              ...story,
+              acceptanceCriteria: newAc,
+              acceptance_criteria: newAc,
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const updateAcceptanceCriterion = (epicIdx, storyIdx, acIdx, value) => {
+    if (confirmed) return;
+    setEditableEpics((prev) =>
+      prev.map((epic, ei) => {
+        if (ei !== epicIdx) return epic;
+        return {
+          ...epic,
+          stories: epic.stories.map((story, si) => {
+            if (si !== storyIdx) return story;
+            const currentAc = [...(story.acceptanceCriteria || story.acceptance_criteria || [])];
+            currentAc[acIdx] = value;
+            return {
+              ...story,
+              acceptanceCriteria: currentAc,
+              acceptance_criteria: currentAc,
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const deleteAcceptanceCriterion = (epicIdx, storyIdx, acIdx) => {
+    if (confirmed) return;
+    setEditableEpics((prev) =>
+      prev.map((epic, ei) => {
+        if (ei !== epicIdx) return epic;
+        return {
+          ...epic,
+          stories: epic.stories.map((story, si) => {
+            if (si !== storyIdx) return story;
+            const currentAc = (story.acceptanceCriteria || story.acceptance_criteria || []).filter((_, idx) => idx !== acIdx);
+            return {
+              ...story,
+              acceptanceCriteria: currentAc,
+              acceptance_criteria: currentAc,
+            };
+          }),
+        };
+      })
+    );
+  };
+
   const addTask = async (epicIdx, storyIdx) => {
     if (isMutating || confirmed) return;
     const currentEpics = editableEpics;
@@ -1272,9 +1374,82 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                             </div>
                           </div>
 
-                          {/* ── Tasks (Chỉ render khi Story được mở rộng - Luồng 5 Step 12) ── */}
+                          {/* ── Tasks & Acceptance Criteria (Chỉ render khi Story được mở rộng - Luồng 5 Step 12) ── */}
                           {isStoryExpanded(story.id, storyIdx) && (
-                            <div className="tasks-container">
+                            <>
+                              {/* ── Tiêu chí nghiệm thu (Acceptance Criteria - BDD) ── */}
+                              <div className="acceptance-criteria-container">
+                                <div className="acceptance-criteria-header">
+                                  <div className="ac-header-left">
+                                    <CheckCircle2 size={13} className="text-primary" />
+                                    <span className="ac-title">Tiêu chí chấp nhận (Acceptance Criteria - BDD)</span>
+                                    <span className="badge badge-outline" style={{ fontSize: '0.68rem', padding: '1px 5px' }}>
+                                      {(story.acceptanceCriteria || story.acceptance_criteria || []).length} AC
+                                    </span>
+                                  </div>
+                                  {!confirmed && (
+                                    <button
+                                      type="button"
+                                      className="btn-add-ac"
+                                      onClick={() => addAcceptanceCriterion(epicIdx, storyIdx)}
+                                      title="Thêm tiêu chí nghiệm thu Given/When/Then"
+                                    >
+                                      <Plus size={12} />
+                                      <span>Thêm AC</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="acceptance-criteria-list">
+                                  {(story.acceptanceCriteria || story.acceptance_criteria || []).length === 0 ? (
+                                    <div className="ac-empty-hint">
+                                      <span>Chưa có tiêu chí nghiệm thu nào.</span>
+                                      {!confirmed && (
+                                        <button
+                                          type="button"
+                                          className="btn-link-action"
+                                          onClick={() => addAcceptanceCriterion(epicIdx, storyIdx)}
+                                        >
+                                          + Thêm tiêu chí BDD đầu tiên
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    (story.acceptanceCriteria || story.acceptance_criteria || []).map((ac, acIdx) => (
+                                      <div key={acIdx} className="ac-item">
+                                        <span className="ac-index">AC {acIdx + 1}</span>
+                                        {confirmed ? (
+                                          <div className="ac-text-confirmed">
+                                            {renderFormattedBdd(ac)}
+                                          </div>
+                                        ) : (
+                                          <div className="ac-edit-wrap">
+                                            <input
+                                              type="text"
+                                              className="form-control ac-input"
+                                              value={ac}
+                                              onChange={(e) =>
+                                                updateAcceptanceCriterion(epicIdx, storyIdx, acIdx, e.target.value)
+                                              }
+                                              placeholder="Given [tiền đề], When [thao tác], Then [kết quả]"
+                                            />
+                                            <button
+                                              type="button"
+                                              className="btn-icon btn-icon-danger btn-ac-delete"
+                                              onClick={() => deleteAcceptanceCriterion(epicIdx, storyIdx, acIdx)}
+                                              title="Xóa tiêu chí này"
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="tasks-container">
                               <span className="tasks-label">
                                 Tasks ({story.tasks.length}):
                               </span>
@@ -1407,7 +1582,8 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                 </button>
                               )}
                             </div>
-                          )}
+                          </>
+                        )}
                         </div>
                       ))}
 

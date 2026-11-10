@@ -63,6 +63,10 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng chọn điểm đón và điểm đến trên bản đồ',
               description:
                 'Cho phép người dùng ghim vị trí hoặc tìm kiếm địa chỉ để tính cước phí thời gian thực.',
+              acceptance_criteria: [
+                'Given khách hàng mở ứng dụng và cấp quyền vị trí, When chọn điểm đón và điểm đến trên bản đồ, Then hệ thống tính toán khoảng cách và hiển thị cước phí tạm tính trong 2 giây.',
+                'Given vị trí đón nằm ngoài phạm vi hoạt động (bán kính > 30km), When khách hàng ấn xác nhận, Then hệ thống thông báo lỗi không hỗ trợ khu vực này.'
+              ],
               tasks: [
                 {
                   title: 'Tích hợp Google Maps API & GPS định vị thời gian thực',
@@ -80,6 +84,10 @@ function getSmartFallback(requirement = '') {
               title: 'Hệ thống tự động ghép tài xế khả dụng gần nhất',
               description:
                 'Tìm kiếm tài xế trong bán kính 3km có trạng thái sẵn sàng nhận chuyến.',
+              acceptance_criteria: [
+                'Given yêu cầu đặt xe hợp lệ được tạo, When hệ thống quét tài xế online trong bán kính 3km, Then phát lệnh điều phối đến tài xế gần nhất có đánh giá >= 4.0 sao.',
+                'Given tài xế không bấm nhận chuyến trong vòng 15 giây, When hết hạn thời gian phản hồi, Then hệ thống tự động chuyển tiếp cuốc xe đến tài xế khả dụng tiếp theo.'
+              ],
               tasks: [
                 {
                   title: 'Truy vấn danh sách tài xế đang online trong bán kính 3km',
@@ -104,6 +112,10 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng thanh toán cước chuyến đi đa phương thức',
               description:
                 'Hỗ trợ thanh toán không tiền mặt qua Ví MoMo, ZaloPay hoặc Tiền mặt trực tiếp.',
+              acceptance_criteria: [
+                'Given chuyến đi hoàn tất và khách hàng chọn Ví điện tử, When xác nhận giao dịch, Then hệ thống gọi IPN cập nhật trạng thái thanh toán thành công và gửi hóa đơn điện tử.',
+                'Given khách hàng hủy chuyến trước khi tài xế di chuyển quá 5 phút, When xử lý yêu cầu hủy, Then tiền tạm giữ được tự động hoàn trả 100% về ví trong 24 giờ.'
+              ],
               tasks: [
                 {
                   title: 'Tích hợp cổng thanh toán Ví điện tử MoMo / ZaloPay',
@@ -121,6 +133,10 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng phản hồi chất lượng dịch vụ',
               description:
                 'Ghi nhận đánh giá sao và ý kiến đóng góp cho tài xế sau khi hoàn thành cuốc xe.',
+              acceptance_criteria: [
+                'Given chuyến đi đã kết thúc thành công, When popup đánh giá hiển thị, Then khách hàng có thể chấm điểm từ 1 đến 5 sao và để lại nhận xét.',
+                'Given khách hàng đánh giá 1 hoặc 2 sao, When bấm gửi đánh giá, Then hệ thống tự động gắn nhãn cảnh báo để bộ phận CSKH liên hệ xử lý.'
+              ],
               tasks: [
                 {
                   title: 'Giao diện đánh giá 1-5 sao và nhập nhận xét cho tài xế',
@@ -154,6 +170,10 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng yêu cầu khôi phục mật khẩu qua Email',
               description:
                 'Người dùng nhập email đăng ký để nhận mã OTP hoặc đường link xác thực một lần.',
+              acceptance_criteria: [
+                'Given email nhập vào tồn tại trong hệ thống, When người dùng bấm Gửi mã, Then hệ thống sinh mã OTP 6 chữ số gửi về hộp thư trong vòng 10 giây.',
+                'Given người dùng gửi yêu cầu liên tục quá 3 lần trong 1 phút, When bấm gửi tiếp, Then hệ thống kích hoạt rate limit và yêu cầu chờ 60 giây.'
+              ],
               tasks: [
                 {
                   title: 'Xây dựng giao diện nhập Email quên mật khẩu',
@@ -171,6 +191,10 @@ function getSmartFallback(requirement = '') {
               title: 'Xác thực mã OTP và thiết lập mật khẩu mới',
               description:
                 'Người dùng nhập mã xác thực từ email và đặt lại mật khẩu mới cho tài khoản.',
+              acceptance_criteria: [
+                'Given mã OTP đúng và còn trong thời hạn 5 phút, When người dùng nhập mật khẩu mới hợp lệ (>= 6 ký tự), Then hệ thống cập nhật mật khẩu mới và thông báo thành công.',
+                'Given mã OTP đã hết hạn hoặc sai quá 5 lần, When người dùng bấm xác nhận, Then hệ thống hủy mã OTP và yêu cầu lấy mã mới.'
+              ],
               tasks: [
                 {
                   title: 'API xác minh mã OTP và cấp mã token đặt lại mật khẩu',
@@ -195,6 +219,10 @@ function getSmartFallback(requirement = '') {
               title: 'Thu hồi các JWT token hiện hữu',
               description:
                 'Tự động đăng xuất tài khoản trên tất cả các thiết bị sau khi đổi mật khẩu.',
+              acceptance_criteria: [
+                'Given đổi mật khẩu thành công, When kiểm tra các thiết bị đang đăng nhập, Then toàn bộ token JWT cũ bị vô hiệu hóa ngay lập tức.',
+                'Given token cũ cố gắng gọi API bảo mật, When hệ thống xác thực, Then trả về lỗi HTTP 401 Unauthorized.'
+              ],
               tasks: [
                 {
                   title: 'Cập nhật thời gian token_version của người dùng',
@@ -225,6 +253,10 @@ function getSmartFallback(requirement = '') {
     (sent, idx) => ({
       title: `Chức năng ${idx + 1}: ${sent.length > 55 ? sent.slice(0, 52) + '...' : sent}`,
       description: `Đặc tả quy trình thực thi chi tiết cho: ${sent}`,
+      acceptance_criteria: [
+        `Given người dùng truy cập phân hệ chức năng, When thực hiện thao tác ${sent.slice(0, 30)}, Then hệ thống xử lý phản hồi chính xác và cập nhật dữ liệu.`,
+        `Given dữ liệu đầu vào không hợp lệ, When kiểm tra validation, Then hệ thống thông báo lỗi chi tiết cho người dùng.`
+      ],
       tasks: [
         {
           title: `Thiết kế giao diện người dùng cho ${sent.slice(0, 30)}`,
@@ -291,6 +323,12 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
         };
       });
 
+      const rawAc = story.acceptance_criteria || story.acceptanceCriteria || story.criteria || [];
+      const acceptanceCriteria = (Array.isArray(rawAc) ? rawAc : [rawAc])
+        .filter(Boolean)
+        .map((ac) => typeof ac === 'string' ? ac.trim() : String(ac.text || ac.title || JSON.stringify(ac)).trim())
+        .filter((text) => text.length > 0);
+
       totalTasks += tasks.length;
       return {
         id: storyId,
@@ -299,6 +337,8 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
         type: 'Story',
         title: String(story.title || story.name || `User Story #${si + 1}`).trim(),
         description: String(story.description || story.desc || '').trim(),
+        acceptance_criteria: acceptanceCriteria,
+        acceptanceCriteria: acceptanceCriteria,
         assigneeId: story.assigneeId || null,
         assigneeName: story.assigneeName || '',
         assigneeAvatar: story.assigneeAvatar || '',
@@ -775,6 +815,7 @@ async function mutateStoryTask(action, targetType, epics, params = {}, context =
 module.exports = {
   analyzeRequirement,
   transformHierarchyTree,
+  getSmartFallback,
   getLocalHierarchyFallback,
   mutateStoryTask,
   getLocalMutationFallback,
