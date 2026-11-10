@@ -617,6 +617,16 @@ class JiraService {
           storyDesc += `\n\n*Acceptance Criteria (Tiêu chí nghiệm thu BDD):*\n${acFormatted}`;
         }
 
+        const sp = story.storyPoints || story.story_points;
+        const hours = story.estimatedHours || story.estimated_hours;
+        const reason = story.complexityReason || story.complexity_reason;
+        if (sp || hours) {
+          const spText = sp ? `${sp} Story Points` : '';
+          const hrText = hours ? `${hours}h` : '';
+          const combo = [spText, hrText].filter(Boolean).join(' (~');
+          storyDesc += `\n\n*Ước lượng độ phức tạp (Agile Estimation):* ${combo ? (hrText && spText ? combo + ')' : combo) : ''}${reason ? ` - Lý do: ${reason}` : ''}`;
+        }
+
         const storyFields = {
           project: { key: projectKey },
           summary: storyTitle,
@@ -684,10 +694,20 @@ class JiraService {
         for (const task of tasks) {
           const taskTitle =
             typeof task === 'string' ? task : task.title || 'Untitled Subtask';
-          const taskDesc =
+          let taskDesc =
             typeof task === 'object' ? task.description || taskTitle : taskTitle;
           const assigneeId = typeof task === 'object' ? task.assigneeId : null;
           const assigneeName = typeof task === 'object' ? task.assigneeName : null;
+
+          const tSp = typeof task === 'object' ? (task.storyPoints || task.story_points) : null;
+          const tHours = typeof task === 'object' ? (task.estimatedHours || task.estimated_hours) : null;
+          const tReason = typeof task === 'object' ? (task.complexityReason || task.complexity_reason) : null;
+          if (tSp || tHours) {
+            const tSpText = tSp ? `${tSp} Story Points` : '';
+            const tHrText = tHours ? `${tHours}h` : '';
+            const tCombo = [tSpText, tHrText].filter(Boolean).join(' (~');
+            taskDesc += `\n\n*Ước lượng kỹ thuật:* ${tCombo ? (tHrText && tSpText ? tCombo + ')' : tCombo) : ''}${tReason ? ` - Lý do: ${tReason}` : ''}`;
+          }
 
           const taskFields = {
             project: { key: projectKey },

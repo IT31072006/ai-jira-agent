@@ -74,6 +74,37 @@ const normalizeEpics = (result) => {
         .map((ac) => (typeof ac === 'string' ? ac.trim() : String(ac.text || ac.title || JSON.stringify(ac)).trim()))
         .filter((text) => text.length > 0);
 
+      const tasks = (story.tasks || story.subtasks || []).map((task, ti) => {
+        const isStr = typeof task === 'string';
+        const tSp = isStr ? 2 : Number(task.storyPoints || task.story_points || 2);
+        const tHours = isStr ? 4 : Number(task.estimatedHours || task.estimated_hours || (tSp * 4));
+        const tReason = isStr ? '' : String(task.complexityReason || task.complexity_reason || '').trim();
+
+        return {
+          id: `epic-${ei}-story-${si}-task-${ti}`,
+          title:
+            isStr
+              ? task
+              : task.title || task.name || task.summary || `Task #${ti + 1}`,
+          description: typeof task === 'object' ? task.description || task.desc || '' : '',
+          storyPoints: tSp,
+          story_points: tSp,
+          estimatedHours: tHours,
+          estimated_hours: tHours,
+          complexityReason: tReason,
+          complexity_reason: tReason,
+          assigneeId: typeof task === 'object' ? task.assigneeId || null : null,
+          assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',
+          assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : '',
+        };
+      });
+
+      const defaultStoryPoints = tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0) : 3;
+      const defaultStoryHours = tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) : (defaultStoryPoints * 4);
+      const sSp = Number(story.storyPoints || story.story_points || defaultStoryPoints);
+      const sHours = Number(story.estimatedHours || story.estimated_hours || defaultStoryHours);
+      const sReason = String(story.complexityReason || story.complexity_reason || '').trim();
+
       return {
         id: `epic-${ei}-story-${si}`,
         title:
@@ -83,22 +114,18 @@ const normalizeEpics = (result) => {
           story.summary ||
           `User Story #${si + 1}`,
         description: story.description || story.desc || '',
+        storyPoints: sSp,
+        story_points: sSp,
+        estimatedHours: sHours,
+        estimated_hours: sHours,
+        complexityReason: sReason,
+        complexity_reason: sReason,
         acceptanceCriteria,
         acceptance_criteria: acceptanceCriteria,
         assigneeId: story.assigneeId || null,
         assigneeName: story.assigneeName || '',
         assigneeAvatar: story.assigneeAvatar || '',
-        tasks: (story.tasks || story.subtasks || []).map((task, ti) => ({
-          id: `epic-${ei}-story-${si}-task-${ti}`,
-          title:
-            typeof task === 'string'
-              ? task
-              : task.title || task.name || task.summary || `Task #${ti + 1}`,
-          description: typeof task === 'object' ? task.description || task.desc || '' : '',
-          assigneeId: typeof task === 'object' ? task.assigneeId || null : null,
-          assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',
-          assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : '',
-        })),
+        tasks,
       };
     }),
   }));
@@ -181,11 +208,29 @@ const reconstructTreeFromJiraIssues = (rawIssues) => {
     const isExplicitStory = type === 'story';
 
     if (!isEpic && (isExplicitStory || hasEpicParent)) {
+      let storyPoints = 3;
+      let estimatedHours = 8;
+      let complexityReason = '';
+      if (iss.description) {
+        const spMatch = iss.description.match(/(\d+)\s*Story Points/i);
+        if (spMatch) storyPoints = parseInt(spMatch[1], 10);
+        const hrMatch = iss.description.match(/(\d+)\s*h/i);
+        if (hrMatch) estimatedHours = parseInt(hrMatch[1], 10);
+        const reasonMatch = iss.description.match(/Lý do:\s*([^\n]+)/i);
+        if (reasonMatch) complexityReason = reasonMatch[1].trim();
+      }
+
       const storyObj = {
         id: `story-${iss.issue_key}`,
         key: iss.issue_key,
         title: iss.summary,
         description: iss.description || '',
+        storyPoints,
+        story_points: storyPoints,
+        estimatedHours,
+        estimated_hours: estimatedHours,
+        complexityReason,
+        complexity_reason: complexityReason,
         assigneeName: iss.assignee || '',
         jiraUrl: iss.jira_url || '',
         parentKey: iss.parent_key || null,
@@ -208,11 +253,29 @@ const reconstructTreeFromJiraIssues = (rawIssues) => {
     const isStory = storiesMap.has(iss.issue_key);
 
     if (!isEpic && !isStory) {
+      let taskSp = 2;
+      let taskHours = 4;
+      let taskReason = '';
+      if (iss.description) {
+        const spMatch = iss.description.match(/(\d+)\s*Story Points/i);
+        if (spMatch) taskSp = parseInt(spMatch[1], 10);
+        const hrMatch = iss.description.match(/(\d+)\s*h/i);
+        if (hrMatch) taskHours = parseInt(hrMatch[1], 10);
+        const reasonMatch = iss.description.match(/Lý do:\s*([^\n]+)/i);
+        if (reasonMatch) taskReason = reasonMatch[1].trim();
+      }
+
       const taskObj = {
         id: `task-${iss.issue_key}`,
         key: iss.issue_key,
         title: iss.summary,
         description: iss.description || '',
+        storyPoints: taskSp,
+        story_points: taskSp,
+        estimatedHours: taskHours,
+        estimated_hours: taskHours,
+        complexityReason: taskReason,
+        complexity_reason: taskReason,
         assigneeName: iss.assignee || '',
         jiraUrl: iss.jira_url || '',
         parentKey: iss.parent_key || null,
@@ -1028,6 +1091,26 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
     }
   };
 
+  // ── Tính toán số liệu thống kê Agile KPI (Story Points & Effort) ─────────────
+  const totalEpicsCount = editableEpics?.length || 0;
+  let totalStoriesCount = 0;
+  let totalTasksCount = 0;
+  let totalStoryPointsCount = 0;
+  let totalEstimatedHoursCount = 0;
+
+  if (editableEpics && Array.isArray(editableEpics)) {
+    editableEpics.forEach((e) => {
+      const stories = e.stories || [];
+      totalStoriesCount += stories.length;
+      stories.forEach((s) => {
+        totalStoryPointsCount += Number(s.storyPoints || s.story_points || 0);
+        totalEstimatedHoursCount += Number(s.estimatedHours || s.estimated_hours || 0);
+        const tasks = s.tasks || [];
+        totalTasksCount += tasks.length;
+      });
+    });
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="card requirement-analyzer-card">
@@ -1189,6 +1272,30 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
               </div>
             )}
 
+            {/* Agile KPI Summary Row */}
+            <div className="agile-kpi-summary-row">
+              <div className="agile-kpi-pill">
+                <Layers size={14} className="text-purple-600" />
+                <span><strong>{totalEpicsCount}</strong> Epics</span>
+              </div>
+              <div className="agile-kpi-pill">
+                <Bookmark size={14} className="text-blue-600" />
+                <span><strong>{totalStoriesCount}</strong> Stories</span>
+              </div>
+              <div className="agile-kpi-pill">
+                <CheckSquare size={14} className="text-green-600" />
+                <span><strong>{totalTasksCount}</strong> Tasks</span>
+              </div>
+              <div className="agile-kpi-pill agile-kpi-pill--highlight" title="Tổng độ phức tạp Story Points theo dãy Fibonacci">
+                <Zap size={14} className="text-amber-500" />
+                <span>Tổng ước lượng: <strong>{totalStoryPointsCount}</strong> SP</span>
+              </div>
+              <div className="agile-kpi-pill" title="Tổng thời gian làm việc ước tính">
+                <span style={{ fontSize: '0.85rem' }}>⏱️</span>
+                <span>Thời gian: <strong>{totalEstimatedHoursCount}</strong> giờ (~{parseFloat((totalEstimatedHoursCount / 8).toFixed(1))} man-day)</span>
+              </div>
+            </div>
+
             {/* Nếu API trả về epics chuẩn */}
             {editableEpics.length > 0 ? (
               <div className="epics-container">
@@ -1285,6 +1392,15 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     <span className="badge badge-outline" style={{ fontSize: '0.72rem', padding: '1px 6px' }}>
                                       {story.tasks.length} {story.tasks.length === 1 ? 'Task' : 'Tasks'}
                                     </span>
+                                    <span className="badge badge-sp" title={story.complexityReason ? `Độ phức tạp: ${story.complexityReason}` : 'Story Points & Thời gian ước tính'}>
+                                      <Zap size={11} />
+                                      <span>{story.storyPoints || 3} SP ({story.estimatedHours || 8}h)</span>
+                                    </span>
+                                    {confirmed && story.complexityReason && (
+                                      <span className="complexity-reason-tag" title={story.complexityReason}>
+                                        💡 {story.complexityReason}
+                                      </span>
+                                    )}
                                   {members.length > 0 && (
                                     <div
                                       className="story-assignee-select-wrap"
@@ -1369,6 +1485,48 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                     placeholder="Mô tả User Story (tuỳ chọn)"
                                     rows={2}
                                   />
+                                  <div className="story-estimation-edit-bar">
+                                    <div className="estimation-sp-select-wrap" title="Chọn Story Points Agile theo Fibonacci">
+                                      <Zap size={12} className="text-amber-500" />
+                                      <select
+                                        className="estimation-sp-select"
+                                        value={story.storyPoints || 3}
+                                        onChange={(e) => {
+                                          const pts = parseInt(e.target.value, 10);
+                                          const hoursMap = { 1: 2, 2: 4, 3: 8, 5: 16, 8: 32, 13: 48 };
+                                          updateStoryField(epicIdx, storyIdx, 'storyPoints', pts);
+                                          updateStoryField(epicIdx, storyIdx, 'estimatedHours', hoursMap[pts] || pts * 4);
+                                        }}
+                                      >
+                                        <option value={1}>1 SP (2h - Rất dễ)</option>
+                                        <option value={2}>2 SP (4h - Dễ)</option>
+                                        <option value={3}>3 SP (8h - Vừa)</option>
+                                        <option value={5}>5 SP (16h - Phức tạp)</option>
+                                        <option value={8}>8 SP (32h - Rất phức tạp)</option>
+                                        <option value={13}>13 SP (48h - Epic nhỏ)</option>
+                                      </select>
+                                    </div>
+                                    <div className="estimation-hours-input-wrap" title="Số giờ làm việc ước lượng">
+                                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>⏱️</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="200"
+                                        className="estimation-hours-input"
+                                        value={story.estimatedHours || 8}
+                                        onChange={(e) => updateStoryField(epicIdx, storyIdx, 'estimatedHours', parseInt(e.target.value, 10) || 1)}
+                                        placeholder="Giờ"
+                                      />
+                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>giờ</span>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      className="estimation-reason-input"
+                                      value={story.complexityReason || ''}
+                                      onChange={(e) => updateStoryField(epicIdx, storyIdx, 'complexityReason', e.target.value)}
+                                      placeholder="Lý do độ phức tạp (VD: Cần tích hợp API và bảo mật)"
+                                    />
+                                  </div>
                                 </>
                               )}
                             </div>
@@ -1466,8 +1624,14 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                             </span>
                                           )}
                                           <span>{task.title}</span>
+                                          <span className="badge badge-sp-task" title={task.complexityReason ? `Độ phức tạp: ${task.complexityReason}` : 'Ước lượng Task'}>
+                                            ⚡ {task.storyPoints || 2} SP ({task.estimatedHours || 4}h)
+                                          </span>
                                           {task.description && (
                                             <span className="task-subdesc-muted"> — {task.description}</span>
+                                          )}
+                                          {task.complexityReason && (
+                                            <span className="task-complexity-reason-inline" title={task.complexityReason}> — 💡 {task.complexityReason}</span>
                                           )}
                                         </div>
                                       ) : (
@@ -1520,6 +1684,41 @@ export const RequirementAnalyzer = ({ project, onDraftChange }) => {
                                             }
                                             placeholder="Mô tả ngắn (tuỳ chọn)"
                                           />
+                                          <div className="task-estimation-edit-bar">
+                                            <select
+                                              className="task-sp-select"
+                                              value={task.storyPoints || 2}
+                                              onChange={(e) => {
+                                                const pts = parseInt(e.target.value, 10);
+                                                const hoursMap = { 1: 2, 2: 4, 3: 8, 5: 16 };
+                                                updateTaskField(epicIdx, storyIdx, taskIdx, 'storyPoints', pts);
+                                                updateTaskField(epicIdx, storyIdx, taskIdx, 'estimatedHours', hoursMap[pts] || pts * 2);
+                                              }}
+                                              title="Story Points của Task"
+                                            >
+                                              <option value={1}>1 SP (2h)</option>
+                                              <option value={2}>2 SP (4h)</option>
+                                              <option value={3}>3 SP (8h)</option>
+                                              <option value={5}>5 SP (16h)</option>
+                                            </select>
+                                            <input
+                                              type="number"
+                                              min="1"
+                                              max="80"
+                                              className="task-hours-input"
+                                              value={task.estimatedHours || 4}
+                                              onChange={(e) => updateTaskField(epicIdx, storyIdx, taskIdx, 'estimatedHours', parseInt(e.target.value, 10) || 1)}
+                                              title="Số giờ thực hiện Task"
+                                            />
+                                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>h</span>
+                                            <input
+                                              type="text"
+                                              className="task-reason-input"
+                                              value={task.complexityReason || ''}
+                                              onChange={(e) => updateTaskField(epicIdx, storyIdx, taskIdx, 'complexityReason', e.target.value)}
+                                              placeholder="Lý do độ phức tạp Task"
+                                            />
+                                          </div>
                                         </div>
                                       )}
                                     </div>

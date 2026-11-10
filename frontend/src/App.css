@@ -1628,6 +1628,171 @@
   border: 1px solid #a7f3d0;
 }
 
+/* ─── Agile Story Points & Effort Estimation ─────────────────── */
+.agile-kpi-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.agile-kpi-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.agile-kpi-pill--highlight {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.agile-kpi-pill--highlight strong {
+  color: #d97706;
+}
+
+.badge-sp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  font-weight: 600;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.badge-sp-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  font-weight: 600;
+  font-size: 0.68rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 0.35rem;
+}
+
+.complexity-reason-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 4px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-complexity-reason-inline {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-style: italic;
+  margin-left: 0.3rem;
+}
+
+.story-estimation-edit-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+}
+
+.estimation-sp-select-wrap,
+.estimation-hours-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.estimation-sp-select {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.estimation-hours-input {
+  width: 55px;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1e293b;
+  text-align: center;
+}
+
+.estimation-reason-input {
+  flex: 1;
+  min-width: 180px;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+}
+
+.task-estimation-edit-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.task-sp-select {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.task-hours-input {
+  width: 45px;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.task-reason-input {
+  width: 150px;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
 .tasks-container {
   display: flex;
   flex-direction: column;
