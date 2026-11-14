@@ -1453,6 +1453,346 @@
   gap: 0.25rem;
 }
 
+/* ── Acceptance Criteria (BDD) Styling ── */
+.acceptance-criteria-container {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.85rem;
+  margin-top: 0.65rem;
+  margin-bottom: 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.acceptance-criteria-container:hover {
+  border-color: #cbd5e1;
+}
+
+.acceptance-criteria-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.ac-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.ac-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.btn-add-ac {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-add-ac:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.acceptance-criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ac-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.ac-index {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.ac-text-confirmed {
+  color: #1e293b;
+  flex: 1;
+}
+
+.ac-edit-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.ac-input {
+  flex: 1;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+}
+
+.ac-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.btn-ac-delete {
+  padding: 0.25rem;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-ac-delete:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.ac-empty-hint {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-link-action {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-link-action:hover {
+  text-decoration: underline;
+}
+
+/* BDD Keyword Tags */
+.bdd-tag {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin: 0 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bdd-tag-given {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.bdd-tag-when {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.bdd-tag-then {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+/* ─── Agile Story Points & Effort Estimation ─────────────────── */
+.agile-kpi-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.agile-kpi-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.agile-kpi-pill--highlight {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.agile-kpi-pill--highlight strong {
+  color: #d97706;
+}
+
+.badge-sp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  font-weight: 600;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.badge-sp-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  font-weight: 600;
+  font-size: 0.68rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 0.35rem;
+}
+
+.complexity-reason-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 4px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-complexity-reason-inline {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-style: italic;
+  margin-left: 0.3rem;
+}
+
+.story-estimation-edit-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+}
+
+.estimation-sp-select-wrap,
+.estimation-hours-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.estimation-sp-select {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.estimation-hours-input {
+  width: 55px;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1e293b;
+  text-align: center;
+}
+
+.estimation-reason-input {
+  flex: 1;
+  min-width: 180px;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+}
+
+.task-estimation-edit-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.task-sp-select {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.task-hours-input {
+  width: 45px;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.task-reason-input {
+  width: 150px;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
 .tasks-container {
   display: flex;
   flex-direction: column;

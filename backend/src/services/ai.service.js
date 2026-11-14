@@ -63,16 +63,38 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng chọn điểm đón và điểm đến trên bản đồ',
               description:
                 'Cho phép người dùng ghim vị trí hoặc tìm kiếm địa chỉ để tính cước phí thời gian thực.',
+              story_points: 5,
+              storyPoints: 5,
+              estimated_hours: 16,
+              estimatedHours: 16,
+              complexity_reason: 'Tích hợp Google Maps API, định vị GPS thời gian thực và tính cước theo cự ly',
+              complexityReason: 'Tích hợp Google Maps API, định vị GPS thời gian thực và tính cước theo cự ly',
+              acceptance_criteria: [
+                'Given khách hàng mở ứng dụng và cấp quyền vị trí, When chọn điểm đón và điểm đến trên bản đồ, Then hệ thống tính toán khoảng cách và hiển thị cước phí tạm tính trong 2 giây.',
+                'Given vị trí đón nằm ngoài phạm vi hoạt động (bán kính > 30km), When khách hàng ấn xác nhận, Then hệ thống thông báo lỗi không hỗ trợ khu vực này.'
+              ],
               tasks: [
                 {
                   title: 'Tích hợp Google Maps API & GPS định vị thời gian thực',
                   description:
                     'Hiển thị bản đồ tương tác và tự động lấy tọa độ vị trí hiện tại của khách hàng.',
+                  story_points: 3,
+                  storyPoints: 3,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Tích hợp Maps SDK và Geolocation API trên mobile/web',
+                  complexityReason: 'Tích hợp Maps SDK và Geolocation API trên mobile/web',
                 },
                 {
                   title: 'Thuật toán tính toán quãng đường và ước lượng cước phí',
                   description:
                     'Tính khoảng cách di chuyển thực tế và nhân với đơn giá theo khung giờ.',
+                  story_points: 2,
+                  storyPoints: 2,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Giải thuật tính cước phí động theo cung đường và giờ cao điểm',
+                  complexityReason: 'Giải thuật tính cước phí động theo cung đường và giờ cao điểm',
                 },
               ],
             },
@@ -80,16 +102,38 @@ function getSmartFallback(requirement = '') {
               title: 'Hệ thống tự động ghép tài xế khả dụng gần nhất',
               description:
                 'Tìm kiếm tài xế trong bán kính 3km có trạng thái sẵn sàng nhận chuyến.',
+              story_points: 8,
+              storyPoints: 8,
+              estimated_hours: 24,
+              estimatedHours: 24,
+              complexity_reason: 'Thuật toán Geo-spatial query bán kính 3km, luồng timeout 15s và chuyển tiếp tự động',
+              complexityReason: 'Thuật toán Geo-spatial query bán kính 3km, luồng timeout 15s và chuyển tiếp tự động',
+              acceptance_criteria: [
+                'Given yêu cầu đặt xe hợp lệ được tạo, When hệ thống quét tài xế online trong bán kính 3km, Then phát lệnh điều phối đến tài xế gần nhất có đánh giá >= 4.0 sao.',
+                'Given tài xế không bấm nhận chuyến trong vòng 15 giây, When hết hạn thời gian phản hồi, Then hệ thống tự động chuyển tiếp cuốc xe đến tài xế khả dụng tiếp theo.'
+              ],
               tasks: [
                 {
                   title: 'Truy vấn danh sách tài xế đang online trong bán kính 3km',
                   description:
                     'Lọc tài xế theo tọa độ không gian địa lý (Geo-spatial query).',
+                  story_points: 5,
+                  storyPoints: 5,
+                  estimated_hours: 16,
+                  estimatedHours: 16,
+                  complexity_reason: 'PostGIS spatial indexing tối ưu tốc độ tìm kiếm tài xế dưới 100ms',
+                  complexityReason: 'PostGIS spatial indexing tối ưu tốc độ tìm kiếm tài xế dưới 100ms',
                 },
                 {
                   title: 'Gửi thông báo nhận chuyến tới ứng dụng của tài xế',
                   description:
                     'Phát tín hiệu Webhook / Push Notification đến thiết bị tài xế được chọn.',
+                  story_points: 3,
+                  storyPoints: 3,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Socket.IO / Firebase Cloud Messaging thời gian thực kèm watchdog timeout',
+                  complexityReason: 'Socket.IO / Firebase Cloud Messaging thời gian thực kèm watchdog timeout',
                 },
               ],
             },
@@ -104,16 +148,38 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng thanh toán cước chuyến đi đa phương thức',
               description:
                 'Hỗ trợ thanh toán không tiền mặt qua Ví MoMo, ZaloPay hoặc Tiền mặt trực tiếp.',
+              story_points: 5,
+              storyPoints: 5,
+              estimated_hours: 16,
+              estimatedHours: 16,
+              complexity_reason: 'Tích hợp cổng ví điện tử MoMo/ZaloPay, xử lý IPN và cơ chế hoàn tiền an toàn',
+              complexityReason: 'Tích hợp cổng ví điện tử MoMo/ZaloPay, xử lý IPN và cơ chế hoàn tiền an toàn',
+              acceptance_criteria: [
+                'Given chuyến đi hoàn tất và khách hàng chọn Ví điện tử, When xác nhận giao dịch, Then hệ thống gọi IPN cập nhật trạng thái thanh toán thành công và gửi hóa đơn điện tử.',
+                'Given khách hàng hủy chuyến trước khi tài xế di chuyển quá 5 phút, When xử lý yêu cầu hủy, Then tiền tạm giữ được tự động hoàn trả 100% về ví trong 24 giờ.'
+              ],
               tasks: [
                 {
                   title: 'Tích hợp cổng thanh toán Ví điện tử MoMo / ZaloPay',
                   description:
                     'Tạo link thanh toán QR Code và xử lý IPN xác nhận giao dịch thành công.',
+                  story_points: 3,
+                  storyPoints: 3,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Tạo mã QR thanh toán động và xác thực chữ ký số HMAC-SHA256 IPN',
+                  complexityReason: 'Tạo mã QR thanh toán động và xác thực chữ ký số HMAC-SHA256 IPN',
                 },
                 {
                   title: 'Xử lý hoàn tiền tự động khi khách hàng hoặc tài xế hủy chuyến',
                   description:
                     'Đối soát và hoàn cước về ví nếu chuyến đi bị hủy trong thời gian quy định.',
+                  story_points: 2,
+                  storyPoints: 2,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'API Refund đối soát giao dịch với ví điện tử theo chính sách hủy chuyến',
+                  complexityReason: 'API Refund đối soát giao dịch với ví điện tử theo chính sách hủy chuyến',
                 },
               ],
             },
@@ -121,11 +187,27 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng phản hồi chất lượng dịch vụ',
               description:
                 'Ghi nhận đánh giá sao và ý kiến đóng góp cho tài xế sau khi hoàn thành cuốc xe.',
+              story_points: 3,
+              storyPoints: 3,
+              estimated_hours: 8,
+              estimatedHours: 8,
+              complexity_reason: 'Modal đánh giá 1-5 sao và phân loại cảnh báo tự động khi rating thấp',
+              complexityReason: 'Modal đánh giá 1-5 sao và phân loại cảnh báo tự động khi rating thấp',
+              acceptance_criteria: [
+                'Given chuyến đi đã kết thúc thành công, When popup đánh giá hiển thị, Then khách hàng có thể chấm điểm từ 1 đến 5 sao và để lại nhận xét.',
+                'Given khách hàng đánh giá 1 hoặc 2 sao, When bấm gửi đánh giá, Then hệ thống tự động gắn nhãn cảnh báo để bộ phận CSKH liên hệ xử lý.'
+              ],
               tasks: [
                 {
                   title: 'Giao diện đánh giá 1-5 sao và nhập nhận xét cho tài xế',
                   description:
                     'Form pop-up hiển thị ngay khi chuyến xe hoàn tất.',
+                  story_points: 3,
+                  storyPoints: 3,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Thiết kế Component giao diện đánh giá sao và lưu trữ dữ liệu feedback',
+                  complexityReason: 'Thiết kế Component giao diện đánh giá sao và lưu trữ dữ liệu feedback',
                 },
               ],
             },
@@ -154,16 +236,38 @@ function getSmartFallback(requirement = '') {
               title: 'Khách hàng yêu cầu khôi phục mật khẩu qua Email',
               description:
                 'Người dùng nhập email đăng ký để nhận mã OTP hoặc đường link xác thực một lần.',
+              story_points: 5,
+              storyPoints: 5,
+              estimated_hours: 16,
+              estimatedHours: 16,
+              complexity_reason: 'Sinh mã OTP bảo mật, rate limiting chống spam và gửi mail qua SMTP',
+              complexityReason: 'Sinh mã OTP bảo mật, rate limiting chống spam và gửi mail qua SMTP',
+              acceptance_criteria: [
+                'Given email nhập vào tồn tại trong hệ thống, When người dùng bấm Gửi mã, Then hệ thống sinh mã OTP 6 chữ số gửi về hộp thư trong vòng 10 giây.',
+                'Given người dùng gửi yêu cầu liên tục quá 3 lần trong 1 phút, When bấm gửi tiếp, Then hệ thống kích hoạt rate limit và yêu cầu chờ 60 giây.'
+              ],
               tasks: [
                 {
                   title: 'Xây dựng giao diện nhập Email quên mật khẩu',
                   description:
                     'Form có kiểm tra định dạng email và nút gửi yêu cầu có chống spam (rate limit).',
+                  story_points: 2,
+                  storyPoints: 2,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Form validation và đếm ngược rate limit 60s',
+                  complexityReason: 'Form validation và đếm ngược rate limit 60s',
                 },
                 {
                   title: 'API sinh mã OTP bảo mật và gửi email cho người dùng',
                   description:
                     'Tạo mã OTP 6 số ngẫu nhiên, lưu cache thời hạn 5 phút và gửi qua Nodemailer.',
+                  story_points: 3,
+                  storyPoints: 3,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Mã hóa OTP, lưu Redis/DB với TTL 5 phút và gửi email SMTP',
+                  complexityReason: 'Mã hóa OTP, lưu Redis/DB với TTL 5 phút và gửi email SMTP',
                 },
               ],
             },
@@ -171,16 +275,38 @@ function getSmartFallback(requirement = '') {
               title: 'Xác thực mã OTP và thiết lập mật khẩu mới',
               description:
                 'Người dùng nhập mã xác thực từ email và đặt lại mật khẩu mới cho tài khoản.',
+              story_points: 5,
+              storyPoints: 5,
+              estimated_hours: 16,
+              estimatedHours: 16,
+              complexity_reason: 'Xác thực mã OTP một lần, kiểm tra độ phức tạp mật khẩu và mã hóa bcrypt',
+              complexityReason: 'Xác thực mã OTP một lần, kiểm tra độ phức tạp mật khẩu và mã hóa bcrypt',
+              acceptance_criteria: [
+                'Given mã OTP đúng và còn trong thời hạn 5 phút, When người dùng nhập mật khẩu mới hợp lệ (>= 6 ký tự), Then hệ thống cập nhật mật khẩu mới và thông báo thành công.',
+                'Given mã OTP đã hết hạn hoặc sai quá 5 lần, When người dùng bấm xác nhận, Then hệ thống hủy mã OTP và yêu cầu lấy mã mới.'
+              ],
               tasks: [
                 {
                   title: 'API xác minh mã OTP và cấp mã token đặt lại mật khẩu',
                   description:
                     'Kiểm tra mã OTP nhập vào có khớp và còn hạn sử dụng hay không.',
+                  story_points: 3,
+                  storyPoints: 3,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Xác thực OTP, đếm số lần sai và cấp reset token JWT tạm thời',
+                  complexityReason: 'Xác thực OTP, đếm số lần sai và cấp reset token JWT tạm thời',
                 },
                 {
                   title: 'Cập nhật mật khẩu mới mã hóa bcrypt vào cơ sở dữ liệu',
                   description:
                     'Hash mật khẩu mới với bcrypt salt 10 vòng và cập nhật vào bảng users.',
+                  story_points: 2,
+                  storyPoints: 2,
+                  estimated_hours: 8,
+                  estimatedHours: 8,
+                  complexity_reason: 'Bcrypt hash salt 10 và cập nhật cơ sở dữ liệu',
+                  complexityReason: 'Bcrypt hash salt 10 và cập nhật cơ sở dữ liệu',
                 },
               ],
             },
@@ -195,16 +321,38 @@ function getSmartFallback(requirement = '') {
               title: 'Thu hồi các JWT token hiện hữu',
               description:
                 'Tự động đăng xuất tài khoản trên tất cả các thiết bị sau khi đổi mật khẩu.',
+              story_points: 3,
+              storyPoints: 3,
+              estimated_hours: 8,
+              estimatedHours: 8,
+              complexity_reason: 'Vô hiệu hóa toàn bộ session token và phát cảnh báo email đăng nhập lạ',
+              complexityReason: 'Vô hiệu hóa toàn bộ session token và phát cảnh báo email đăng nhập lạ',
+              acceptance_criteria: [
+                'Given đổi mật khẩu thành công, When kiểm tra các thiết bị đang đăng nhập, Then toàn bộ token JWT cũ bị vô hiệu hóa ngay lập tức.',
+                'Given token cũ cố gắng gọi API bảo mật, When hệ thống xác thực, Then trả về lỗi HTTP 401 Unauthorized.'
+              ],
               tasks: [
                 {
                   title: 'Cập nhật thời gian token_version của người dùng',
                   description:
                     'Đảm bảo token cũ bị từ chối khi truy cập API bảo mật.',
+                  story_points: 2,
+                  storyPoints: 2,
+                  estimated_hours: 4,
+                  estimatedHours: 4,
+                  complexity_reason: 'Cơ chế JWT invalidation với versioning trên DB',
+                  complexityReason: 'Cơ chế JWT invalidation với versioning trên DB',
                 },
                 {
                   title: 'Gửi email cảnh báo tài khoản vừa đổi mật khẩu',
                   description:
                     'Gửi email thông báo bảo mật kèm thời gian và IP thực hiện đổi mật khẩu.',
+                  story_points: 1,
+                  storyPoints: 1,
+                  estimated_hours: 4,
+                  estimatedHours: 4,
+                  complexity_reason: 'Gửi email thông báo bảo mật và log IP người dùng',
+                  complexityReason: 'Gửi email thông báo bảo mật và log IP người dùng',
                 },
               ],
             },
@@ -225,14 +373,36 @@ function getSmartFallback(requirement = '') {
     (sent, idx) => ({
       title: `Chức năng ${idx + 1}: ${sent.length > 55 ? sent.slice(0, 52) + '...' : sent}`,
       description: `Đặc tả quy trình thực thi chi tiết cho: ${sent}`,
+      story_points: 5,
+      storyPoints: 5,
+      estimated_hours: 16,
+      estimatedHours: 16,
+      complexity_reason: 'Phát triển hoàn chỉnh tính năng kèm giao diện và API backend',
+      complexityReason: 'Phát triển hoàn chỉnh tính năng kèm giao diện và API backend',
+      acceptance_criteria: [
+        `Given người dùng truy cập phân hệ chức năng, When thực hiện thao tác ${sent.slice(0, 30)}, Then hệ thống xử lý phản hồi chính xác và cập nhật dữ liệu.`,
+        `Given dữ liệu đầu vào không hợp lệ, When kiểm tra validation, Then hệ thống thông báo lỗi chi tiết cho người dùng.`
+      ],
       tasks: [
         {
           title: `Thiết kế giao diện người dùng cho ${sent.slice(0, 30)}`,
           description: `Xây dựng UI component tương ứng trên Frontend theo chuẩn UX/UI.`,
+          story_points: 2,
+          storyPoints: 2,
+          estimated_hours: 8,
+          estimatedHours: 8,
+          complexity_reason: 'Thiết kế React component và form tương tác',
+          complexityReason: 'Thiết kế React component và form tương tác',
         },
         {
           title: `Phát triển API và xử lý dữ liệu backend cho ${sent.slice(0, 30)}`,
           description: `Viết endpoint Controller, Service và lưu trữ vào CSDL PostgreSQL.`,
+          story_points: 3,
+          storyPoints: 3,
+          estimated_hours: 8,
+          estimatedHours: 8,
+          complexity_reason: 'Viết API endpoint, service xử lý nghiệp vụ và schema DB',
+          complexityReason: 'Viết API endpoint, service xử lý nghiệp vụ và schema DB',
         },
       ],
     })
@@ -258,6 +428,8 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
   const epics = Array.isArray(rawEpics) ? rawEpics : [];
   let totalStories = 0;
   let totalTasks = 0;
+  let totalStoryPoints = 0;
+  let totalEstimatedHours = 0;
 
   const treeData = epics.map((epic, ei) => {
     const epicId = `epic-${ei}`;
@@ -277,6 +449,9 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
           typeof task === 'object'
             ? String(task.description || task.desc || '').trim()
             : '';
+        const tSp = typeof task === 'object' ? Number(task.story_points || task.storyPoints || 2) : 2;
+        const tHours = typeof task === 'object' ? Number(task.estimated_hours || task.estimatedHours || (tSp * 4)) : 8;
+        const tReason = typeof task === 'object' ? String(task.complexity_reason || task.complexityReason || '').trim() : '';
 
         return {
           id: taskId,
@@ -285,13 +460,34 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
           type: 'Task',
           title,
           description,
+          story_points: tSp,
+          storyPoints: tSp,
+          estimated_hours: tHours,
+          estimatedHours: tHours,
+          complexity_reason: tReason,
+          complexityReason: tReason,
           assigneeId: typeof task === 'object' ? task.assigneeId || null : null,
           assigneeName: typeof task === 'object' ? task.assigneeName || '' : '',
           assigneeAvatar: typeof task === 'object' ? task.assigneeAvatar || '' : '',
         };
       });
 
+      const rawAc = story.acceptance_criteria || story.acceptanceCriteria || story.criteria || [];
+      const acceptanceCriteria = (Array.isArray(rawAc) ? rawAc : [rawAc])
+        .filter(Boolean)
+        .map((ac) => typeof ac === 'string' ? ac.trim() : String(ac.text || ac.title || JSON.stringify(ac)).trim())
+        .filter((text) => text.length > 0);
+
+      const defaultStoryPoints = tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0) : 3;
+      const defaultStoryHours = tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) : (defaultStoryPoints * 4);
+      const sSp = Number(story.story_points || story.storyPoints || defaultStoryPoints);
+      const sHours = Number(story.estimated_hours || story.estimatedHours || defaultStoryHours);
+      const sReason = String(story.complexity_reason || story.complexityReason || '').trim();
+
       totalTasks += tasks.length;
+      totalStoryPoints += sSp;
+      totalEstimatedHours += sHours;
+
       return {
         id: storyId,
         parentId: epicId,
@@ -299,6 +495,14 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
         type: 'Story',
         title: String(story.title || story.name || `User Story #${si + 1}`).trim(),
         description: String(story.description || story.desc || '').trim(),
+        story_points: sSp,
+        storyPoints: sSp,
+        estimated_hours: sHours,
+        estimatedHours: sHours,
+        complexity_reason: sReason,
+        complexityReason: sReason,
+        acceptance_criteria: acceptanceCriteria,
+        acceptanceCriteria: acceptanceCriteria,
         assigneeId: story.assigneeId || null,
         assigneeName: story.assigneeName || '',
         assigneeAvatar: story.assigneeAvatar || '',
@@ -325,6 +529,8 @@ function getLocalHierarchyFallback(rawEpics = [], context = {}) {
       totalEpics: treeData.length,
       totalStories,
       totalTasks,
+      totalStoryPoints,
+      totalEstimatedHours,
       totalNodes: treeData.length + totalStories + totalTasks,
       treeDepth: treeData.length > 0 ? (totalStories > 0 ? (totalTasks > 0 ? 3 : 2) : 1) : 0,
       avgTasksPerStory: totalStories > 0 ? parseFloat((totalTasks / totalStories).toFixed(1)) : 0,
@@ -523,6 +729,12 @@ function getLocalMutationFallback(action, targetType, rawEpics = [], params = {}
         type: 'Story',
         title: (data && data.title && data.title.trim()) ? data.title.trim() : 'User Story mới',
         description: (data && data.description) ? data.description.trim() : '',
+        story_points: Number(data.storyPoints || data.story_points || 3),
+        storyPoints: Number(data.storyPoints || data.story_points || 3),
+        estimated_hours: Number(data.estimatedHours || data.estimated_hours || 8),
+        estimatedHours: Number(data.estimatedHours || data.estimated_hours || 8),
+        complexity_reason: String(data.complexityReason || data.complexity_reason || '').trim(),
+        complexityReason: String(data.complexityReason || data.complexity_reason || '').trim(),
         assigneeId: (data && data.assigneeId) || null,
         assigneeName: (data && data.assigneeName) || '',
         assigneeAvatar: (data && data.assigneeAvatar) || '',
@@ -553,6 +765,12 @@ function getLocalMutationFallback(action, targetType, rawEpics = [], params = {}
         type: 'Task',
         title: (data && data.title && data.title.trim()) ? data.title.trim() : 'Task mới',
         description: (data && data.description) ? data.description.trim() : '',
+        story_points: Number(data.storyPoints || data.story_points || 2),
+        storyPoints: Number(data.storyPoints || data.story_points || 2),
+        estimated_hours: Number(data.estimatedHours || data.estimated_hours || 4),
+        estimatedHours: Number(data.estimatedHours || data.estimated_hours || 4),
+        complexity_reason: String(data.complexityReason || data.complexity_reason || '').trim(),
+        complexityReason: String(data.complexityReason || data.complexity_reason || '').trim(),
         assigneeId: (data && data.assigneeId) || null,
         assigneeName: (data && data.assigneeName) || '',
         assigneeAvatar: (data && data.assigneeAvatar) || '',
@@ -571,6 +789,21 @@ function getLocalMutationFallback(action, targetType, rawEpics = [], params = {}
         if (s) {
           if (data.title !== undefined) s.title = String(data.title).trim();
           if (data.description !== undefined) s.description = String(data.description).trim();
+          if (data.storyPoints !== undefined || data.story_points !== undefined) {
+            const pts = Number(data.storyPoints !== undefined ? data.storyPoints : data.story_points);
+            s.storyPoints = pts;
+            s.story_points = pts;
+          }
+          if (data.estimatedHours !== undefined || data.estimated_hours !== undefined) {
+            const hrs = Number(data.estimatedHours !== undefined ? data.estimatedHours : data.estimated_hours);
+            s.estimatedHours = hrs;
+            s.estimated_hours = hrs;
+          }
+          if (data.complexityReason !== undefined || data.complexity_reason !== undefined) {
+            const rsn = String(data.complexityReason !== undefined ? data.complexityReason : data.complexity_reason).trim();
+            s.complexityReason = rsn;
+            s.complexity_reason = rsn;
+          }
           if (data.assigneeId !== undefined) s.assigneeId = data.assigneeId;
           if (data.assigneeName !== undefined) s.assigneeName = String(data.assigneeName).trim();
           if (data.assigneeAvatar !== undefined) s.assigneeAvatar = String(data.assigneeAvatar).trim();
@@ -589,6 +822,21 @@ function getLocalMutationFallback(action, targetType, rawEpics = [], params = {}
           if (t) {
             if (data.title !== undefined) t.title = String(data.title).trim();
             if (data.description !== undefined) t.description = String(data.description).trim();
+            if (data.storyPoints !== undefined || data.story_points !== undefined) {
+              const pts = Number(data.storyPoints !== undefined ? data.storyPoints : data.story_points);
+              t.storyPoints = pts;
+              t.story_points = pts;
+            }
+            if (data.estimatedHours !== undefined || data.estimated_hours !== undefined) {
+              const hrs = Number(data.estimatedHours !== undefined ? data.estimatedHours : data.estimated_hours);
+              t.estimatedHours = hrs;
+              t.estimated_hours = hrs;
+            }
+            if (data.complexityReason !== undefined || data.complexity_reason !== undefined) {
+              const rsn = String(data.complexityReason !== undefined ? data.complexityReason : data.complexity_reason).trim();
+              t.complexityReason = rsn;
+              t.complexity_reason = rsn;
+            }
             if (data.assigneeId !== undefined) t.assigneeId = data.assigneeId;
             if (data.assigneeName !== undefined) t.assigneeName = String(data.assigneeName).trim();
             if (data.assigneeAvatar !== undefined) t.assigneeAvatar = String(data.assigneeAvatar).trim();
@@ -775,6 +1023,7 @@ async function mutateStoryTask(action, targetType, epics, params = {}, context =
 module.exports = {
   analyzeRequirement,
   transformHierarchyTree,
+  getSmartFallback,
   getLocalHierarchyFallback,
   mutateStoryTask,
   getLocalMutationFallback,

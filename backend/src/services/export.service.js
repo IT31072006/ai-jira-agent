@@ -229,6 +229,8 @@ class ExportService {
 
     let storiesCount = 0;
     let tasksCount = 0;
+    let totalStoryPoints = 0;
+    let totalEstimatedHours = 0;
 
     const epics = rawEpics.map((epic, ei) => {
       const rawStories = epic.stories || epic.user_stories || epic.userStories || [];
@@ -238,10 +240,20 @@ class ExportService {
         const tasks = rawTasks.map((task, ti) => {
           tasksCount++;
           const isStr = typeof task === 'string';
+          const tSp = isStr ? 2 : Number(task.storyPoints || task.story_points || 2);
+          const tHours = isStr ? 4 : Number(task.estimatedHours || task.estimated_hours || (tSp * 4));
+          const tReason = isStr ? '' : String(task.complexityReason || task.complexity_reason || '').trim();
+
           return {
             key: isStr ? null : task.key || null,
             title: isStr ? task : task.title || task.name || task.summary || `Task #${ti + 1}`,
             description: isStr ? '' : task.description || task.desc || '',
+            storyPoints: tSp,
+            story_points: tSp,
+            estimatedHours: tHours,
+            estimated_hours: tHours,
+            complexityReason: tReason,
+            complexity_reason: tReason,
             status: isStr ? 'Bản nháp' : task.status || 'Bản nháp',
             assignee: isStr ? null : task.assigneeName || task.assignee || null,
             jiraUrl: null,
@@ -249,10 +261,33 @@ class ExportService {
           };
         });
 
+        const rawAc = story.acceptanceCriteria || story.acceptance_criteria || story.criteria || [];
+        const acceptanceCriteria = (Array.isArray(rawAc) ? rawAc : [rawAc])
+          .filter(Boolean)
+          .map((ac) => (typeof ac === 'string' ? ac.trim() : (ac.text || JSON.stringify(ac)).trim()))
+          .filter((text) => text.length > 0);
+
+        const defaultStoryPoints = tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0) : 3;
+        const defaultStoryHours = tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) : (defaultStoryPoints * 4);
+        const sSp = Number(story.storyPoints || story.story_points || defaultStoryPoints);
+        const sHours = Number(story.estimatedHours || story.estimated_hours || defaultStoryHours);
+        const sReason = String(story.complexityReason || story.complexity_reason || '').trim();
+
+        totalStoryPoints += sSp;
+        totalEstimatedHours += sHours;
+
         return {
           key: story.key || null,
           title: story.title || story.name || story.user_story || story.summary || `User Story #${si + 1}`,
           description: story.description || story.desc || '',
+          storyPoints: sSp,
+          story_points: sSp,
+          estimatedHours: sHours,
+          estimated_hours: sHours,
+          complexityReason: sReason,
+          complexity_reason: sReason,
+          acceptanceCriteria,
+          acceptance_criteria: acceptanceCriteria,
           status: story.status || 'Bản nháp',
           assignee: story.assigneeName || story.assignee || null,
           jiraUrl: null,
@@ -284,6 +319,8 @@ class ExportService {
         epicsCount,
         storiesCount,
         tasksCount,
+        totalStoryPoints,
+        totalEstimatedHours,
         totalIssues: epicsCount + storiesCount + tasksCount,
       },
       epics,
@@ -311,7 +348,8 @@ class ExportService {
     md += `- **Mã dự án (Project Key):** \`${projectKey}\`\n`;
     md += `- **Thời gian xuất (Exported At):** ${exportedAt}\n`;
     md += `- **Nguồn dữ liệu (Data Source):** ${sourceLabel}\n`;
-    md += `- **Tổng số yêu cầu:** ${stats.totalIssues} issue(s) (Epic: ${stats.epicsCount}, User Story: ${stats.storiesCount}, Task/Sub-task: ${stats.tasksCount})\n`;
+    const spStats = stats.totalStoryPoints ? ` | **Tổng Story Points:** ${stats.totalStoryPoints} SP | **Tổng Thời gian Ước tính:** ${stats.totalEstimatedHours}h` : '';
+    md += `- **Tổng số yêu cầu:** ${stats.totalIssues} issue(s) (Epic: ${stats.epicsCount}, User Story: ${stats.storiesCount}, Task/Sub-task: ${stats.tasksCount})${spStats}\n`;
 
     if (projectDescription) {
       md += `\n### Mô tả dự án\n${projectDescription}\n`;
@@ -352,6 +390,22 @@ class ExportService {
         if (story.description) {
           md += `  - **Mô tả:** ${story.description.replace(/\n+/g, ' ')}\n`;
         }
+
+        if (story.storyPoints || story.estimatedHours) {
+          const spText = story.storyPoints ? `${story.storyPoints} SP` : '';
+          const hrText = story.estimatedHours ? `${story.estimatedHours}h` : '';
+          const combo = [spText, hrText].filter(Boolean).join(' (~');
+          md += `  - **Ước lượng Agile:** \`${combo ? (hrText && spText ? combo + ')' : combo) : ''}\`${story.complexityReason ? ` — *Lý do:* ${story.complexityReason}` : ''}\n`;
+        }
+
+        const acList = story.acceptanceCriteria || story.acceptance_criteria || [];
+        if (Array.isArray(acList) && acList.length > 0) {
+          md += `  - **Tiêu chí nghiệm thu (Acceptance Criteria - BDD):**\n`;
+          acList.forEach((ac, aci) => {
+            const acText = typeof ac === 'string' ? ac : (ac.text || JSON.stringify(ac));
+            md += `    ${aci + 1}. *${acText}*\n`;
+          });
+        }
         md += `\n`;
 
         if (!story.tasks || story.tasks.length === 0) {
@@ -361,13 +415,17 @@ class ExportService {
 
         story.tasks.forEach((task, tIdx) => {
           const taskKeyPrefix = task.key ? `\`${task.key}\` ` : '';
+          const spText = task.storyPoints ? ` [${task.storyPoints} SP / ${task.estimatedHours}h]` : '';
           const statusText = task.status ? ` [${task.status}]` : '';
           const assigneeText = task.assignee ? ` — *${task.assignee}*` : '';
           const linkText = task.jiraUrl ? ` — [Jira](${task.jiraUrl})` : '';
 
-          md += `- **Task ${eIdx + 1}.${sIdx + 1}.${tIdx + 1}:** ${taskKeyPrefix}${task.title}${statusText}${assigneeText}${linkText}\n`;
+          md += `- **Task ${eIdx + 1}.${sIdx + 1}.${tIdx + 1}:** ${taskKeyPrefix}${task.title}${spText}${statusText}${assigneeText}${linkText}\n`;
           if (task.description) {
             md += `  > ${task.description.replace(/\n+/g, ' ')}\n`;
+          }
+          if (task.complexityReason) {
+            md += `  > *Lý do ước lượng:* ${task.complexityReason}\n`;
           }
         });
         md += `\n`;
@@ -451,8 +509,9 @@ class ExportService {
         // Stats line
         doc.fillColor('#475569').font('DejaVuSans-Bold').fontSize(9)
           .text('TỔNG SỐ LƯỢNG:', 60, boxY + 44);
+        const spStatsText = stats.totalStoryPoints ? `   •   Ước tính: ${stats.totalStoryPoints} SP (~${stats.totalEstimatedHours}h)` : '';
         doc.fillColor('#0f172a').font('DejaVuSans-Bold').fontSize(9)
-          .text(`${stats.epicsCount} Epic   •   ${stats.storiesCount} User Story   •   ${stats.tasksCount} Task / Sub-task   (Tổng: ${stats.totalIssues} issue)`, 155, boxY + 44);
+          .text(`${stats.epicsCount} Epic   •   ${stats.storiesCount} User Story   •   ${stats.tasksCount} Task / Sub-task${spStatsText}   (Tổng: ${stats.totalIssues} issue)`, 155, boxY + 44);
 
         doc.y = boxY + 80;
 
@@ -547,6 +606,28 @@ class ExportService {
                   doc.moveDown(0.3);
                 }
 
+                if (story.storyPoints || story.estimatedHours) {
+                  const spMeta = `⚡ Ước lượng Agile: ${story.storyPoints || 0} SP (~${story.estimatedHours || 0}h)${story.complexityReason ? ` | Lý do: ${story.complexityReason}` : ''}`;
+                  doc.fillColor('#6366f1').font('DejaVuSans-Bold').fontSize(7.5).text(spMeta, 75, doc.y);
+                  doc.moveDown(0.25);
+                }
+
+                // Acceptance Criteria (BDD)
+                const acList = story.acceptanceCriteria || story.acceptance_criteria || [];
+                if (Array.isArray(acList) && acList.length > 0) {
+                  if (doc.y > 700) doc.addPage();
+                  doc.fillColor('#0284c7').font('DejaVuSans-Bold').fontSize(7.5)
+                    .text('Tiêu chí nghiệm thu (Acceptance Criteria - BDD):', 75, doc.y);
+                  doc.moveDown(0.15);
+                  acList.forEach((ac, acIdx) => {
+                    if (doc.y > 720) doc.addPage();
+                    const acText = typeof ac === 'string' ? ac : (ac.text || JSON.stringify(ac));
+                    doc.fillColor('#334155').font('DejaVuSans').fontSize(7.5)
+                      .text(`  ✓ [AC ${acIdx + 1}] ${acText}`, 85, doc.y, { width: 460 });
+                  });
+                  doc.moveDown(0.3);
+                }
+
                 // Tasks
                 if (story.tasks && story.tasks.length > 0) {
                   story.tasks.forEach((task, tIdx) => {
@@ -555,9 +636,10 @@ class ExportService {
                     }
 
                     const taskKeyStr = task.key ? `[${task.key}] ` : '';
+                    const taskSpStr = task.storyPoints ? ` [${task.storyPoints} SP / ${task.estimatedHours}h]` : '';
                     const taskStatusStr = task.status ? ` (${task.status})` : '';
                     const taskAssigneeStr = task.assignee ? ` — ${task.assignee}` : '';
-                    const taskLine = `• Task ${eIdx + 1}.${sIdx + 1}.${tIdx + 1}: ${taskKeyStr}${task.title}${taskStatusStr}${taskAssigneeStr}`;
+                    const taskLine = `• Task ${eIdx + 1}.${sIdx + 1}.${tIdx + 1}: ${taskKeyStr}${task.title}${taskSpStr}${taskStatusStr}${taskAssigneeStr}`;
 
                     doc.fillColor('#1e293b').font('DejaVuSans').fontSize(8)
                       .text(taskLine, 88, doc.y, { width: 460 });
